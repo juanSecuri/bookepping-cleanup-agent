@@ -161,6 +161,18 @@ class LlamaParseClient:
 
         return movements
 
+    async def extract_text(self, file_path: Path) -> str:
+        """Extract raw markdown/text from any PDF (invoices, receipts, etc.)."""
+        if not file_path.exists():
+            raise ExtractionError(f"PDF not found: {file_path}")
+        try:
+            text = self._parse_pdf(file_path)
+        except Exception as exc:
+            raise ExtractionError(f"LlamaParse failed: {exc}") from exc
+        if not text.strip():
+            raise ExtractionError(f"No text extracted from {file_path.name}")
+        return text
+
     async def parse_bank_statement(
         self,
         file_path: Path,
@@ -170,13 +182,7 @@ class LlamaParseClient:
         statement_month: str,
     ) -> list[BankMovement]:
         """Parse a bank statement PDF and return list of BankMovement entities."""
-        if not file_path.exists():
-            raise ExtractionError(f"PDF not found: {file_path}")
-
-        try:
-            markdown = self._parse_pdf(file_path)
-        except Exception as exc:
-            raise ExtractionError(f"LlamaParse failed: {exc}") from exc
+        markdown = await self.extract_text(file_path)
 
         movements = self._parse_markdown_tables(
             markdown=markdown,

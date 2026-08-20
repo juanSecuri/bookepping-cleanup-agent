@@ -2,12 +2,11 @@
 from __future__ import annotations
 
 import uuid
-from datetime import date, datetime
+from datetime import date
 from decimal import Decimal
 
 import pytest
 
-from src.domain.exceptions import InvalidTransactionError
 from src.domain.models.enums import DocumentSource, TransactionStatus, TransactionType
 from src.domain.models.transaction import ExtractionMetadata, FinancialTransaction
 
@@ -16,7 +15,7 @@ def _metadata(**overrides) -> ExtractionMetadata:
     defaults = dict(
         source=DocumentSource.PHOTO,
         raw_file_path="/tmp/test.jpg",
-        extraction_model="claude-3-5-sonnet",
+        extraction_model="gpt-4o",
         confidence_score=0.95,
     )
     return ExtractionMetadata(**(defaults | overrides))
@@ -58,15 +57,17 @@ class TestFinancialTransactionValidation:
 
     def test_mark_verified_returns_new_instance(self) -> None:
         tx = _transaction()
-        verified = tx.mark_verified("6010", 0.92)
+        verified = tx.mark_verified("6010", "Office Supplies", 0.92)
         assert verified.status == TransactionStatus.VERIFIED
         assert verified.chart_of_accounts_code == "6010"
-        assert tx.status == TransactionStatus.PENDING_REVIEW   # original unchanged
+        assert verified.chart_of_accounts_name == "Office Supplies"
+        assert tx.status == TransactionStatus.PENDING_REVIEW
 
-    def test_mark_synced(self) -> None:
-        tx = _transaction().mark_verified("6010", 0.9).mark_synced("QB-123")
-        assert tx.status == TransactionStatus.SYNCED
-        assert tx.quickbooks_id == "QB-123"
+    def test_mark_closed(self) -> None:
+        tx = _transaction().mark_verified("6010", "Office Supplies", 0.9)
+        closed = tx.mark_closed("2022-06")
+        assert closed.status == TransactionStatus.CLOSED
+        assert closed.fiscal_period == "2022-06"
 
     def test_confidence_rounded_to_4_decimals(self) -> None:
         meta = _metadata(confidence_score=0.123456789)

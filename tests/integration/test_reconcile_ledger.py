@@ -1,4 +1,4 @@
-"""Integration test for ReconcileLedger use-case with an in-memory mock repository."""
+"""Integration test for ReconcileLedger use-case with in-memory mock repositories."""
 from __future__ import annotations
 
 import uuid
@@ -9,7 +9,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from src.domain.models.bank_movement import BankMovement
-from src.domain.models.enums import DocumentSource, TransactionStatus, TransactionType
+from src.domain.models.enums import DocumentSource, TransactionType
 from src.domain.models.transaction import ExtractionMetadata, FinancialTransaction
 from src.use_cases.reconcile_ledger import ReconcileLedgerUseCase
 
@@ -28,7 +28,7 @@ def _make_transaction(
         metadata=ExtractionMetadata(
             source=DocumentSource.PHOTO,
             raw_file_path="/tmp/inv.jpg",
-            extraction_model="claude-3-5-sonnet",
+            extraction_model="gpt-4o",
             confidence_score=0.9,
         ),
     )
@@ -41,7 +41,7 @@ def _make_movement(
 ) -> BankMovement:
     return BankMovement(
         tenant_id=tenant_id,
-        bank_account_number="999",
+        bank_account_number="9999",
         bank_name="TestBank",
         movement_date=movement_date,
         description="Cargo factura",
@@ -52,21 +52,26 @@ def _make_movement(
     )
 
 
+def _use_case(transactions: list[FinancialTransaction]) -> ReconcileLedgerUseCase:
+    tx_repo = AsyncMock()
+    tx_repo.list_pending.return_value = transactions
+    tx_repo.save.side_effect = lambda x: x
+
+    mv_repo = AsyncMock()
+    mv_repo.save.side_effect = lambda x: x
+
+    return ReconcileLedgerUseCase(transaction_repo=tx_repo, movement_repo=mv_repo)
+
+
 @pytest.mark.asyncio
 async def test_exact_match_reconciles() -> None:
     tenant_id = uuid.uuid4()
     amount = Decimal("500.00")
     txn_date = date(2022, 6, 10)
 
-    transaction = _make_transaction(tenant_id, amount, txn_date)
-    movement = _make_movement(tenant_id, amount, txn_date)
-
-    mock_repo = AsyncMock()
-    mock_repo.list_pending.return_value = [transaction]
-    mock_repo.save.side_effect = lambda x: x
-
-    use_case = ReconcileLedgerUseCase(transaction_repo=mock_repo)
-    result = await use_case.execute(tenant_id, [movement])
+    result = await _use_case([_make_transaction(tenant_id, amount, txn_date)]).execute(
+        tenant_id, [_make_movement(tenant_id, amount, txn_date)]
+    )
 
     assert len(result.matched) == 1
     assert len(result.unmatched_movements) == 0
@@ -75,15 +80,9 @@ async def test_exact_match_reconciles() -> None:
 @pytest.mark.asyncio
 async def test_no_match_goes_to_unmatched() -> None:
     tenant_id = uuid.uuid4()
-    transaction = _make_transaction(tenant_id, Decimal("500.00"), date(2022, 6, 10))
-    movement = _make_movement(tenant_id, Decimal("9999.00"), date(2022, 6, 10))
-
-    mock_repo = AsyncMock()
-    mock_repo.list_pending.return_value = [transaction]
-    mock_repo.save.side_effect = lambda x: x
-
-    use_case = ReconcileLedgerUseCase(transaction_repo=mock_repo)
-    result = await use_case.execute(tenant_id, [movement])
+    result = await _use_case(
+        [_make_transaction(tenant_id, Decimal("500.00"), date(2022, 6, 10))]
+    ).execute(tenant_id, [_make_movement(tenant_id, Decimal("9999.00"), date(2022, 6, 10))])
 
     assert len(result.matched) == 0
     assert len(result.unmatched_movements) == 1
@@ -93,15 +92,8 @@ async def test_no_match_goes_to_unmatched() -> None:
 async def test_date_window_respected() -> None:
     tenant_id = uuid.uuid4()
     amount = Decimal("100.00")
-    transaction = _make_transaction(tenant_id, amount, date(2022, 6, 1))
-    # Movement is 10 days away — outside the default 3-day window
-    movement = _make_movement(tenant_id, amount, date(2022, 6, 11))
-
-    mock_repo = AsyncMock()
-    mock_repo.list_pending.return_value = [transaction]
-    mock_repo.save.side_effect = lambda x: x
-
-    use_case = ReconcileLedgerUseCase(transaction_repo=mock_repo)
-    result = await use_case.execute(tenant_id, [movement])
+    result = await _use_case(
+        [_make_transaction(tenant_id, amount, date(2022, 6, 1))]
+    ).execute(tenant_id, [_make_movement(tenant_id, amount, date(2022, 6, 11))])
 
     assert len(result.unmatched_movements) == 1

@@ -14,10 +14,10 @@ Usage
 
 Supported file types
 ────────────────────
-  Images   : .jpg .jpeg .png .webp .heic   → Claude vision extraction
-  Audio    : .mp3 .wav .m4a .ogg .flac     → Groq Whisper transcription
-  PDF      : .pdf                           → LlamaParse or Claude
-  Text     : .txt                           → Claude text structuring
+  Images   : .jpg .jpeg .png .webp         → OpenAI vision extraction
+  Audio    : .mp3 .wav .m4a .ogg           → Groq Whisper + OpenAI structuring
+  PDF      : .pdf                           → LlamaParse + OpenAI
+  Text     : .txt                           → OpenAI text structuring
 
 The CLI reads BANK_STATEMENT_MONTHS from the folder structure.  If you
 organise documents as  2023/01/  then the parent folder name is used as

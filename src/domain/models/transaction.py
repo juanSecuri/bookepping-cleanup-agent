@@ -5,7 +5,7 @@ included in a MonthlyLedger and generating financial statements.
 """
 from __future__ import annotations
 import uuid
-from datetime import date, datetime
+from datetime import date, datetime, timezone
 from decimal import Decimal
 from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
@@ -17,7 +17,7 @@ class ExtractionMetadata(BaseModel):
     source: DocumentSource
     raw_file_path: str
     extraction_model: str
-    extraction_timestamp: datetime = Field(default_factory=datetime.utcnow)
+    extraction_timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     confidence_score: float = Field(..., ge=0.0, le=1.0)
     raw_text: str | None = None
     page_number: int | None = Field(default=None, ge=1)
@@ -63,8 +63,8 @@ class FinancialTransaction(BaseModel):
     # Pipeline state
     status: TransactionStatus = Field(default=TransactionStatus.PENDING_REVIEW)
     metadata: ExtractionMetadata
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     extra: dict[str, Any] = Field(default_factory=dict)
 
     @field_validator("amount")
@@ -91,12 +91,12 @@ class FinancialTransaction(BaseModel):
             "chart_of_accounts_code": chart_code,
             "chart_of_accounts_name": chart_name,
             "category_confidence": round(confidence, 4),
-            "updated_at": datetime.utcnow(),
+            "updated_at": datetime.now(timezone.utc),
         })
 
     def mark_closed(self, fiscal_period: str) -> "FinancialTransaction":
         return self.model_copy(update={
             "status": TransactionStatus.CLOSED,
             "fiscal_period": fiscal_period,
-            "updated_at": datetime.utcnow(),
+            "updated_at": datetime.now(timezone.utc),
         })

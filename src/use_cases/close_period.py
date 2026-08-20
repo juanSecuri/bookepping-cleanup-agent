@@ -1,14 +1,7 @@
 """
 ClosePeriod use-case.
 
-Takes all VERIFIED transactions for a given (tenant_id, fiscal_period),
-aggregates them by Chart-of-Accounts entry, and produces a closed MonthlyLedger.
-
-Rules:
-- Only VERIFIED transactions are included (pending_review are excluded).
-- A period can only be closed once — re-closing raises PeriodAlreadyClosedError.
-- All transactions included are marked status = CLOSED.
-- The MonthlyLedger is persisted to Supabase.
+Aggregates VERIFIED transactions for a fiscal period into a closed MonthlyLedger.
 """
 from __future__ import annotations
 
@@ -20,7 +13,7 @@ from decimal import Decimal
 from src.domain.exceptions import BookkeepingError
 from src.domain.models.enums import AccountType, TransactionStatus, TransactionType
 from src.domain.models.monthly_ledger import LedgerEntry, MonthlyLedger
-from src.domain.models.transaction import FinancialTransaction
+from src.infrastructure.repositories.monthly_ledger_repository import MonthlyLedgerRepository
 from src.infrastructure.repositories.transaction_repository import TransactionRepository
 
 
@@ -29,19 +22,13 @@ class PeriodAlreadyClosedError(BookkeepingError):
 
 
 class ClosePeriodUseCase:
-    """
-    Close a fiscal period and produce a MonthlyLedger aggregate.
-
-    Usage:
-        use_case = ClosePeriodUseCase()
-        ledger = await use_case.execute(
-            tenant_id=uuid.UUID("..."),
-            fiscal_period="2022-06",
-        )
-    """
-
-    def __init__(self, transaction_repo: TransactionRepository | None = None) -> None:
-        self._repo = transaction_repo or TransactionRepository()
+    def __init__(
+        self,
+        transaction_repo: TransactionRepository | None = None,
+        ledger_repo: MonthlyLedgerRepository | None = None,
+    ) -> None:
+        self._transactions = transaction_repo or TransactionRepository()
+        self._ledgers = ledger_repo or MonthlyLedgerRepository()
 
     async def execute(
         self,
@@ -49,10 +36,16 @@ class ClosePeriodUseCase:
         fiscal_period: str,
         currency: str = "USD",
     ) -> MonthlyLedger:
-        # 1. Load all VERIFIED transactions for this period
-        all_txns = await self._repo.list_by_tenant(tenant_id, limit=10000)
+        existing = await self._ledgers.get_by_period(tenant_id, fiscal_period)
+        if existing is not None and existing.status == "closed":
+            raise PeriodAlreadyClosedError(
+                f"Period {fiscal_period} is already closed for tenant {tenant_id}."
+            )
+
+        all_txns = await self._transactions.list_by_tenant(tenant_id, limit=10000)
         period_txns = [
-            t for t in all_txns
+            t
+            for t in all_txns
             if str(t.transaction_date)[:7] == fiscal_period
             and t.status == TransactionStatus.VERIFIED
         ]
@@ -63,14 +56,15 @@ class ClosePeriodUseCase:
                 "Verify and approve transactions before closing the period."
             )
 
-        # 2. Aggregate by account code
-        aggregates: dict[str, dict] = defaultdict(lambda: {
-            "total_debit": Decimal("0"),
-            "total_credit": Decimal("0"),
-            "transaction_count": 0,
-            "account_name": "",
-            "account_type": AccountType.EXPENSE,
-        })
+        aggregates: dict[str, dict] = defaultdict(
+            lambda: {
+                "total_debit": Decimal("0"),
+                "total_credit": Decimal("0"),
+                "transaction_count": 0,
+                "account_name": "",
+                "account_type": AccountType.EXPENSE,
+            }
+        )
 
         for tx in period_txns:
             code = tx.chart_of_accounts_code or "9999"
@@ -80,14 +74,11 @@ class ClosePeriodUseCase:
             agg["account_name"] = name
             agg["account_type"] = account_type
             agg["transaction_count"] += 1
-
-            # Debits = expenses/assets go out; Credits = income/liabilities come in
             if tx.transaction_type == TransactionType.INCOME:
                 agg["total_credit"] += tx.amount
             else:
                 agg["total_debit"] += tx.amount
 
-        # 3. Build LedgerEntry list
         entries = [
             LedgerEntry(
                 account_code=code,
@@ -100,13 +91,11 @@ class ClosePeriodUseCase:
             for code, agg in sorted(aggregates.items())
         ]
 
-        # 4. Mark all transactions as CLOSED
         for tx in period_txns:
-            closed_tx = tx.mark_closed(fiscal_period)
-            await self._repo.save(closed_tx)
+            await self._transactions.save(tx.mark_closed(fiscal_period))
 
-        # 5. Build and return the MonthlyLedger
-        return MonthlyLedger(
+        ledger = MonthlyLedger(
+            id=existing.id if existing else uuid.uuid4(),
             tenant_id=tenant_id,
             fiscal_period=fiscal_period,
             currency=currency.upper(),
@@ -115,6 +104,7 @@ class ClosePeriodUseCase:
             status="closed",
             closed_at=datetime.utcnow(),
         )
+        return await self._ledgers.save(ledger)
 
     @staticmethod
     def _infer_account_type(tx_type: TransactionType) -> AccountType:

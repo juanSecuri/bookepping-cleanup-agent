@@ -1,14 +1,11 @@
 -- ============================================================
--- Bookkeeping Clean-up Agent — Schema v0.2
--- Run in Supabase SQL Editor (or via psql)
--- FASE 2 (QuickBooks): columnas quickbooks_id están comentadas.
---   Descomentar cuando se active la integración QBO.
+-- Bookkeeping Clean-up Agent — Schema v0.4 (OpenAI + Supabase)
+-- Applied remotely as migration: align_schema_to_app_v1
 -- ============================================================
 
-CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
+CREATE EXTENSION IF NOT EXISTS "uuid-ossp" WITH SCHEMA extensions;
 CREATE EXTENSION IF NOT EXISTS vector;
 
--- ── financial_transactions ───────────────────────────────────
 CREATE TABLE IF NOT EXISTS financial_transactions (
     id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id               UUID NOT NULL,
@@ -19,15 +16,14 @@ CREATE TABLE IF NOT EXISTS financial_transactions (
     transaction_type        TEXT NOT NULL,
     chart_of_accounts_code  TEXT,
     chart_of_accounts_name  TEXT,
-    category_confidence     FLOAT CHECK (category_confidence BETWEEN 0 AND 1),
+    category_confidence     FLOAT CHECK (category_confidence IS NULL OR category_confidence BETWEEN 0 AND 1),
     vendor_name             TEXT,
     tax_id                  TEXT,
     invoice_number          TEXT,
     bank_movement_id        UUID,
-    fiscal_period           TEXT CHECK (fiscal_period ~ '^\d{4}-(0[1-9]|1[0-2])$'),
+    fiscal_period           TEXT CHECK (fiscal_period IS NULL OR fiscal_period ~ '^\d{4}-(0[1-9]|1[0-2])$'),
     status                  TEXT NOT NULL DEFAULT 'pending_review'
                               CHECK (status IN ('pending_review','verified','closed')),
-    -- FASE 2: quickbooks_id TEXT,
     metadata                JSONB NOT NULL DEFAULT '{}',
     extra                   JSONB NOT NULL DEFAULT '{}',
     created_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -37,7 +33,6 @@ CREATE INDEX IF NOT EXISTS idx_ft_tenant_status ON financial_transactions (tenan
 CREATE INDEX IF NOT EXISTS idx_ft_tenant_period ON financial_transactions (tenant_id, fiscal_period);
 CREATE INDEX IF NOT EXISTS idx_ft_tenant_date   ON financial_transactions (tenant_id, transaction_date DESC);
 
--- ── bank_movements ───────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS bank_movements (
     id                      UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id               UUID NOT NULL,
@@ -53,7 +48,7 @@ CREATE TABLE IF NOT EXISTS bank_movements (
     currency                CHAR(3) NOT NULL DEFAULT 'USD',
     chart_of_accounts_code  TEXT,
     chart_of_accounts_name  TEXT,
-    category_confidence     FLOAT CHECK (category_confidence BETWEEN 0 AND 1),
+    category_confidence     FLOAT CHECK (category_confidence IS NULL OR category_confidence BETWEEN 0 AND 1),
     matched_invoice_id      UUID,
     matched_transaction_id  UUID REFERENCES financial_transactions(id),
     status                  TEXT NOT NULL DEFAULT 'pending_review'
@@ -65,7 +60,6 @@ CREATE TABLE IF NOT EXISTS bank_movements (
 );
 CREATE INDEX IF NOT EXISTS idx_bm_tenant_month ON bank_movements (tenant_id, statement_month);
 
--- ── monthly_ledgers ──────────────────────────────────────────
 CREATE TABLE IF NOT EXISTS monthly_ledgers (
     id                  UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id           UUID NOT NULL,
@@ -80,7 +74,6 @@ CREATE TABLE IF NOT EXISTS monthly_ledgers (
 );
 CREATE INDEX IF NOT EXISTS idx_ml_tenant ON monthly_ledgers (tenant_id, fiscal_period);
 
--- ── chart_of_accounts (pgvector RAG) ────────────────────────
 CREATE TABLE IF NOT EXISTS chart_of_accounts (
     id          UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     tenant_id   UUID NOT NULL,
@@ -92,11 +85,7 @@ CREATE TABLE IF NOT EXISTS chart_of_accounts (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now(),
     UNIQUE (tenant_id, code)
 );
-CREATE INDEX IF NOT EXISTS idx_coa_embedding
-    ON chart_of_accounts USING ivfflat (embedding vector_cosine_ops)
-    WITH (lists = 100);
 
--- ── pgvector semantic search RPC ─────────────────────────────
 CREATE OR REPLACE FUNCTION match_accounts(
     query_embedding vector(1536),
     p_tenant_id     UUID,
@@ -113,3 +102,9 @@ LANGUAGE sql STABLE AS $$
     ORDER  BY embedding <=> query_embedding
     LIMIT  match_count;
 $$;
+
+ALTER TABLE financial_transactions ENABLE ROW LEVEL SECURITY;
+ALTER TABLE bank_movements ENABLE ROW LEVEL SECURITY;
+ALTER TABLE monthly_ledgers ENABLE ROW LEVEL SECURITY;
+ALTER TABLE chart_of_accounts ENABLE ROW LEVEL SECURITY;
+-- Backend uses SUPABASE_SERVICE_ROLE_KEY (bypasses RLS).

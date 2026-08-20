@@ -1,17 +1,14 @@
 """
 Quick-start launcher — Bookkeeping Clean-up Agent
-===================================================
-Run from the project root:
 
   python run.py            → start API server (default: http://localhost:8000)
   python run.py --port 9000
   python run.py --reload   → hot-reload for development
-
-The HTML interface is served at http://localhost:8000/
-The interactive API docs are at http://localhost:8000/docs
 """
+from __future__ import annotations
+
 import argparse
-import sys
+import os
 
 import uvicorn
 
@@ -19,18 +16,21 @@ import uvicorn
 def main() -> None:
     parser = argparse.ArgumentParser(description="Start the Bookkeeping Clean-up Agent server.")
     parser.add_argument("--host", default="0.0.0.0", help="Bind host (default: 0.0.0.0)")
-    parser.add_argument("--port", type=int, default=8000, help="Bind port (default: 8000)")
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=int(os.environ.get("PORT", "8000")),
+        help="Bind port (default: 8000 or $PORT)",
+    )
     parser.add_argument("--reload", action="store_true", help="Enable hot-reload (dev mode)")
     args = parser.parse_args()
 
-    print(f"""
-╔══════════════════════════════════════════════════════════╗
-║        Bookkeeping Clean-up Agent  v0.3.0                ║
-║                                                          ║
-║   UI  →  http://localhost:{args.port:<5}                        ║
-║   API →  http://localhost:{args.port:<5}/docs                   ║
-╚══════════════════════════════════════════════════════════╝
-    """)
+    print(
+        f"\n"
+        f"  Bookkeeping Clean-up Agent  v0.4.0\n"
+        f"  UI   -> http://localhost:{args.port}/\n"
+        f"  API  -> http://localhost:{args.port}/docs\n"
+    )
 
     uvicorn.run(
         "apps.api.main:app",
