@@ -1,0 +1,924 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Bookkeeping Clean-up Agent</title>
+<style>
+:root{
+  --navy:#1F3864;--blue:#2E75B6;--light-blue:#D6E4F0;--accent:#00B4D8;
+  --green:#1A7A1A;--red:#C00000;--orange:#E67E22;--yellow:#F1C40F;
+  --bg:#F0F4F8;--surface:#FFFFFF;--sidebar-bg:#0F2340;
+  --text:#1a1a2e;--text-muted:#6B7280;--border:#E5E7EB;
+  --radius:10px;--shadow:0 2px 12px rgba(0,0,0,.08);
+}
+*{box-sizing:border-box;margin:0;padding:0;}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--bg);color:var(--text);display:flex;height:100vh;overflow:hidden;}
+
+/* ── SIDEBAR ── */
+#sidebar{width:240px;min-width:240px;background:var(--sidebar-bg);display:flex;flex-direction:column;padding:0;overflow-y:auto;}
+.sidebar-logo{padding:24px 20px 16px;border-bottom:1px solid rgba(255,255,255,.1);}
+.sidebar-logo h1{color:#fff;font-size:15px;font-weight:700;line-height:1.3;}
+.sidebar-logo span{color:var(--accent);font-size:11px;letter-spacing:.5px;text-transform:uppercase;}
+nav{flex:1;padding:12px 0;}
+.nav-section{padding:8px 16px 4px;color:rgba(255,255,255,.4);font-size:10px;letter-spacing:1px;text-transform:uppercase;font-weight:600;}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 20px;color:rgba(255,255,255,.7);cursor:pointer;border-left:3px solid transparent;transition:all .2s;font-size:14px;}
+.nav-item:hover{background:rgba(255,255,255,.07);color:#fff;}
+.nav-item.active{background:rgba(46,117,182,.25);border-left-color:var(--accent);color:#fff;font-weight:600;}
+.nav-item .icon{font-size:16px;width:20px;text-align:center;}
+.nav-badge{margin-left:auto;background:var(--red);color:#fff;border-radius:10px;padding:1px 7px;font-size:10px;font-weight:700;}
+.sidebar-footer{padding:16px 20px;border-top:1px solid rgba(255,255,255,.1);}
+.sidebar-footer p{color:rgba(255,255,255,.4);font-size:11px;}
+.sidebar-footer strong{color:rgba(255,255,255,.7);}
+
+/* ── MAIN ── */
+#main{flex:1;display:flex;flex-direction:column;overflow:hidden;}
+#topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:0 28px;height:58px;display:flex;align-items:center;justify-content:space-between;flex-shrink:0;}
+#topbar h2{font-size:18px;font-weight:700;color:var(--navy);}
+.topbar-actions{display:flex;gap:10px;align-items:center;}
+#content{flex:1;overflow-y:auto;padding:28px;}
+
+/* ── CARDS ── */
+.kpi-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px;margin-bottom:28px;}
+.kpi-card{background:var(--surface);border-radius:var(--radius);padding:20px 22px;box-shadow:var(--shadow);border-top:4px solid var(--blue);}
+.kpi-card.green{border-top-color:var(--green);}
+.kpi-card.red{border-top-color:var(--red);}
+.kpi-card.orange{border-top-color:var(--orange);}
+.kpi-card.accent{border-top-color:var(--accent);}
+.kpi-label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;}
+.kpi-value{font-size:26px;font-weight:800;color:var(--navy);}
+.kpi-sub{font-size:12px;color:var(--text-muted);margin-top:4px;}
+
+/* ── PANELS ── */
+.panel{background:var(--surface);border-radius:var(--radius);box-shadow:var(--shadow);margin-bottom:24px;}
+.panel-header{padding:16px 22px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;}
+.panel-header h3{font-size:15px;font-weight:700;color:var(--navy);}
+.panel-body{padding:20px 22px;}
+
+/* ── TABLE ── */
+.tbl-wrap{overflow-x:auto;}
+table{width:100%;border-collapse:collapse;font-size:13px;}
+thead th{background:var(--navy);color:#fff;padding:10px 12px;text-align:left;font-weight:600;font-size:12px;letter-spacing:.3px;white-space:nowrap;}
+tbody tr{border-bottom:1px solid var(--border);transition:background .15s;}
+tbody tr:hover{background:#F8FAFF;}
+tbody td{padding:9px 12px;vertical-align:middle;}
+.td-desc{max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.td-amount{font-weight:700;text-align:right;font-variant-numeric:tabular-nums;}
+.td-amount.income{color:var(--green);}
+.td-amount.expense{color:var(--red);}
+
+/* ── STATUS BADGES ── */
+.badge{display:inline-block;padding:2px 10px;border-radius:20px;font-size:11px;font-weight:700;letter-spacing:.3px;}
+.badge-pending{background:#FEF3C7;color:#92400E;}
+.badge-verified{background:#D1FAE5;color:#065F46;}
+.badge-closed{background:#DBEAFE;color:#1E40AF;}
+.badge-income{background:#D1FAE5;color:#065F46;}
+.badge-expense{background:#FEE2E2;color:#991B1B;}
+.badge-transfer{background:#E0E7FF;color:#3730A3;}
+
+/* ── BUTTONS ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 18px;border-radius:6px;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .2s;}
+.btn-primary{background:var(--blue);color:#fff;}
+.btn-primary:hover{background:var(--navy);}
+.btn-success{background:var(--green);color:#fff;}
+.btn-success:hover{background:#145214;}
+.btn-danger{background:var(--red);color:#fff;}
+.btn-danger:hover{background:#8B0000;}
+.btn-outline{background:transparent;color:var(--blue);border:1.5px solid var(--blue);}
+.btn-outline:hover{background:var(--light-blue);}
+.btn-sm{padding:5px 12px;font-size:12px;}
+.btn-icon{padding:6px;border-radius:6px;background:transparent;border:1px solid var(--border);cursor:pointer;font-size:14px;transition:all .2s;}
+.btn-icon:hover{background:var(--light-blue);}
+
+/* ── FORM ── */
+.form-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:14px;}
+.form-group{display:flex;flex-direction:column;gap:5px;}
+.form-group label{font-size:12px;font-weight:600;color:var(--text-muted);text-transform:uppercase;letter-spacing:.4px;}
+.form-group input,.form-group select,.form-group textarea{
+  padding:8px 12px;border:1.5px solid var(--border);border-radius:6px;font-size:13px;
+  outline:none;transition:border .2s;background:var(--surface);color:var(--text);
+}
+.form-group input:focus,.form-group select:focus{border-color:var(--blue);}
+.form-group textarea{resize:vertical;min-height:70px;}
+
+/* ── UPLOAD ZONE ── */
+.upload-zone{border:2px dashed var(--border);border-radius:var(--radius);padding:36px;text-align:center;cursor:pointer;transition:all .2s;background:#FAFBFF;}
+.upload-zone:hover,.upload-zone.dragover{border-color:var(--blue);background:var(--light-blue);}
+.upload-zone .upload-icon{font-size:36px;margin-bottom:10px;}
+.upload-zone p{color:var(--text-muted);font-size:14px;}
+.upload-zone strong{color:var(--blue);}
+
+/* ── TOAST ── */
+#toast-container{position:fixed;bottom:24px;right:24px;z-index:9999;display:flex;flex-direction:column;gap:10px;}
+.toast{padding:13px 18px;border-radius:8px;color:#fff;font-size:13px;font-weight:600;box-shadow:0 4px 20px rgba(0,0,0,.2);display:flex;align-items:center;gap:10px;min-width:260px;animation:slideIn .3s ease;}
+.toast-success{background:var(--green);}
+.toast-error{background:var(--red);}
+.toast-info{background:var(--blue);}
+@keyframes slideIn{from{transform:translateX(40px);opacity:0;}to{transform:translateX(0);opacity:1;}}
+
+/* ── MODAL ── */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.5);z-index:1000;display:flex;align-items:center;justify-content:center;display:none;}
+.modal-overlay.open{display:flex;}
+.modal{background:var(--surface);border-radius:var(--radius);padding:28px;max-width:560px;width:90%;box-shadow:0 20px 60px rgba(0,0,0,.3);}
+.modal h3{font-size:17px;font-weight:700;color:var(--navy);margin-bottom:16px;}
+.modal-footer{margin-top:20px;display:flex;justify-content:flex-end;gap:10px;}
+
+/* ── PROGRESS BAR ── */
+.progress-bar{height:6px;background:var(--border);border-radius:3px;overflow:hidden;margin-top:8px;}
+.progress-fill{height:100%;background:var(--blue);border-radius:3px;transition:width .4s ease;}
+
+/* ── EMPTY STATE ── */
+.empty-state{text-align:center;padding:48px 24px;color:var(--text-muted);}
+.empty-state .empty-icon{font-size:48px;margin-bottom:12px;}
+.empty-state p{font-size:14px;}
+
+/* ── PERIOD TIMELINE ── */
+.period-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(140px,1fr));gap:12px;}
+.period-card{border:1.5px solid var(--border);border-radius:8px;padding:14px;cursor:pointer;transition:all .2s;text-align:center;}
+.period-card:hover{border-color:var(--blue);background:var(--light-blue);}
+.period-card.closed{border-color:var(--green);background:#F0FDF4;}
+.period-card.open{border-color:var(--orange);background:#FFFBEB;}
+.period-card.empty{border-color:var(--border);background:#FAFAFA;opacity:.6;}
+.period-month{font-size:16px;font-weight:800;color:var(--navy);}
+.period-year{font-size:11px;color:var(--text-muted);}
+.period-status{font-size:11px;margin-top:6px;font-weight:600;}
+.period-count{font-size:12px;color:var(--text-muted);}
+
+/* ── STATEMENT TABLE ── */
+.stmt-section{margin-bottom:20px;}
+.stmt-section h4{background:var(--navy);color:#fff;padding:8px 14px;font-size:12px;letter-spacing:.5px;text-transform:uppercase;border-radius:4px;margin-bottom:0;}
+.stmt-row{display:flex;justify-content:space-between;align-items:center;padding:7px 14px;border-bottom:1px solid var(--border);font-size:13px;}
+.stmt-row:nth-child(even){background:#FAFBFF;}
+.stmt-row.subtotal{background:var(--light-blue);font-weight:700;}
+.stmt-row.total{background:var(--navy);color:#fff;font-weight:800;font-size:14px;border-radius:0 0 4px 4px;}
+.stmt-amount{font-variant-numeric:tabular-nums;font-weight:600;}
+.stmt-positive{color:var(--green);}
+.stmt-negative{color:var(--red);}
+
+/* ── SEARCH ── */
+.search-bar{position:relative;}
+.search-bar input{padding-left:32px;}
+.search-bar::before{content:'🔍';position:absolute;left:10px;top:50%;transform:translateY(-50%);font-size:12px;}
+
+/* ── TABS ── */
+.tabs{display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:20px;}
+.tab{padding:10px 20px;cursor:pointer;font-size:13px;font-weight:600;color:var(--text-muted);border-bottom:3px solid transparent;margin-bottom:-2px;transition:all .2s;}
+.tab.active{color:var(--blue);border-bottom-color:var(--blue);}
+.tab-panel{display:none;}
+.tab-panel.active{display:block;}
+
+/* ── CHECKBOX ── */
+.cb{width:16px;height:16px;cursor:pointer;accent-color:var(--blue);}
+
+/* ── CONFIDENCE BAR ── */
+.conf-bar{display:flex;align-items:center;gap:6px;}
+.conf-fill{height:4px;border-radius:2px;background:var(--blue);}
+.conf-fill.high{background:var(--green);}
+.conf-fill.mid{background:var(--orange);}
+.conf-fill.low{background:var(--red);}
+.conf-pct{font-size:11px;color:var(--text-muted);}
+
+@media(max-width:900px){#sidebar{display:none;}}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════════════ SIDEBAR -->
+<aside id="sidebar">
+  <div class="sidebar-logo">
+    <h1>📒 Bookkeeping<br>Clean-up Agent</h1>
+    <span>v0.2 · Fase 1</span>
+  </div>
+  <nav>
+    <div class="nav-section">Principal</div>
+    <div class="nav-item active" onclick="showView('dashboard')">
+      <span class="icon">📊</span>Dashboard
+    </div>
+    <div class="nav-section">Ingestión</div>
+    <div class="nav-item" onclick="showView('upload')">
+      <span class="icon">📤</span>Subir Documentos
+    </div>
+    <div class="nav-item" onclick="showView('statements')">
+      <span class="icon">🏦</span>Extractos Bancarios
+    </div>
+    <div class="nav-section">Revisión Contable</div>
+    <div class="nav-item" id="nav-transactions" onclick="showView('transactions')">
+      <span class="icon">📋</span>Transacciones
+      <span class="nav-badge" id="pending-badge">0</span>
+    </div>
+    <div class="nav-item" onclick="showView('movements')">
+      <span class="icon">↔️</span>Movimientos Banco
+    </div>
+    <div class="nav-section">Contabilidad</div>
+    <div class="nav-item" onclick="showView('periods')">
+      <span class="icon">📅</span>Períodos
+    </div>
+    <div class="nav-item" onclick="showView('reports')">
+      <span class="icon">📑</span>Estados Financieros
+    </div>
+  </nav>
+  <div class="sidebar-footer">
+    <p>Tenant:<br><strong id="tenant-display">—</strong></p>
+  </div>
+</aside>
+
+<!-- ═══════════════════════════════════════════════════════ MAIN -->
+<div id="main">
+  <header id="topbar">
+    <h2 id="topbar-title">Dashboard</h2>
+    <div class="topbar-actions">
+      <div class="form-group" style="flex-direction:row;align-items:center;gap:8px;margin:0;">
+        <label style="font-size:12px;white-space:nowrap;">Tenant ID</label>
+        <input id="tenant-input" type="text" placeholder="uuid del cliente"
+               style="width:280px;font-size:12px;"
+               value="00000000-0000-0000-0000-000000000001"
+               onchange="setTenant(this.value)"/>
+      </div>
+      <button class="btn btn-primary btn-sm" onclick="refreshAll()">🔄 Actualizar</button>
+    </div>
+  </header>
+
+  <div id="content">
+
+    <!-- ──────────────────────────────── VIEW: DASHBOARD -->
+    <div id="view-dashboard" class="view">
+      <div class="kpi-grid">
+        <div class="kpi-card"><div class="kpi-label">Pendientes de Revisión</div><div class="kpi-value" id="kpi-pending">—</div><div class="kpi-sub">requieren aprobación</div></div>
+        <div class="kpi-card green"><div class="kpi-label">Verificadas</div><div class="kpi-value" id="kpi-verified">—</div><div class="kpi-sub">listas para cierre</div></div>
+        <div class="kpi-card accent"><div class="kpi-label">Períodos Cerrados</div><div class="kpi-value" id="kpi-closed">—</div><div class="kpi-sub">con estados financieros</div></div>
+        <div class="kpi-card orange"><div class="kpi-label">Sin Conciliar</div><div class="kpi-value" id="kpi-unreconciled">—</div><div class="kpi-sub">movimientos bancarios</div></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header">
+          <h3>⚡ Acciones Rápidas</h3>
+        </div>
+        <div class="panel-body" style="display:flex;gap:12px;flex-wrap:wrap;">
+          <button class="btn btn-primary" onclick="showView('upload')">📤 Subir Documento</button>
+          <button class="btn btn-outline" onclick="showView('transactions')">✅ Revisar Pendientes</button>
+          <button class="btn btn-outline" onclick="showView('periods')">📅 Ver Períodos</button>
+          <button class="btn btn-success" onclick="showView('reports')">📑 Generar Reporte</button>
+        </div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-header"><h3>📋 Últimas Transacciones</h3></div>
+        <div class="panel-body tbl-wrap">
+          <table>
+            <thead><tr><th>Fecha</th><th>Descripción</th><th>Proveedor</th><th>Tipo</th><th>Cuenta</th><th>Confianza</th><th>Monto</th><th>Estado</th></tr></thead>
+            <tbody id="dashboard-txn-tbody">
+              <tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📭</div><p>Cargando transacciones...</p></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────── VIEW: UPLOAD -->
+    <div id="view-upload" class="view" style="display:none;">
+      <div class="tabs">
+        <div class="tab active" onclick="switchTab('upload','receipts')">🧾 Facturas / Recibos</div>
+        <div class="tab" onclick="switchTab('upload','audio')">🎙️ Notas de Voz</div>
+      </div>
+
+      <div id="upload-tab-receipts" class="tab-panel active">
+        <div class="panel">
+          <div class="panel-header"><h3>📸 Subir Foto o PDF de Factura</h3></div>
+          <div class="panel-body">
+            <div class="upload-zone" id="drop-receipts" onclick="document.getElementById('file-receipt').click()" ondragover="event.preventDefault();this.classList.add('dragover')" ondragleave="this.classList.remove('dragover')" ondrop="handleDrop(event,'receipt')">
+              <div class="upload-icon">📄</div>
+              <p><strong>Clic para seleccionar</strong> o arrastra aquí</p>
+              <p style="margin-top:6px;font-size:12px;">JPG, PNG, PDF — máx. 20MB por archivo</p>
+            </div>
+            <input type="file" id="file-receipt" style="display:none" accept="image/*,.pdf" multiple onchange="uploadFiles(this.files,'receipt')"/>
+            <div id="upload-progress" style="margin-top:16px;"></div>
+          </div>
+        </div>
+      </div>
+
+      <div id="upload-tab-audio" class="tab-panel">
+        <div class="panel">
+          <div class="panel-header"><h3>🎙️ Subir Nota de Voz</h3></div>
+          <div class="panel-body">
+            <div class="upload-zone" onclick="document.getElementById('file-audio').click()">
+              <div class="upload-icon">🎵</div>
+              <p><strong>Clic para seleccionar</strong> archivo de audio</p>
+              <p style="margin-top:6px;font-size:12px;">MP3, M4A, WAV, OGG, WebM — máx. 25MB</p>
+            </div>
+            <input type="file" id="file-audio" style="display:none" accept="audio/*" onchange="uploadFiles(this.files,'audio')"/>
+            <div id="audio-progress" style="margin-top:16px;"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────── VIEW: BANK STATEMENTS -->
+    <div id="view-statements" class="view" style="display:none;">
+      <div class="panel">
+        <div class="panel-header"><h3>🏦 Procesar Extracto Bancario</h3></div>
+        <div class="panel-body">
+          <div class="form-grid" style="margin-bottom:16px;">
+            <div class="form-group"><label>Banco</label><input id="stmt-bank" placeholder="ej. Bancolombia"/></div>
+            <div class="form-group"><label>Número de Cuenta</label><input id="stmt-account" placeholder="ej. 123-456789"/></div>
+            <div class="form-group"><label>Mes del Extracto</label><input id="stmt-month" type="month" /></div>
+          </div>
+          <div class="upload-zone" onclick="document.getElementById('file-statement').click()">
+            <div class="upload-icon">🏦</div>
+            <p><strong>Clic para seleccionar</strong> PDF del extracto</p>
+            <p style="margin-top:6px;font-size:12px;">LlamaParse extraerá cada fila automáticamente</p>
+          </div>
+          <input type="file" id="file-statement" style="display:none" accept=".pdf" onchange="uploadStatement(this.files[0])"/>
+          <div id="statement-result" style="margin-top:16px;"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────── VIEW: TRANSACTIONS -->
+    <div id="view-transactions" class="view" style="display:none;">
+      <div class="panel">
+        <div class="panel-header">
+          <h3>📋 Revisión de Transacciones</h3>
+          <div style="display:flex;gap:8px;align-items:center;">
+            <div class="search-bar"><input id="txn-search" placeholder="Buscar..." style="width:220px;" oninput="filterTransactions()"/></div>
+            <select id="txn-filter-status" style="font-size:13px;padding:7px 10px;border:1.5px solid var(--border);border-radius:6px;" onchange="loadTransactions()">
+              <option value="pending_review">⏳ Pendientes</option>
+              <option value="verified">✅ Verificadas</option>
+              <option value="closed">🔒 Cerradas</option>
+              <option value="">Todas</option>
+            </select>
+          </div>
+        </div>
+        <div class="panel-body" style="padding-bottom:0;">
+          <div style="display:flex;gap:8px;margin-bottom:14px;align-items:center;">
+            <input type="checkbox" class="cb" id="select-all" onchange="toggleSelectAll(this.checked)"/>
+            <label for="select-all" style="font-size:13px;">Seleccionar todo</label>
+            <button class="btn btn-success btn-sm" onclick="approveSelected()">✅ Aprobar Seleccionadas</button>
+            <button class="btn btn-outline btn-sm" onclick="loadTransactions()">🔄 Recargar</button>
+            <span id="txn-count" style="margin-left:auto;font-size:12px;color:var(--text-muted);"></span>
+          </div>
+          <div class="tbl-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th style="width:36px;"></th>
+                  <th>Fecha</th>
+                  <th>Descripción</th>
+                  <th>Proveedor</th>
+                  <th>Tipo</th>
+                  <th>Cuenta Contable</th>
+                  <th>Confianza</th>
+                  <th style="text-align:right;">Monto</th>
+                  <th>Estado</th>
+                  <th>Acciones</th>
+                </tr>
+              </thead>
+              <tbody id="txn-tbody">
+                <tr><td colspan="10"><div class="empty-state"><div class="empty-icon">🔄</div><p>Cargando...</p></div></td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────── VIEW: MOVEMENTS -->
+    <div id="view-movements" class="view" style="display:none;">
+      <div class="panel">
+        <div class="panel-header">
+          <h3>↔️ Movimientos Bancarios</h3>
+          <button class="btn btn-outline btn-sm" onclick="loadMovements()">🔄 Recargar</button>
+        </div>
+        <div class="panel-body tbl-wrap">
+          <table>
+            <thead><tr><th>Fecha</th><th>Descripción</th><th>Banco</th><th>Débito</th><th>Crédito</th><th>Cuenta RAG</th><th>Confianza</th><th>Conciliado</th><th>Estado</th></tr></thead>
+            <tbody id="mov-tbody">
+              <tr><td colspan="9"><div class="empty-state"><div class="empty-icon">🏦</div><p>Sin movimientos cargados</p></div></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────── VIEW: PERIODS -->
+    <div id="view-periods" class="view" style="display:none;">
+      <div class="panel">
+        <div class="panel-header">
+          <h3>📅 Períodos Fiscales</h3>
+          <div style="display:flex;gap:8px;">
+            <select id="period-year" style="font-size:13px;padding:7px 10px;border:1.5px solid var(--border);border-radius:6px;" onchange="renderPeriodGrid()"></select>
+            <button class="btn btn-outline btn-sm" onclick="renderPeriodGrid()">🔄</button>
+          </div>
+        </div>
+        <div class="panel-body">
+          <div class="period-grid" id="period-grid"></div>
+        </div>
+      </div>
+
+      <!-- Close Period Modal Trigger -->
+      <div class="panel" id="close-period-panel" style="display:none;">
+        <div class="panel-header"><h3 id="close-period-title">Cerrar Período</h3></div>
+        <div class="panel-body">
+          <p style="font-size:14px;margin-bottom:16px;color:var(--text-muted);">
+            Al cerrar este período se agregarán todas las transacciones <strong>VERIFIED</strong>
+            en un MonthlyLedger. Esta acción no se puede deshacer.
+          </p>
+          <button class="btn btn-success" onclick="closePeriod()">🔒 Cerrar Período</button>
+          <button class="btn btn-outline" style="margin-left:10px;" onclick="document.getElementById('close-period-panel').style.display='none'">Cancelar</button>
+        </div>
+      </div>
+    </div>
+
+    <!-- ──────────────────────────────── VIEW: REPORTS -->
+    <div id="view-reports" class="view" style="display:none;">
+      <div class="panel">
+        <div class="panel-header"><h3>📑 Generar Estados Financieros</h3></div>
+        <div class="panel-body">
+          <div class="form-grid" style="margin-bottom:20px;">
+            <div class="form-group">
+              <label>Tipo de Reporte</label>
+              <select id="report-type">
+                <option value="month">Mes individual</option>
+                <option value="year">Año completo</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label>Período</label>
+              <input id="report-period" type="month" />
+            </div>
+            <div class="form-group">
+              <label>Nombre de la Empresa</label>
+              <input id="report-company" placeholder="Mi Empresa S.A.S" value="Mi Empresa S.A.S"/>
+            </div>
+            <div class="form-group">
+              <label>Formato</label>
+              <select id="report-format">
+                <option value="excel">Excel (.xlsx)</option>
+                <option value="pdf">PDF</option>
+                <option value="both">Ambos</option>
+              </select>
+            </div>
+          </div>
+          <button class="btn btn-primary" onclick="generateReport()">⚙️ Generar Reporte</button>
+          <div id="report-result" style="margin-top:20px;"></div>
+        </div>
+      </div>
+
+      <!-- Preview panel -->
+      <div class="panel" id="report-preview" style="display:none;">
+        <div class="panel-header"><h3 id="report-preview-title">Estado de Resultados</h3></div>
+        <div class="panel-body" id="report-preview-body"></div>
+      </div>
+    </div>
+
+  </div><!-- /#content -->
+</div><!-- /#main -->
+
+<!-- ═══════════════════════════════════════════════════════ EDIT MODAL -->
+<div class="modal-overlay" id="edit-modal">
+  <div class="modal">
+    <h3>✏️ Editar Transacción</h3>
+    <div class="form-grid">
+      <div class="form-group"><label>Cuenta Contable (Código)</label><input id="edit-account-code" placeholder="ej. 5105"/></div>
+      <div class="form-group"><label>Nombre de la Cuenta</label><input id="edit-account-name" placeholder="ej. Gastos de Personal"/></div>
+      <div class="form-group"><label>Tipo de Transacción</label>
+        <select id="edit-type">
+          <option value="expense">Gasto</option>
+          <option value="income">Ingreso</option>
+          <option value="transfer">Transferencia</option>
+          <option value="journal_entry">Asiento</option>
+        </select>
+      </div>
+      <div class="form-group"><label>Descripción</label><input id="edit-description"/></div>
+    </div>
+    <input type="hidden" id="edit-txn-id"/>
+    <div class="modal-footer">
+      <button class="btn btn-outline" onclick="closeModal('edit-modal')">Cancelar</button>
+      <button class="btn btn-primary" onclick="saveEdit()">💾 Guardar y Aprobar</button>
+    </div>
+  </div>
+</div>
+
+<div id="toast-container"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════ CONFIG
+const API = 'http://localhost:8000';
+let TENANT_ID = '00000000-0000-0000-0000-000000000001';
+let allTransactions = [];
+let selectedPeriod = null;
+
+// ═══════════════════════════════════════════════════════════════ INIT
+document.addEventListener('DOMContentLoaded', () => {
+  setTenant(document.getElementById('tenant-input').value);
+  populateYearSelect();
+  renderPeriodGrid();
+  loadDashboard();
+  const now = new Date();
+  document.getElementById('report-period').value = now.toISOString().slice(0,7);
+  document.getElementById('stmt-month').value = now.toISOString().slice(0,7);
+});
+
+function setTenant(val){
+  TENANT_ID = val.trim();
+  document.getElementById('tenant-display').textContent = TENANT_ID.slice(0,8)+'…';
+}
+
+function refreshAll(){ loadDashboard(); loadTransactions(); }
+
+// ═══════════════════════════════════════════════════════════════ NAVIGATION
+function showView(name){
+  document.querySelectorAll('.view').forEach(v=>v.style.display='none');
+  document.querySelectorAll('.nav-item').forEach(n=>n.classList.remove('active'));
+  const v = document.getElementById('view-'+name);
+  if(v) v.style.display='block';
+  document.querySelectorAll('.nav-item').forEach(n=>{
+    if(n.getAttribute('onclick')?.includes("'"+name+"'")) n.classList.add('active');
+  });
+  const titles = {dashboard:'Dashboard',upload:'Subir Documentos',statements:'Extractos Bancarios',
+    transactions:'Revisión de Transacciones',movements:'Movimientos Bancarios',
+    periods:'Períodos Fiscales',reports:'Estados Financieros'};
+  document.getElementById('topbar-title').textContent = titles[name]||name;
+  if(name==='transactions') loadTransactions();
+  if(name==='movements') loadMovements();
+  if(name==='dashboard') loadDashboard();
+}
+
+function switchTab(view, tab){
+  document.querySelectorAll(`#view-${view} .tab-panel`).forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll(`#view-${view} .tab`).forEach(t=>t.classList.remove('active'));
+  document.getElementById(`${view}-tab-${tab}`).classList.add('active');
+  event.target.classList.add('active');
+}
+
+// ═══════════════════════════════════════════════════════════════ API CALLS
+async function apiFetch(path, opts={}){
+  try{
+    const r = await fetch(API+path, opts);
+    if(!r.ok){
+      const err = await r.json().catch(()=>({detail:'Error desconocido'}));
+      throw new Error(err.detail||r.statusText);
+    }
+    return await r.json();
+  } catch(e){
+    if(e.message.includes('Failed to fetch')){
+      toast('No se puede conectar al servidor. ¿Está corriendo? uvicorn apps.api.main:app','error');
+    } else {
+      toast(e.message,'error');
+    }
+    return null;
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════ DASHBOARD
+async function loadDashboard(){
+  const data = await apiFetch(`/transactions?tenant_id=${TENANT_ID}&limit=200`);
+  if(!data) return;
+  const txns = data.transactions || [];
+  const pending = txns.filter(t=>t.status==='pending_review').length;
+  const verified = txns.filter(t=>t.status==='verified').length;
+  document.getElementById('kpi-pending').textContent = pending;
+  document.getElementById('kpi-verified').textContent = verified;
+  document.getElementById('kpi-closed').textContent = '—';
+  document.getElementById('kpi-unreconciled').textContent = '—';
+  document.getElementById('pending-badge').textContent = pending;
+
+  const tbody = document.getElementById('dashboard-txn-tbody');
+  const recent = txns.slice(0,10);
+  if(!recent.length){
+    tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><div class="empty-icon">📭</div><p>Sin transacciones aún. Sube tu primer documento.</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = recent.map(t=>txnRow(t)).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════ TRANSACTIONS
+async function loadTransactions(){
+  const status = document.getElementById('txn-filter-status')?.value || 'pending_review';
+  const url = `/transactions?tenant_id=${TENANT_ID}&limit=500${status?'&status='+status:''}`;
+  const data = await apiFetch(url);
+  allTransactions = data?.transactions || [];
+  renderTransactions(allTransactions);
+}
+
+function filterTransactions(){
+  const q = document.getElementById('txn-search').value.toLowerCase();
+  const filtered = allTransactions.filter(t=>
+    (t.description||'').toLowerCase().includes(q) ||
+    (t.vendor_name||'').toLowerCase().includes(q) ||
+    (t.chart_of_accounts_code||'').toLowerCase().includes(q)
+  );
+  renderTransactions(filtered);
+}
+
+function renderTransactions(txns){
+  const tbody = document.getElementById('txn-tbody');
+  const count = document.getElementById('txn-count');
+  count.textContent = `${txns.length} registro${txns.length!==1?'s':''}`;
+  if(!txns.length){
+    tbody.innerHTML = '<tr><td colspan="10"><div class="empty-state"><div class="empty-icon">✅</div><p>Sin registros para este filtro.</p></div></td></tr>';
+    return;
+  }
+  tbody.innerHTML = txns.map(t=>`
+    <tr>
+      <td><input type="checkbox" class="cb txn-cb" value="${t.id}"/></td>
+      <td style="white-space:nowrap;">${t.transaction_date||'—'}</td>
+      <td class="td-desc" title="${t.description||''}">${t.description||'—'}</td>
+      <td>${t.vendor_name||'<span style="color:var(--text-muted)">—</span>'}</td>
+      <td><span class="badge badge-${t.transaction_type}">${typeLabel(t.transaction_type)}</span></td>
+      <td>
+        ${t.chart_of_accounts_code
+          ? `<span style="font-weight:600;">${t.chart_of_accounts_code}</span>
+             <span style="font-size:11px;color:var(--text-muted);display:block;">${t.chart_of_accounts_name||''}</span>`
+          : '<span style="color:var(--orange);font-size:12px;">⚠ Sin clasificar</span>'}
+      </td>
+      <td>${confBar(t.category_confidence)}</td>
+      <td class="td-amount ${t.transaction_type}">
+        ${fmtCurrency(t.amount, t.currency)}
+      </td>
+      <td><span class="badge badge-${t.status}">${statusLabel(t.status)}</span></td>
+      <td>
+        <div style="display:flex;gap:4px;">
+          ${t.status==='pending_review'
+            ? `<button class="btn-icon" title="Aprobar" onclick="approveTxn('${t.id}')">✅</button>`
+            : ''}
+          <button class="btn-icon" title="Editar" onclick="openEdit(${JSON.stringify(t).replace(/"/g,'&quot;')})">✏️</button>
+        </div>
+      </td>
+    </tr>`).join('');
+}
+
+function txnRow(t){
+  return `<tr>
+    <td style="white-space:nowrap;">${t.transaction_date||'—'}</td>
+    <td class="td-desc">${t.description||'—'}</td>
+    <td>${t.vendor_name||'—'}</td>
+    <td><span class="badge badge-${t.transaction_type}">${typeLabel(t.transaction_type)}</span></td>
+    <td style="font-size:12px;">${t.chart_of_accounts_code||'—'}</td>
+    <td>${confBar(t.category_confidence)}</td>
+    <td class="td-amount ${t.transaction_type}">${fmtCurrency(t.amount,t.currency)}</td>
+    <td><span class="badge badge-${t.status}">${statusLabel(t.status)}</span></td>
+  </tr>`;
+}
+
+async function approveTxn(id){
+  const data = await apiFetch(`/transactions/${id}/verify`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tenant_id:TENANT_ID})});
+  if(data){ toast('Transacción aprobada ✅','success'); loadTransactions(); loadDashboard(); }
+}
+
+async function approveSelected(){
+  const cbs = document.querySelectorAll('.txn-cb:checked');
+  if(!cbs.length){ toast('Selecciona al menos una transacción','info'); return; }
+  let ok=0;
+  for(const cb of cbs){
+    const r = await apiFetch(`/transactions/${cb.value}/verify`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tenant_id:TENANT_ID})});
+    if(r) ok++;
+  }
+  toast(`${ok} transacción${ok!==1?'es':''} aprobada${ok!==1?'s':''} ✅`,'success');
+  loadTransactions(); loadDashboard();
+}
+
+function toggleSelectAll(checked){
+  document.querySelectorAll('.txn-cb').forEach(cb=>cb.checked=checked);
+}
+
+// ═══════════════════════════════════════════════════════════════ EDIT MODAL
+function openEdit(t){
+  document.getElementById('edit-txn-id').value = t.id;
+  document.getElementById('edit-description').value = t.description||'';
+  document.getElementById('edit-account-code').value = t.chart_of_accounts_code||'';
+  document.getElementById('edit-account-name').value = t.chart_of_accounts_name||'';
+  document.getElementById('edit-type').value = t.transaction_type||'expense';
+  document.getElementById('edit-modal').classList.add('open');
+}
+
+async function saveEdit(){
+  const id = document.getElementById('edit-txn-id').value;
+  const payload = {
+    tenant_id: TENANT_ID,
+    chart_of_accounts_code: document.getElementById('edit-account-code').value,
+    chart_of_accounts_name: document.getElementById('edit-account-name').value,
+    transaction_type: document.getElementById('edit-type').value,
+    description: document.getElementById('edit-description').value,
+  };
+  const data = await apiFetch(`/transactions/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify(payload)});
+  if(data){ toast('Guardado y aprobado ✅','success'); closeModal('edit-modal'); loadTransactions(); }
+}
+
+function closeModal(id){ document.getElementById(id).classList.remove('open'); }
+
+// ═══════════════════════════════════════════════════════════════ UPLOAD
+async function uploadFiles(files, type){
+  const container = document.getElementById(type==='audio'?'audio-progress':'upload-progress');
+  container.innerHTML='';
+  for(const file of files){
+    const bar = document.createElement('div');
+    bar.innerHTML=`<div style="display:flex;justify-content:space-between;margin-bottom:4px;font-size:13px;"><span>${file.name}</span><span id="status-${file.name.replace(/\W/g,'_')}">Subiendo...</span></div><div class="progress-bar"><div class="progress-fill" style="width:40%"></div></div>`;
+    container.appendChild(bar);
+    const fd = new FormData();
+    fd.append('file', file);
+    fd.append('tenant_id', TENANT_ID);
+    try{
+      const r = await fetch(API+'/ingest',{method:'POST',body:fd});
+      const d = await r.json();
+      const statusEl = document.getElementById('status-'+file.name.replace(/\W/g,'_'));
+      if(r.ok){
+        statusEl.textContent='✅ Procesado';
+        statusEl.style.color='var(--green)';
+        bar.querySelector('.progress-fill').style.width='100%';
+        bar.querySelector('.progress-fill').style.background='var(--green)';
+        toast(`${file.name} procesado exitosamente`,'success');
+      } else {
+        statusEl.textContent='❌ Error';
+        statusEl.style.color='var(--red)';
+        toast(d.detail||'Error al procesar','error');
+      }
+    } catch(e){ toast('Error de conexión','error'); }
+  }
+  loadDashboard();
+}
+
+function handleDrop(e, type){ e.preventDefault(); document.getElementById('drop-receipts')?.classList.remove('dragover'); uploadFiles(e.dataTransfer.files, type); }
+
+async function uploadStatement(file){
+  if(!file) return;
+  const bank = document.getElementById('stmt-bank').value.trim();
+  const account = document.getElementById('stmt-account').value.trim();
+  const month = document.getElementById('stmt-month').value;
+  if(!bank||!account||!month){ toast('Completa banco, cuenta y mes primero','error'); return; }
+
+  const fd = new FormData();
+  fd.append('file',file);
+  fd.append('tenant_id',TENANT_ID);
+  fd.append('bank_name',bank);
+  fd.append('bank_account_number',account);
+  fd.append('statement_month',month);
+
+  const result = document.getElementById('statement-result');
+  result.innerHTML='<p style="color:var(--blue);font-size:13px;">⏳ Procesando extracto con LlamaParse...</p>';
+
+  try{
+    const r = await fetch(API+'/statements',{method:'POST',body:fd});
+    const d = await r.json();
+    if(r.ok){
+      result.innerHTML=`
+        <div style="background:#F0FDF4;border:1px solid var(--green);border-radius:8px;padding:16px;">
+          <h4 style="color:var(--green);margin-bottom:10px;">✅ Extracto procesado exitosamente</h4>
+          <div class="form-grid">
+            <div><strong>${d.total_movements}</strong><div style="font-size:12px;color:var(--text-muted)">Movimientos totales</div></div>
+            <div><strong>${d.categorised}</strong><div style="font-size:12px;color:var(--text-muted)">Categorizados (RAG)</div></div>
+            <div><strong>${d.reconciled}</strong><div style="font-size:12px;color:var(--text-muted)">Conciliados</div></div>
+            <div><strong style="color:var(--orange);">${d.unmatched}</strong><div style="font-size:12px;color:var(--text-muted)">Sin conciliar</div></div>
+          </div>
+        </div>`;
+      toast('Extracto procesado ✅','success');
+    } else {
+      result.innerHTML=`<p style="color:var(--red);">❌ ${d.detail}</p>`;
+    }
+  } catch(e){ result.innerHTML='<p style="color:var(--red);">❌ Error de conexión</p>'; }
+}
+
+// ═══════════════════════════════════════════════════════════════ MOVEMENTS
+async function loadMovements(){
+  const data = await apiFetch(`/movements?tenant_id=${TENANT_ID}&limit=500`);
+  const tbody = document.getElementById('mov-tbody');
+  const mvs = data?.movements||[];
+  if(!mvs.length){ tbody.innerHTML='<tr><td colspan="9"><div class="empty-state"><div class="empty-icon">🏦</div><p>Sin movimientos. Sube un extracto bancario.</p></div></td></tr>'; return; }
+  tbody.innerHTML = mvs.map(m=>`
+    <tr>
+      <td>${m.movement_date||'—'}</td>
+      <td class="td-desc">${m.description||'—'}</td>
+      <td>${m.bank_name||'—'}</td>
+      <td class="td-amount expense">${m.debit_amount>0?fmtCurrency(m.debit_amount,m.currency):''}</td>
+      <td class="td-amount income">${m.credit_amount>0?fmtCurrency(m.credit_amount,m.currency):''}</td>
+      <td>${m.chart_of_accounts_code||'<span style="color:var(--orange);font-size:11px;">⚠ Sin cuenta</span>'}</td>
+      <td>${confBar(m.category_confidence)}</td>
+      <td>${m.matched_transaction_id?'<span style="color:var(--green);">✅ Sí</span>':'<span style="color:var(--orange);">⏳ No</span>'}</td>
+      <td><span class="badge badge-${m.status}">${statusLabel(m.status)}</span></td>
+    </tr>`).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════ PERIODS
+function populateYearSelect(){
+  const sel = document.getElementById('period-year');
+  const now = new Date().getFullYear();
+  for(let y=now;y>=now-10;y--){ const o=document.createElement('option'); o.value=y; o.textContent=y; sel.appendChild(o); }
+}
+
+function renderPeriodGrid(){
+  const year = parseInt(document.getElementById('period-year').value||new Date().getFullYear());
+  const grid = document.getElementById('period-grid');
+  const months = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+  grid.innerHTML = months.map((_,i)=>{
+    const m = String(i+1).padStart(2,'0');
+    const period = `${year}-${m}`;
+    return `
+      <div class="period-card open" onclick="selectPeriod('${period}')">
+        <div class="period-month">${months[i]}</div>
+        <div class="period-year">${year}</div>
+        <div class="period-status" style="color:var(--orange);">⏳ Abierto</div>
+        <div class="period-count" id="pc-${period}">— txns</div>
+      </div>`;
+  }).join('');
+}
+
+function selectPeriod(period){
+  selectedPeriod = period;
+  const panel = document.getElementById('close-period-panel');
+  document.getElementById('close-period-title').textContent = `Cerrar Período: ${period}`;
+  panel.style.display='block';
+  panel.scrollIntoView({behavior:'smooth'});
+}
+
+async function closePeriod(){
+  if(!selectedPeriod){ toast('Selecciona un período primero','error'); return; }
+  const fd = new FormData();
+  fd.append('tenant_id', TENANT_ID);
+  try{
+    const r = await fetch(`${API}/periods/${selectedPeriod}/close`,{method:'POST',body:fd});
+    const d = await r.json();
+    if(r.ok){
+      toast(`Período ${selectedPeriod} cerrado ✅ — ${d.transaction_count} transacciones`,'success');
+      document.getElementById('close-period-panel').style.display='none';
+      const card = document.querySelector(`[onclick="selectPeriod('${selectedPeriod}')"]`);
+      if(card){ card.className='period-card closed'; card.querySelector('.period-status').textContent='🔒 Cerrado'; card.querySelector('.period-status').style.color='var(--green)'; }
+    } else {
+      toast(d.detail||'Error al cerrar período','error');
+    }
+  } catch(e){ toast('Error de conexión','error'); }
+}
+
+// ═══════════════════════════════════════════════════════════════ REPORTS
+async function generateReport(){
+  const period = document.getElementById('report-period').value;
+  const company = document.getElementById('report-company').value;
+  const format = document.getElementById('report-format').value;
+  if(!period){ toast('Selecciona un período','error'); return; }
+
+  const result = document.getElementById('report-result');
+  result.innerHTML='<p style="color:var(--blue);">⏳ Generando estados financieros...</p>';
+
+  const fd = new FormData();
+  fd.append('tenant_id',TENANT_ID);
+  fd.append('company_name',company);
+  fd.append('format',format);
+
+  try{
+    const r = await fetch(`${API}/periods/${period}/report`,{method:'POST',body:fd});
+    const d = await r.json();
+    if(r.ok){
+      result.innerHTML=`
+        <div style="background:#F0FDF4;border:1px solid var(--green);border-radius:8px;padding:16px;display:flex;gap:12px;flex-wrap:wrap;">
+          <a href="${d.excel_url}" class="btn btn-success">📥 Descargar Excel</a>
+          <a href="${d.pdf_url}" class="btn btn-primary">📄 Descargar PDF</a>
+        </div>`;
+      showStatementPreview(d);
+    } else {
+      result.innerHTML=`<p style="color:var(--orange);font-size:13px;">ℹ️ ${d.detail}</p>`;
+    }
+  } catch(e){ result.innerHTML='<p style="color:var(--red);">❌ Error de conexión</p>'; }
+}
+
+function showStatementPreview(data){
+  if(!data.income_statement) return;
+  const s = data.income_statement;
+  const preview = document.getElementById('report-preview');
+  const body = document.getElementById('report-preview-body');
+  document.getElementById('report-preview-title').textContent = `Estado de Resultados — ${s.period_label}`;
+  body.innerHTML=`
+    <div class="stmt-section">
+      <div class="stmt-section"><h4>Ingresos</h4>${(s.revenue_lines||[]).map(l=>`<div class="stmt-row"><span>${l.account_name}</span><span class="stmt-amount stmt-positive">${fmtCurrency(l.amount,s.currency)}</span></div>`).join('')}<div class="stmt-row subtotal"><span>Total Ingresos</span><span class="stmt-amount">${fmtCurrency(s.total_revenue,s.currency)}</span></div></div>
+      <div class="stmt-section"><h4>Gastos</h4>${(s.expense_lines||[]).map(l=>`<div class="stmt-row"><span>${l.account_name}</span><span class="stmt-amount stmt-negative">${fmtCurrency(l.amount,s.currency)}</span></div>`).join('')}<div class="stmt-row subtotal"><span>Total Gastos</span><span class="stmt-amount">${fmtCurrency(s.total_expenses,s.currency)}</span></div></div>
+      <div class="stmt-row total"><span>UTILIDAD NETA</span><span class="stmt-amount">${fmtCurrency(s.net_income,s.currency)}</span></div>
+    </div>`;
+  preview.style.display='block';
+}
+
+// ═══════════════════════════════════════════════════════════════ HELPERS
+function fmtCurrency(amount, currency='USD'){
+  if(amount==null) return '—';
+  const n = parseFloat(amount);
+  return `${currency} ${Math.abs(n).toLocaleString('es-CO',{minimumFractionDigits:2,maximumFractionDigits:2})}`;
+}
+
+function confBar(score){
+  if(score==null) return '<span style="color:var(--text-muted);font-size:11px;">—</span>';
+  const pct = Math.round(score*100);
+  const cls = pct>=80?'high':pct>=60?'mid':'low';
+  const w = pct;
+  return `<div class="conf-bar"><div class="conf-fill ${cls}" style="width:${w}px;min-width:4px;max-width:60px;"></div><span class="conf-pct">${pct}%</span></div>`;
+}
+
+function typeLabel(t){ return {income:'Ingreso',expense:'Gasto',transfer:'Transfer.',journal_entry:'Asiento'}[t]||t; }
+function statusLabel(s){ return {pending_review:'Pendiente',verified:'Verificada',closed:'Cerrada'}[s]||s; }
+
+function toast(msg, type='info'){
+  const c = document.getElementById('toast-container');
+  const t = document.createElement('div');
+  t.className=`toast toast-${type}`;
+  t.innerHTML=`<span>${type==='success'?'✅':type==='error'?'❌':'ℹ️'}</span>${msg}`;
+  c.appendChild(t);
+  setTimeout(()=>t.remove(),4000);
+}
+</script>
+</body>
+</html>
