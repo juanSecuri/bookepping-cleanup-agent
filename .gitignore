@@ -1,6 +1,10 @@
 # Environment
 .env
 *.env
+.google_drive_token.json
+client_secret*.json
+data/drive_inbox/
+data/*.md
 
 # Python
 __pycache__/
@@ -16,10 +20,21 @@ build/
 venv/
 env/
 
+# Frontend
+frontend/node_modules/
+frontend/dist/
+frontend/node_modules/.tmp/
+
+# IDE / local
+.cursor/
+.vscode/
+
 # Reports / generated files
 ingestion_report_*.json
 *.xlsx
 *.pdf
+_run_tests.bat
+_reprocess_*.py
 
 # OS
 .DS_Store

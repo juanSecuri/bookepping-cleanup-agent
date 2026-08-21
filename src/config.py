@@ -28,6 +28,14 @@ class Settings(BaseSettings):
     default_currency: str = Field(default="USD")
     fiscal_year_start_month: int = Field(default=1, ge=1, le=12)
 
+    google_oauth_client_id: str | None = Field(default=None)
+    google_oauth_client_secret: SecretStr = Field(default=SecretStr(""))
+    google_oauth_refresh_token: SecretStr = Field(default=SecretStr(""))
+    google_drive_token_path: str | None = Field(default=None)
+    google_drive_default_folder_id: str = Field(
+        default="1db-aXczr9hHkv207U5gjEDmUfitN8MmT"
+    )
+
 
 @lru_cache(maxsize=1)
 def get_settings() -> Settings:

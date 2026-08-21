@@ -4,8 +4,8 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "bookkeeping-cleanup-agent"
-version = "0.4.0"
-description = "AI Agent for reconstructing and generating financial statements from unstructured bookkeeping (OpenAI + Supabase)"
+version = "1.0.0"
+description = "LedgerAI — bookkeeping cleanup agent: Drive ingest, OCR, classify, reconcile, month close, P&L (OpenAI + LlamaParse + Supabase)"
 requires-python = ">=3.11"
 dependencies = [
     # Web framework

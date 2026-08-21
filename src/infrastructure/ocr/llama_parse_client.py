@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import re
 import uuid
-from datetime import datetime
+from datetime import date, datetime
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
@@ -45,18 +45,57 @@ def _parse_decimal(raw: str) -> Decimal:
         return Decimal("0")
 
 
-def _normalise_date(raw: str) -> str:
-    """Return date in YYYY-MM-DD regardless of input format."""
+def _normalise_date(raw: str, statement_month: str | None = None) -> date:
+    """Return a date from statement cell values (supports MM/DD without year)."""
+    from datetime import date as date_cls
+
     raw = raw.strip()
-    if re.match(r"\d{4}-\d{2}-\d{2}", raw):
-        return raw
-    for fmt in ("%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y"):
+    if not raw:
+        raise ValueError("empty date")
+
+    # Already ISO
+    if re.match(r"^\d{4}-\d{2}-\d{2}$", raw):
+        return date_cls.fromisoformat(raw)
+
+    year_hint = None
+    month_hint = None
+    if statement_month and re.match(r"^\d{4}-\d{2}$", statement_month):
+        year_hint = int(statement_month[:4])
+        month_hint = int(statement_month[5:7])
+
+    for fmt in ("%d/%m/%Y", "%m/%d/%Y", "%d-%m-%Y", "%m-%d-%Y", "%Y/%m/%d"):
         try:
-            from datetime import datetime as dt
-            return dt.strptime(raw, fmt).strftime("%Y-%m-%d")
+            return datetime.strptime(raw, fmt).date()
         except ValueError:
             continue
-    return raw   # Return as-is if format not recognized
+
+    # MM/DD or DD/MM without year (US credit cards usually MM/DD)
+    m = re.match(r"^(\d{1,2})[/-](\d{1,2})(?:[/-](\d{2,4}))?$", raw)
+    if m:
+        a, b, y = int(m.group(1)), int(m.group(2)), m.group(3)
+        if y:
+            year = int(y)
+            if year < 100:
+                year += 2000
+        else:
+            year = year_hint or date_cls.today().year
+        # Prefer MM/DD for US statements
+        month, day = a, b
+        if month > 12 and day <= 12:
+            month, day = day, a
+        if month > 12 or day > 31:
+            raise ValueError(f"invalid date parts: {raw}")
+        # If day looks wrong relative to statement month, still accept MM/DD
+        try:
+            return date_cls(year, month, day)
+        except ValueError:
+            # Try swapping if US parse failed
+            try:
+                return date_cls(year, day, month)
+            except ValueError as exc:
+                raise ValueError(f"invalid date: {raw}") from exc
+
+    raise ValueError(f"unrecognised date: {raw}")
 
 
 class LlamaParseClient:
@@ -130,19 +169,31 @@ class LlamaParseClient:
 
                 if not re.search(r"\d", date_raw):
                     continue  # Skip non-data rows
+                # Skip fee/interest summary rows without amounts
+                desc_upper = description.upper()
+                if "TOTAL FEES" in desc_upper or description.strip() == "":
+                    continue
 
                 debit = _parse_decimal(debit_raw) if debit_raw else Decimal("0")
                 credit = _parse_decimal(credit_raw) if credit_raw else Decimal("0")
+
+                # Autopay / payments often appear as debit on CC statements but are credits to balance
+                if "AUTOPAY" in desc_upper or (
+                    "PAYMENT" in desc_upper and "THANK" in desc_upper
+                ):
+                    if debit > 0 and credit == 0:
+                        credit, debit = debit, Decimal("0")
 
                 if debit == Decimal("0") and credit == Decimal("0"):
                     continue
 
                 try:
+                    movement_date = _normalise_date(date_raw, statement_month)
                     movement = BankMovement(
                         tenant_id=tenant_id,
                         bank_account_number=bank_account_number,
                         bank_name=bank_name,
-                        movement_date=_normalise_date(date_raw),
+                        movement_date=movement_date,
                         description=description[:512],
                         reference=reference[:256] if reference else None,
                         debit_amount=debit,
@@ -163,10 +214,13 @@ class LlamaParseClient:
 
     async def extract_text(self, file_path: Path) -> str:
         """Extract raw markdown/text from any PDF (invoices, receipts, etc.)."""
+        import asyncio
+
         if not file_path.exists():
             raise ExtractionError(f"PDF not found: {file_path}")
         try:
-            text = self._parse_pdf(file_path)
+            # LlamaParse SDK is sync; run off the event loop to avoid "Event loop is closed"
+            text = await asyncio.to_thread(self._parse_pdf, file_path)
         except Exception as exc:
             raise ExtractionError(f"LlamaParse failed: {exc}") from exc
         if not text.strip():

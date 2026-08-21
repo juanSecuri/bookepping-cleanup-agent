@@ -1,7 +1,7 @@
 """
 ProcessStatement use-case.
 
-PDF → parse → RAG categorise → persist → reconcile.
+PDF → parse → RAG categorise → persist movements + mirror transactions → reconcile.
 """
 from __future__ import annotations
 
@@ -11,8 +11,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from src.domain.models.bank_movement import BankMovement
+from src.domain.models.enums import DocumentSource, TransactionType
+from src.domain.models.transaction import ExtractionMetadata, FinancialTransaction
 from src.infrastructure.ocr.llama_parse_client import LlamaParseClient
 from src.infrastructure.repositories.bank_movement_repository import BankMovementRepository
+from src.infrastructure.repositories.transaction_repository import TransactionRepository
 from src.infrastructure.repositories.vector_repository import VectorRepository
 from src.use_cases.reconcile_ledger import ReconcileLedgerUseCase, ReconciliationResult
 
@@ -36,11 +39,13 @@ class ProcessStatementUseCase:
         llama_client: LlamaParseClient | None = None,
         vector_repo: VectorRepository | None = None,
         movement_repo: BankMovementRepository | None = None,
+        transaction_repo: TransactionRepository | None = None,
         reconciler: ReconcileLedgerUseCase | None = None,
     ) -> None:
         self._llama = llama_client or LlamaParseClient()
         self._vector = vector_repo or VectorRepository()
         self._movements = movement_repo or BankMovementRepository()
+        self._transactions = transaction_repo or TransactionRepository()
         self._reconciler = reconciler or ReconcileLedgerUseCase()
 
     async def execute(
@@ -77,7 +82,9 @@ class ProcessStatementUseCase:
                 logger.exception(
                     "RAG categorisation failed for movement %s", movement.id
                 )
-            categorised.append(await self._movements.save(movement))
+            saved_mov = await self._movements.save(movement)
+            categorised.append(saved_mov)
+            await self._mirror_transaction(saved_mov, file_path)
 
         categorised_count = sum(
             1 for m in categorised if m.chart_of_accounts_code is not None
@@ -97,3 +104,42 @@ class ProcessStatementUseCase:
             movements=categorised,
             reconciliation=reconciliation,
         )
+
+    async def _mirror_transaction(self, movement: BankMovement, file_path: Path) -> None:
+        """Create a reviewable FinancialTransaction for each bank line."""
+        amount = movement.debit_amount if movement.debit_amount > 0 else movement.credit_amount
+        if amount <= 0:
+            return
+        tx_type = (
+            TransactionType.EXPENSE
+            if movement.debit_amount > 0
+            else TransactionType.INCOME
+        )
+        vendor = movement.description.split("  ")[0][:128]
+        meta = ExtractionMetadata(
+            source=DocumentSource.BANK_STATEMENT,
+            raw_file_path=str(file_path),
+            extraction_model="llamaparse+statement",
+            confidence_score=float(movement.category_confidence or 0.85),
+            raw_text=movement.description,
+        )
+        tx = FinancialTransaction(
+            tenant_id=movement.tenant_id,
+            transaction_date=movement.movement_date,
+            description=movement.description,
+            amount=amount,
+            currency=movement.currency,
+            transaction_type=tx_type,
+            chart_of_accounts_code=movement.chart_of_accounts_code,
+            chart_of_accounts_name=movement.chart_of_accounts_name,
+            category_confidence=movement.category_confidence,
+            ai_suggested_account_code=movement.chart_of_accounts_code,
+            ai_suggested_account_name=movement.chart_of_accounts_name,
+            vendor_name=vendor,
+            bank_movement_id=movement.id,
+            metadata=meta,
+        )
+        try:
+            await self._transactions.save(tx)
+        except Exception:
+            logger.exception("Failed mirroring movement %s to transaction", movement.id)

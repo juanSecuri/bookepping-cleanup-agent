@@ -1,9 +1,9 @@
 """
-Quick-start launcher — Bookkeeping Clean-up Agent
+Quick-start launcher — LedgerAI
 
-  python run.py            → start API server (default: http://localhost:8000)
+  python run.py            → API + SPA (http://localhost:8000)
   python run.py --port 9000
-  python run.py --reload   → hot-reload for development
+  python run.py --reload
 """
 from __future__ import annotations
 
@@ -14,20 +14,19 @@ import uvicorn
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Start the Bookkeeping Clean-up Agent server.")
-    parser.add_argument("--host", default="0.0.0.0", help="Bind host (default: 0.0.0.0)")
+    parser = argparse.ArgumentParser(description="Start LedgerAI server.")
+    parser.add_argument("--host", default="0.0.0.0")
     parser.add_argument(
         "--port",
         type=int,
         default=int(os.environ.get("PORT", "8000")),
-        help="Bind port (default: 8000 or $PORT)",
     )
-    parser.add_argument("--reload", action="store_true", help="Enable hot-reload (dev mode)")
+    parser.add_argument("--reload", action="store_true")
     args = parser.parse_args()
 
     print(
         f"\n"
-        f"  Bookkeeping Clean-up Agent  v0.4.0\n"
+        f"  LedgerAI  v1.0.0\n"
         f"  UI   -> http://localhost:{args.port}/\n"
         f"  API  -> http://localhost:{args.port}/docs\n"
     )

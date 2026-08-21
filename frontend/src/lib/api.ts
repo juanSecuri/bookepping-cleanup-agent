@@ -1,0 +1,300 @@
+const API_BASE = import.meta.env.VITE_API_URL || ''
+
+async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_BASE}${path}`, {
+    ...init,
+    headers: {
+      ...(init?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
+      ...init?.headers,
+    },
+  })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(text || `Request failed: ${res.status}`)
+  }
+  if (res.status === 204) return undefined as T
+  const contentType = res.headers.get('content-type') || ''
+  if (contentType.includes('application/json')) return res.json() as Promise<T>
+  return undefined as T
+}
+
+export type Workspace = {
+  id: string
+  name: string
+  description?: string | null
+  legal_name?: string | null
+  created_at?: string
+}
+
+export type WorkspaceStats = {
+  documents?: number
+  pending_transactions?: number
+  verified_transactions?: number
+  rejected_transactions?: number
+  unmatched_movements?: number
+  periods_open?: number
+  totalIncome?: number
+  totalExpenses?: number
+  netIncome?: number
+  [key: string]: unknown
+}
+
+export type DriveStatus = {
+  configured?: boolean
+  default_folder_id?: string
+  default_folder_name?: string
+  [key: string]: unknown
+}
+
+export type DriveBrowseNode = {
+  id: string
+  name: string
+  mime_type?: string
+  path?: string
+  is_folder?: boolean
+  size?: number | null
+  children?: DriveBrowseNode[]
+  [key: string]: unknown
+}
+
+export type DriveSyncResult = {
+  discovered?: number
+  imported?: number
+  skipped?: number
+  failed?: unknown[]
+  [key: string]: unknown
+}
+
+export const DEFAULT_DRIVE_FOLDER_ID = '1db-aXczr9hHkv207U5gjEDmUfitN8MmT'
+export const DEFAULT_DRIVE_FOLDER_NAME = 'My Xcell Network CORP'
+
+export type Document = {
+  id: string
+  workspace_id?: string
+  tenant_id?: string
+  filename?: string
+  name?: string
+  status?: string
+  created_at?: string
+  [key: string]: unknown
+}
+
+export type Transaction = {
+  id: string
+  tenant_id?: string
+  workspace_id?: string
+  description?: string
+  amount?: number
+  currency?: string
+  status?: string
+  category?: string
+  account_code?: string
+  chart_of_accounts_code?: string
+  account_name?: string
+  date?: string
+  transaction_date?: string
+  vendor?: string
+  vendor_name?: string
+  type?: string
+  transaction_type?: string
+  category_confidence?: number
+  [key: string]: unknown
+}
+
+export type TransactionCounts = {
+  pending?: number
+  verified?: number
+  rejected?: number
+  all?: number
+  [key: string]: number | undefined
+}
+
+export type ChartAccount = {
+  id: string
+  code?: string
+  name?: string
+  category?: string
+  subcategory?: string
+  workspace_id?: string
+  [key: string]: unknown
+}
+
+export type Movement = {
+  id: string
+  description?: string
+  amount?: number
+  debit?: number
+  credit?: number
+  date?: string
+  bank?: string
+  bank_name?: string
+  matched?: boolean
+  transaction_id?: string | null
+  [key: string]: unknown
+}
+
+export type Period = {
+  period: string
+  status?: string
+  closed_at?: string | null
+  [key: string]: unknown
+}
+
+export type PnLReport = {
+  revenue?: number
+  expenses?: number
+  net_income?: number
+  lines?: Array<{ account?: string; amount?: number; category?: string }>
+  [key: string]: unknown
+}
+
+export const api = {
+  listWorkspaces: () => request<Workspace[]>('/api/workspaces'),
+  createWorkspace: (body: { name: string; description?: string }) =>
+    request<Workspace>('/api/workspaces', { method: 'POST', body: JSON.stringify(body) }),
+  deleteWorkspace: (id: string) =>
+    request<{ deleted: boolean; id: string; name?: string }>(`/api/workspaces/${id}`, {
+      method: 'DELETE',
+    }),
+  getWorkspace: (id: string) => request<Workspace>(`/api/workspaces/${id}`),
+  getWorkspaceStats: (id: string) => request<WorkspaceStats>(`/api/workspaces/${id}/stats`),
+
+  listDocuments: (params?: { workspace_id?: string; tenant_id?: string }) => {
+    const q = new URLSearchParams()
+    if (params?.workspace_id) q.set('workspace_id', params.workspace_id)
+    if (params?.tenant_id) q.set('tenant_id', params.tenant_id)
+    const qs = q.toString()
+    return request<Document[]>(`/api/documents${qs ? `?${qs}` : ''}`)
+  },
+  createDocument: (body: Record<string, unknown>) =>
+    request<Document>('/api/documents', { method: 'POST', body: JSON.stringify(body) }),
+  uploadDocument: (form: FormData) =>
+    request<Document>('/api/documents/upload', { method: 'POST', body: form }),
+
+  listTransactions: (params: { tenant_id: string; status?: string }) => {
+    const q = new URLSearchParams({ tenant_id: params.tenant_id })
+    if (params.status) q.set('status', params.status)
+    return request<Transaction[]>(`/api/transactions?${q}`)
+  },
+  transactionCounts: (tenant_id: string) =>
+    request<TransactionCounts>(`/api/transactions/counts?tenant_id=${encodeURIComponent(tenant_id)}`),
+  approveTransaction: (id: string) =>
+    request<Transaction>(`/api/transactions/${id}/approve`, { method: 'POST' }),
+  rejectTransaction: (id: string, reason?: string) =>
+    request<Transaction>(`/api/transactions/${id}/reject`, {
+      method: 'POST',
+      body: JSON.stringify({ reason }),
+    }),
+  reclassifyTransaction: (id: string, body: Record<string, unknown>) =>
+    request<Transaction>(`/api/transactions/${id}/reclassify`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  bulkApprove: (ids: string[]) =>
+    request<{ updated?: number }>('/api/transactions/bulk-approve', {
+      method: 'POST',
+      body: JSON.stringify({ ids }),
+    }),
+  bulkReject: (ids: string[], reason?: string) =>
+    request<{ updated?: number }>('/api/transactions/bulk-reject', {
+      method: 'POST',
+      body: JSON.stringify({ ids, reason }),
+    }),
+
+  chartOfAccounts: (workspace_id: string) =>
+    request<ChartAccount[]>(`/api/chart-of-accounts?workspace_id=${encodeURIComponent(workspace_id)}`),
+  seedChartOfAccounts: (workspace_id: string) =>
+    request<{ seeded?: number; accounts?: ChartAccount[] }>('/api/chart-of-accounts/seed', {
+      method: 'POST',
+      body: JSON.stringify({ workspace_id }),
+    }),
+
+  listMovements: (params?: { workspace_id?: string; tenant_id?: string }) => {
+    const q = new URLSearchParams()
+    if (params?.workspace_id) q.set('workspace_id', params.workspace_id)
+    if (params?.tenant_id) q.set('tenant_id', params.tenant_id)
+    const qs = q.toString()
+    return request<Movement[]>(`/api/movements${qs ? `?${qs}` : ''}`)
+  },
+  matchMovement: (id: string, transaction_id: string) =>
+    request<Movement>(`/api/movements/${id}/match`, {
+      method: 'POST',
+      body: JSON.stringify({ transaction_id }),
+    }),
+  unmatchMovement: (id: string) =>
+    request<Movement>(`/api/movements/${id}/unmatch`, { method: 'POST' }),
+
+  uploadStatement: (form: FormData) =>
+    request<unknown>('/api/statements', { method: 'POST', body: form }),
+
+  listPeriods: (params?: { workspace_id?: string }) => {
+    const q = new URLSearchParams()
+    if (params?.workspace_id) q.set('workspace_id', params.workspace_id)
+    const qs = q.toString()
+    return request<Period[]>(`/api/periods${qs ? `?${qs}` : ''}`)
+  },
+  closePeriod: (period: string, workspace_id: string) =>
+    request<Period>(`/api/periods/${encodeURIComponent(period)}/close`, {
+      method: 'POST',
+      body: JSON.stringify({ workspace_id }),
+    }),
+  reopenPeriod: (period: string, workspace_id: string) =>
+    request<Period>(`/api/periods/${encodeURIComponent(period)}/reopen`, {
+      method: 'POST',
+      body: JSON.stringify({ workspace_id }),
+    }),
+
+  pnlReport: (params: { workspace_id: string; date_from?: string; date_to?: string }) => {
+    const q = new URLSearchParams({ workspace_id: params.workspace_id })
+    if (params.date_from) q.set('date_from', params.date_from)
+    if (params.date_to) q.set('date_to', params.date_to)
+    return request<PnLReport>(`/api/reports/pnl?${q}`)
+  },
+
+  driveStatus: () => request<DriveStatus>('/api/drive/status'),
+  driveLink: (body: { workspace_id: string; folder_id: string; folder_name?: string }) =>
+    request<{ workspace_id?: string; drive_folder_id?: string; drive_folder_name?: string }>(
+      '/api/drive/link',
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+  driveBrowse: (folder_id?: string) => {
+    const q = new URLSearchParams()
+    if (folder_id) q.set('folder_id', folder_id)
+    q.set('depth', '1')
+    return request<DriveBrowseNode>(`/api/drive/browse?${q}`)
+  },
+  driveChildren: (folder_id: string, parent_path?: string) => {
+    const q = new URLSearchParams({ folder_id })
+    if (parent_path) q.set('parent_path', parent_path)
+    return request<DriveBrowseNode[]>(`/api/drive/children?${q}`)
+  },
+  driveSync: (body: {
+    workspace_id: string
+    folder_id?: string
+    max_files?: number
+    ingest?: boolean
+  }) =>
+    request<DriveSyncResult>('/api/drive/sync', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  driveImportFiles: (body: {
+    workspace_id: string
+    files: Array<{ id: string; name: string; path?: string; mime_type?: string }>
+    ingest?: boolean
+  }) =>
+    request<DriveSyncResult>('/api/drive/import-files', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  driveImportFolder: (body: {
+    workspace_id: string
+    folder_id: string
+    max_files?: number
+    ingest?: boolean
+  }) =>
+    request<DriveSyncResult>('/api/drive/import-folder', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+}

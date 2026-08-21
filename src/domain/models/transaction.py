@@ -46,12 +46,16 @@ class FinancialTransaction(BaseModel):
     chart_of_accounts_code: str | None = None
     chart_of_accounts_name: str | None = None
     category_confidence: float | None = Field(default=None, ge=0.0, le=1.0)
+    ai_suggested_account_code: str | None = None
+    ai_suggested_account_name: str | None = None
 
     # References
     vendor_name: str | None = Field(default=None, max_length=256)
     tax_id: str | None = Field(default=None, max_length=64)
     invoice_number: str | None = Field(default=None, max_length=128)
     bank_movement_id: uuid.UUID | None = None
+    notes: str | None = None
+    reconciled: bool = False
 
     # Period tracking
     fiscal_period: str | None = Field(
@@ -98,5 +102,12 @@ class FinancialTransaction(BaseModel):
         return self.model_copy(update={
             "status": TransactionStatus.CLOSED,
             "fiscal_period": fiscal_period,
+            "updated_at": datetime.now(timezone.utc),
+        })
+
+    def mark_rejected(self, notes: str | None = None) -> "FinancialTransaction":
+        return self.model_copy(update={
+            "status": TransactionStatus.REJECTED,
+            "notes": notes,
             "updated_at": datetime.now(timezone.utc),
         })

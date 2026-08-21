@@ -1,7 +1,6 @@
 """
-Seed a starter Chart of Accounts with OpenAI embeddings.
+Seed Chart of Accounts with OpenAI embeddings (LedgerAI default CoA).
 
-Usage:
   python -m apps.cli.seed_coa --tenant 00000000-0000-0000-0000-000000000001
 """
 from __future__ import annotations
@@ -19,37 +18,68 @@ if str(_ROOT) not in sys.path:
 from src.infrastructure.repositories.vector_repository import VectorRepository
 
 DEFAULT_ACCOUNTS = [
-    ("1000", "Cash", "asset", "Cash and cash equivalents"),
-    ("1100", "Accounts Receivable", "asset", "Money owed by customers"),
-    ("2000", "Accounts Payable", "liability", "Money owed to vendors"),
-    ("3000", "Owner Equity", "equity", "Owner capital"),
-    ("4000", "Sales Revenue", "income", "Operating income"),
-    ("5000", "Cost of Goods Sold", "cogs", "Direct costs of goods sold"),
-    ("6000", "Office Supplies", "expense", "Office and admin supplies"),
-    ("6100", "Travel & Meals", "expense", "Travel, meals and entertainment"),
-    ("6200", "Utilities", "expense", "Electricity, water, internet"),
-    ("6300", "Professional Services", "expense", "Legal, accounting, consulting"),
-    ("9999", "Uncategorized", "expense", "Needs human review"),
+    ("1010", "Cash and Cash Equivalents", "asset", "Current Assets"),
+    ("1020", "Accounts Receivable", "asset", "Current Assets"),
+    ("1030", "Inventory", "asset", "Current Assets"),
+    ("1040", "Prepaid Expenses", "asset", "Current Assets"),
+    ("1510", "Equipment", "asset", "Fixed Assets"),
+    ("1520", "Furniture & Fixtures", "asset", "Fixed Assets"),
+    ("1530", "Vehicles", "asset", "Fixed Assets"),
+    ("2010", "Accounts Payable", "liability", "Current Liabilities"),
+    ("2020", "Accrued Liabilities", "liability", "Current Liabilities"),
+    ("2030", "Short-Term Loans", "liability", "Current Liabilities"),
+    ("2040", "Taxes Payable", "liability", "Current Liabilities"),
+    ("2510", "Long-Term Debt", "liability", "Long-Term Liabilities"),
+    ("3010", "Owner's Equity", "equity", "Equity"),
+    ("3020", "Retained Earnings", "equity", "Equity"),
+    ("4010", "Sales Revenue", "income", "Operating Revenue"),
+    ("4020", "Service Revenue", "income", "Operating Revenue"),
+    ("4030", "Interest Income", "income", "Other Income"),
+    ("4040", "Other Income", "income", "Other Income"),
+    ("5010", "Cost of Goods Sold", "cogs", "COGS"),
+    ("5020", "Direct Labor", "cogs", "COGS"),
+    ("6010", "Salaries & Wages", "expense", "Operating Expenses"),
+    ("6020", "Rent Expense", "expense", "Operating Expenses"),
+    ("6030", "Utilities", "expense", "Operating Expenses"),
+    ("6040", "Office Supplies", "expense", "Operating Expenses"),
+    ("6050", "Travel & Meals", "expense", "Operating Expenses"),
+    ("6060", "Marketing & Advertising", "expense", "Operating Expenses"),
+    ("6070", "Professional Services", "expense", "Operating Expenses"),
+    ("6080", "Insurance", "expense", "Operating Expenses"),
+    ("6090", "Repairs & Maintenance", "expense", "Operating Expenses"),
+    ("6100", "Technology & Software", "expense", "Operating Expenses"),
+    ("6110", "Bank Fees & Charges", "expense", "Operating Expenses"),
+    ("6120", "Depreciation Expense", "expense", "Operating Expenses"),
+    ("6130", "Taxes & Licenses", "expense", "Operating Expenses"),
+    ("6140", "Interest Expense", "expense", "Other Expenses"),
+    ("6150", "Miscellaneous Expense", "expense", "Other Expenses"),
+    ("9999", "Uncategorized", "expense", "Other Expenses"),
 ]
 
 
 async def _run(tenant_id: uuid.UUID) -> None:
+    from src.infrastructure.repositories.supabase_client import get_supabase_client
+
     repo = VectorRepository()
-    for code, name, account_type, description in DEFAULT_ACCOUNTS:
+    client = get_supabase_client()
+    for code, name, account_type, subcategory in DEFAULT_ACCOUNTS:
         await repo.upsert_account_embedding(
             tenant_id=tenant_id,
             code=code,
             name=name,
             account_type=account_type,
-            description=description,
+            description=subcategory,
         )
+        client.table("chart_of_accounts").update(
+            {"subcategory": subcategory, "is_active": True}
+        ).eq("tenant_id", str(tenant_id)).eq("code", code).execute()
         print(f"  seeded {code} {name}")
     print(f"Done — {len(DEFAULT_ACCOUNTS)} accounts for tenant {tenant_id}")
 
 
 def main() -> None:
     parser = argparse.ArgumentParser(description="Seed Chart of Accounts embeddings")
-    parser.add_argument("--tenant", required=True, help="Tenant UUID")
+    parser.add_argument("--tenant", required=True, help="Tenant / workspace UUID")
     args = parser.parse_args()
     asyncio.run(_run(uuid.UUID(args.tenant)))
 
