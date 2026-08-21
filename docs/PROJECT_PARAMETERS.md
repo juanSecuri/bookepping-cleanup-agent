@@ -10,11 +10,27 @@ Agentes / Cursor: regla `.cursor/rules/ledgerai-project-parameters.mdc` (always 
 
 ## 0. Cómo trabajamos (sprints)
 
-1. **Entrada:** feedback de la empresa (prioridad del mes, clientes, formatos, bancos).  
+### Disparo desde la empresa (protocolo Juan)
+
+Cuando haya cambios pedidos por la empresa, el mensaje típico será:
+
+> **Tarea de la fecha YYYY-MM-DD** (+ contexto de lo que ya llevamos)
+
+El agente debe entonces:
+
+1. **Leer** este documento y el estado actual del repo (no reinventar el producto).  
+2. **Generar un sprint** acotado: objetivo, lista priorizada **tarea por tarea** (1 foco activo), DoD *full verificado*.  
+3. **Priorizar** calidad profesional sobre cantidad: una capacidad bien cerrada > muchas a medias.  
+4. **No** abrir deploy / auth / móvil / Excel / audio a la vez salvo que la tarea lo pida explícitamente.  
+5. **Actualizar** la sección 8 (log empresa) y la tabla de orden de sprints si la prioridad cambió.
+
+### Ciclo de sprint
+
+1. **Entrada:** feedback de la empresa (prioridad del mes, clientes, formatos, bancos) vía “tarea de la fecha…”.  
 2. **Sprint:** 1 objetivo medible (ej. “Excel extracto → movimientos verificados en UI”).  
 3. **Definition of Done:** *full verificado* (sección 3), no “parece que funciona”.  
 4. **Salida:** demo corta + checklist marcada en este doc + notas de costo si se tocó un vendor.  
-5. **No** abrir frentes nuevos (deploy, auth, móvil) hasta cerrar validación de ingesta del sprint.
+5. **No** abrir frentes nuevos hasta cerrar la tarea activa del sprint.
 
 Orden por defecto (ajustable por la empresa):
 
