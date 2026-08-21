@@ -1,0 +1,20 @@
+---
+description: LedgerAI project parameters — sprints, verification, costs, multi-channel ingest
+alwaysApply: true
+---
+
+# LedgerAI — parámetros del proyecto
+
+Antes de implementar features, deploys o “mejoras”, alinear con:
+
+**`docs/PROJECT_PARAMETERS.md`**
+
+## Obligatorio recordar
+
+1. **Sprints** guiados por feedback de la empresa; un objetivo medible por sprint.
+2. **Full verificado** (Definition of Done del doc) — no dar por hecho Excel, imagen ni audio hasta validarlos.
+3. **Multi-canal:** no solo Google Drive. Web app = PC + móvil (upload/cámara) + Drive + Excel/CSV.
+4. **Costos:** al tocar vendors (LlamaParse, OpenAI, Render, Supabase, Vercel), anotar plan/gasto en la sección de costos del doc.
+5. **Deploy internet** es un sprint futuro (Vercel UI + API en Render/Railway); no improvisar sin el checklist del doc.
+
+Si el usuario pide algo fuera de orden, avisar el trade-off y ofrecer meterlo al backlog del `PROJECT_PARAMETERS.md`.
