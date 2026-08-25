@@ -10,7 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { api, type Period, type PnLReport } from '../../lib/api'
+import { api, type Period, type PnLLineItem, type PnLReport } from '../../lib/api'
 import { useLocale } from '../../i18n'
 import { cn } from '../../lib/utils'
 
@@ -19,11 +19,142 @@ function periodClosed(p: Period): boolean {
   return s === 'closed' || Boolean(p.closed_at)
 }
 
+function periodSuggested(p: Period): boolean {
+  return String(p.status ?? '').toLowerCase() === 'suggested'
+}
+
 type StatementsBundle = Awaited<ReturnType<typeof api.financialStatements>>
 
 function money(n: number) {
   return n.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
 }
+
+function periodToDates(period: string): { from?: string; to?: string } {
+  const p = period.trim()
+  if (/^\d{4}-\d{2}$/.test(p)) {
+    const [ys, ms] = p.split('-')
+    const y = Number(ys)
+    const m = Number(ms)
+    const last = new Date(y, m, 0).getDate()
+    return { from: `${p}-01`, to: `${p}-${String(last).padStart(2, '0')}` }
+  }
+  if (/^\d{4}$/.test(p)) {
+    return { from: `${p}-01-01`, to: `${p}-12-31` }
+  }
+  return {}
+}
+
+function pnlItems(pnl: PnLReport | null | undefined, key: 'revenueItems' | 'expenseItems'): PnLLineItem[] {
+  if (!pnl) return []
+  const items = pnl[key]
+  return Array.isArray(items) ? items : []
+}
+
+function PnLDetailTables({
+  pnl,
+  t,
+}: {
+  pnl: PnLReport
+  t: (key: string) => string
+}) {
+  const revenue = pnlItems(pnl, 'revenueItems')
+  const expenses = pnlItems(pnl, 'expenseItems')
+  const revTotal = Number(pnl.revenue ?? pnl.totalRevenue ?? 0)
+  const expTotal = Number(pnl.expenses ?? pnl.totalExpenses ?? 0)
+  const net = Number(pnl.net_income ?? pnl.netIncome ?? revTotal - expTotal)
+
+  return (
+    <div className="space-y-4">
+      <div className="grid gap-4 sm:grid-cols-3">
+        {[
+          { label: t('reports.revenue'), value: revTotal, tone: 'text-emerald-700' },
+          { label: t('reports.expenses'), value: expTotal, tone: 'text-rose-700' },
+          { label: t('reports.net'), value: net, tone: 'text-amber-700' },
+        ].map((kpi) => (
+          <div key={kpi.label} className="rounded-xl border border-border bg-background p-4">
+            <p className="text-sm text-muted-foreground">{kpi.label}</p>
+            <p className={cn('mt-1 text-2xl font-semibold tabular-nums', kpi.tone)}>
+              {money(kpi.value)}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <div className="grid gap-4 lg:grid-cols-2">
+        <div className="table-scroll rounded-xl border border-border bg-background">
+          <div className="border-b border-border px-4 py-3">
+            <h3 className="font-semibold">{t('reports.revenue')}</h3>
+            <p className="text-xs text-muted-foreground">{t('reports.pnlDetail')}</p>
+          </div>
+          {revenue.length === 0 ? (
+            <p className="px-4 py-6 text-sm text-muted-foreground">—</p>
+          ) : (
+            <table className="w-full min-w-[320px] text-left text-sm">
+              <thead className="bg-secondary/40 text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-2 font-medium">Código</th>
+                  <th className="px-4 py-2 font-medium">Cuenta</th>
+                  <th className="px-4 py-2 text-right font-medium">Monto</th>
+                  <th className="px-4 py-2 text-right font-medium">{t('reports.txCount')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {revenue.map((row) => (
+                  <tr key={`${row.code}-${row.name}`} className="border-t border-border">
+                    <td className="px-4 py-2 font-mono text-xs">{row.code ?? '—'}</td>
+                    <td className="px-4 py-2">{row.name ?? '—'}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{money(Number(row.amount ?? 0))}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
+                      {row.txCount ?? '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+
+        <div className="table-scroll rounded-xl border border-border bg-background">
+          <div className="border-b border-border px-4 py-3">
+            <h3 className="font-semibold">{t('reports.expenses')}</h3>
+            <p className="text-xs text-muted-foreground">{t('reports.pnlDetail')}</p>
+          </div>
+          {expenses.length === 0 ? (
+            <p className="px-4 py-6 text-sm text-muted-foreground">—</p>
+          ) : (
+            <table className="w-full min-w-[320px] text-left text-sm">
+              <thead className="bg-secondary/40 text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-2 font-medium">Código</th>
+                  <th className="px-4 py-2 font-medium">Cuenta</th>
+                  <th className="px-4 py-2 text-right font-medium">Monto</th>
+                  <th className="px-4 py-2 text-right font-medium">{t('reports.txCount')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {expenses.map((row) => (
+                  <tr key={`${row.code}-${row.name}`} className="border-t border-border">
+                    <td className="px-4 py-2 font-mono text-xs">{row.code ?? '—'}</td>
+                    <td className="px-4 py-2">{row.name ?? '—'}</td>
+                    <td className="px-4 py-2 text-right tabular-nums">{money(Number(row.amount ?? 0))}</td>
+                    <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
+                      {row.txCount ?? '—'}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+const btnPrimary =
+  'cursor-pointer rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-amber-600 hover:opacity-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50'
+const btnSecondary =
+  'cursor-pointer rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium transition hover:border-primary/50 hover:bg-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50'
 
 export default function Reports() {
   const { workspaceId = '' } = useParams()
@@ -39,7 +170,9 @@ export default function Reports() {
   const [dateTo, setDateTo] = useState('')
   const [loading, setLoading] = useState(true)
   const [loadingStmt, setLoadingStmt] = useState(false)
+  const [loadingPnl, setLoadingPnl] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [pnlLoaded, setPnlLoaded] = useState(false)
 
   const loadPeriods = useCallback(async () => {
     setLoading(true)
@@ -70,7 +203,11 @@ export default function Reports() {
         date_to: dateTo || undefined,
       })
       setBundle(data)
-      if (data.pnl) setPnl(data.pnl)
+      if (data.pnl) {
+        setPnl(data.pnl)
+        setPnlLoaded(true)
+      }
+      await loadPeriods()
     } catch (e) {
       setError(e instanceof Error ? e.message : t('common.error'))
     } finally {
@@ -79,34 +216,55 @@ export default function Reports() {
   }
 
   async function loadPnl() {
+    setLoadingPnl(true)
     setError(null)
+    setPnlLoaded(true)
     try {
+      const derived = !dateFrom && !dateTo ? periodToDates(periodInput) : {}
       const data = await api.pnlReport({
         workspace_id: workspaceId,
-        date_from: dateFrom || undefined,
-        date_to: dateTo || undefined,
+        date_from: dateFrom || derived.from,
+        date_to: dateTo || derived.to,
       })
       setPnl(data)
+      // Keep statement KPIs in sync when only loading P&L
+      setBundle((prev) => (prev ? { ...prev, pnl: data } : prev))
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('common.error'))
+      setPnl(null)
+    } finally {
+      setLoadingPnl(false)
+    }
+  }
+
+  async function closePeriod(period: string) {
+    setError(null)
+    try {
+      await api.closePeriod(period, workspaceId)
+      await loadPeriods()
     } catch (e) {
       setError(e instanceof Error ? e.message : t('common.error'))
     }
   }
 
-  async function closePeriod(period: string) {
-    await api.closePeriod(period, workspaceId)
-    await loadPeriods()
-  }
-
   async function reopenPeriod(period: string) {
-    await api.reopenPeriod(period, workspaceId)
-    await loadPeriods()
+    setError(null)
+    try {
+      await api.reopenPeriod(period, workspaceId)
+      await loadPeriods()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('common.error'))
+    }
   }
 
-  const chartData = [
-    { name: t('reports.revenue'), value: Number(pnl?.revenue ?? pnl?.totalRevenue ?? 0) },
-    { name: t('reports.expenses'), value: Number(pnl?.expenses ?? pnl?.totalExpenses ?? 0) },
-    { name: t('reports.net'), value: Number(pnl?.net_income ?? pnl?.netIncome ?? 0) },
-  ]
+  const displayPnl = pnl || bundle?.pnl || null
+  const chartData = displayPnl
+    ? [
+        { name: t('reports.revenue'), value: Number(displayPnl.revenue ?? displayPnl.totalRevenue ?? 0) },
+        { name: t('reports.expenses'), value: Number(displayPnl.expenses ?? displayPnl.totalExpenses ?? 0) },
+        { name: t('reports.net'), value: Number(displayPnl.net_income ?? displayPnl.netIncome ?? 0) },
+      ]
+    : []
 
   const cfMonthly = bundle?.cash_flow_monthly || []
 
@@ -126,8 +284,9 @@ export default function Reports() {
       <section className="mb-8 rounded-xl border border-border bg-card p-5">
         <h2 className="mb-1 text-lg font-semibold tracking-tight">Emitir estados financieros</h2>
         <p className="mb-4 text-sm text-muted-foreground">
-          Balance + P&amp;L + Cash flow del periodo (desde transacciones verificadas, motor local $0).
-          Usa mes <code className="text-xs">YYYY-MM</code> o año <code className="text-xs">YYYY</code>.
+          Balance + P&amp;L detallado + Cash flow (txs verificadas, motor local $0). Periodo{' '}
+          <code className="text-xs">YYYY-MM</code> o <code className="text-xs">YYYY</code>. Si no
+          pones fechas, «Cargar P&amp;L» usa el periodo.
         </p>
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
           <label className="w-full text-sm sm:w-auto">
@@ -162,16 +321,17 @@ export default function Reports() {
               type="button"
               onClick={() => void loadStatements()}
               disabled={loadingStmt}
-              className="flex-1 rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-50 sm:flex-none"
+              className={cn(btnPrimary, 'flex-1 sm:flex-none')}
             >
-              {loadingStmt ? t('common.loading') : 'Emitir estados'}
+              {loadingStmt ? t('common.loading') : t('reports.emit')}
             </button>
             <button
               type="button"
               onClick={() => void loadPnl()}
-              className="flex-1 rounded-lg border border-border px-4 py-2 text-sm sm:flex-none"
+              disabled={loadingPnl}
+              className={cn(btnSecondary, 'flex-1 sm:flex-none')}
             >
-              {t('reports.load')}
+              {loadingPnl ? t('common.loading') : t('reports.load')}
             </button>
           </div>
         </div>
@@ -182,21 +342,26 @@ export default function Reports() {
           </p>
         )}
 
-        {bundle?.pnl && (
-          <div className="mb-6 grid gap-4 sm:grid-cols-3">
-            {[
-              { label: t('reports.revenue'), value: Number(bundle.pnl.revenue ?? 0), tone: 'text-emerald-700' },
-              { label: t('reports.expenses'), value: Number(bundle.pnl.expenses ?? 0), tone: 'text-rose-700' },
-              { label: t('reports.net'), value: Number(bundle.pnl.net_income ?? 0), tone: 'text-amber-700' },
-            ].map((kpi) => (
-              <div key={kpi.label} className="rounded-xl border border-border bg-background p-4">
-                <p className="text-sm text-muted-foreground">{kpi.label}</p>
-                <p className={cn('mt-1 text-2xl font-semibold tabular-nums', kpi.tone)}>
-                  {money(kpi.value)}
-                </p>
-              </div>
-            ))}
+        {displayPnl && (
+          <div className="mb-6">
+            <h3 className="mb-3 text-base font-semibold tracking-tight">{t('reports.pnl')}</h3>
+            <PnLDetailTables pnl={displayPnl} t={t} />
+            <div className="mt-4 h-56 rounded-xl border border-border bg-background p-3">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={chartData}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
+                  <YAxis tick={{ fontSize: 12 }} />
+                  <Tooltip formatter={(v) => money(Number(v ?? 0))} />
+                  <Bar dataKey="value" fill="var(--primary)" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
           </div>
+        )}
+
+        {pnlLoaded && !displayPnl && !loadingPnl && (
+          <p className="mb-4 text-sm text-muted-foreground">{t('reports.pnlEmpty')}</p>
         )}
 
         {bundle?.balance_sheet && (
@@ -303,11 +468,19 @@ export default function Reports() {
             <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
               {t('reports.periodsEmptyHint')}
             </p>
+            <button
+              type="button"
+              onClick={() => void closePeriod(periodInput)}
+              className={cn(btnPrimary, 'mt-5')}
+            >
+              {t('reports.close')} ({periodInput})
+            </button>
           </div>
         )}
         <div className="space-y-2">
           {periods.map((p) => {
             const closed = periodClosed(p)
+            const suggested = periodSuggested(p)
             return (
               <div
                 key={p.period}
@@ -320,36 +493,47 @@ export default function Reports() {
                       'rounded-md px-2 py-0.5 text-xs font-medium',
                       closed
                         ? 'bg-secondary text-muted-foreground'
-                        : 'bg-emerald-50 text-emerald-800',
+                        : suggested
+                          ? 'bg-amber-50 text-amber-900'
+                          : 'bg-emerald-50 text-emerald-800',
                     )}
                   >
-                    {closed ? t('reports.statusClosed') : t('reports.statusOpen')}
+                    {closed
+                      ? t('reports.statusClosed')
+                      : suggested
+                        ? t('reports.statusSuggested')
+                        : t('reports.statusOpen')}
                   </span>
+                  {(p.verified_count ?? p.transaction_count) != null && (
+                    <span className="text-xs text-muted-foreground">
+                      {Number(p.verified_count ?? p.transaction_count)} {t('reports.txCount')}
+                    </span>
+                  )}
                 </div>
-                <div className="flex gap-2">
+                <div className="flex flex-wrap gap-2">
                   <button
                     type="button"
                     onClick={() => {
                       setPeriodInput(p.period)
                       void loadStatements()
                     }}
-                    className="rounded-lg border border-border px-3 py-1.5 text-sm"
+                    className={btnSecondary}
                   >
-                    Emitir
+                    {t('reports.emit')}
                   </button>
                   <button
                     type="button"
                     onClick={() => void closePeriod(p.period)}
                     disabled={closed}
-                    className="rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground disabled:opacity-40"
+                    className={cn(btnPrimary, 'disabled:opacity-40')}
                   >
                     {t('reports.close')}
                   </button>
                   <button
                     type="button"
                     onClick={() => void reopenPeriod(p.period)}
-                    disabled={!closed}
-                    className="rounded-lg border border-border px-3 py-1.5 text-sm disabled:opacity-40"
+                    disabled={!closed || suggested}
+                    className={cn(btnSecondary, 'disabled:opacity-40')}
                   >
                     {t('reports.reopen')}
                   </button>
@@ -359,23 +543,6 @@ export default function Reports() {
           })}
         </div>
       </section>
-
-      {pnl && !bundle && (
-        <section>
-          <h2 className="mb-3 text-lg font-semibold tracking-tight">{t('reports.pnl')}</h2>
-          <div className="soft-shadow h-64 rounded-xl border border-border bg-card p-4">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                <YAxis tick={{ fontSize: 12 }} />
-                <Tooltip />
-                <Bar dataKey="value" fill="var(--primary)" radius={[6, 6, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </section>
-      )}
     </div>
   )
 }

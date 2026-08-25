@@ -9,10 +9,11 @@ import {
   TrendingUp,
   TrendingDown,
   Wallet,
-  Cpu,
   HardDrive,
-  Sparkles,
-  Database,
+  ScanText,
+  BookOpen,
+  Landmark,
+  LineChart,
 } from 'lucide-react'
 import {
   ResponsiveContainer,
@@ -41,7 +42,7 @@ function formatMoney(n: number, locale: string) {
 
 const STAGE_ROUTES = [
   'documents',
-  'transactions',
+  'documents',
   'transactions',
   'reconciliation',
   'reports',
@@ -231,23 +232,28 @@ export default function Dashboard() {
   const agentSteps = [
     {
       icon: HardDrive,
-      title: '1. Google Drive',
-      body: 'Baja el PDF/Excel desde la carpeta vinculada (ruta completa guardada).',
+      title: '1. Ingesta',
+      body: 'Drive o subida web (PC/móvil): PDF, Excel/CSV, imagen. Guarda ruta y tipo (estado vs factura).',
     },
     {
-      icon: Sparkles,
-      title: '2. LlamaParse',
-      body: 'OCR / tablas: lee el PDF y saca texto o movimientos bancarios.',
+      icon: ScanText,
+      title: '2. Leer',
+      body: 'Extracción local $0 (pdfplumber / openpyxl). Sin LlamaParse ni OpenAI obligatorios.',
     },
     {
-      icon: Cpu,
-      title: '3. OpenAI',
-      body: 'Estructura factura (proveedor, monto, fecha) o categoriza con embeddings vs plan de cuentas.',
+      icon: BookOpen,
+      title: '3. Clasificar CoA',
+      body: 'Reglas y keywords vs plan de cuentas. Facturas → transacciones; estados → movimientos.',
     },
     {
-      icon: Database,
-      title: '4. Supabase',
-      body: 'Guarda documento, transacciones y movimientos separados por tipo y carpeta.',
+      icon: Landmark,
+      title: '4. Conciliar',
+      body: 'Empareja movimientos bancarios con transacciones verificadas del periodo.',
+    },
+    {
+      icon: LineChart,
+      title: '5. Emitir',
+      body: 'Balance + P&L + Cash flow mensual/anual desde txs verificadas (motor local).',
     },
   ]
 
@@ -270,9 +276,9 @@ export default function Dashboard() {
       )}
 
       <section className="animate-fade-up-delay-1 soft-shadow mb-6 rounded-xl border border-border bg-card p-5 sm:p-6">
-        <h2 className="mb-1 text-lg font-semibold tracking-tight">Qué hace el agente ahora</h2>
+        <h2 className="mb-1 text-lg font-semibold tracking-tight">{t('dashboard.agentTitle')}</h2>
         <p className="mb-4 text-sm text-muted-foreground">
-          No es magia opaca: cada PDF pasa por APIs reales. En Armenia LLC ves{' '}
+          {t('dashboard.agentIntro')}{' '}
           <strong className="font-semibold text-foreground">{docSummary.total} docs</strong>
           {docSummary.processing > 0 && (
             <>
@@ -294,7 +300,7 @@ export default function Dashboard() {
           )}
           .
         </p>
-        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
           {agentSteps.map((step) => {
             const Icon = step.icon
             return (
@@ -312,8 +318,8 @@ export default function Dashboard() {
           })}
         </div>
         <p className="mt-4 text-xs text-muted-foreground">
-          Estado de cuenta → Conciliación (movimientos). Factura → Transacciones (revisar /
-          aprobar). Detalle por carpeta en Documentos.
+          Estado de cuenta → Conciliación. Factura → Transacciones (revisar / aprobar). Luego emitir
+          estados en Reportes.
         </p>
       </section>
 

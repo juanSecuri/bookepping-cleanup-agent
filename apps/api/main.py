@@ -668,12 +668,16 @@ async def process_statement(
 
 @api.get("/periods")
 async def list_periods(workspace_id: str | None = None, tenant_id: str | None = None) -> list[dict]:
+    """List closed/open ledgers, plus suggested months from verified txs (so UI is never blank)."""
     wid = workspace_id or tenant_id
     if not wid:
         raise HTTPException(400, "workspace_id required")
-    ledgers = await get_container().ledgers.list_by_tenant(uuid.UUID(wid), limit=120)
-    return [
-        {
+    tid = uuid.UUID(wid)
+    c = get_container()
+    ledgers = await c.ledgers.list_by_tenant(tid, limit=120)
+    by_period: dict[str, dict] = {}
+    for l in ledgers:
+        by_period[l.fiscal_period] = {
             "id": str(l.id),
             "period": l.fiscal_period,
             "fiscal_period": l.fiscal_period,
@@ -681,9 +685,35 @@ async def list_periods(workspace_id: str | None = None, tenant_id: str | None = 
             "transaction_count": l.transaction_count,
             "net_income": str(l.net_income),
             "closed_at": l.closed_at.isoformat() if l.closed_at else None,
+            "source": "ledger",
         }
-        for l in ledgers
-    ]
+
+    txns = await c.transactions.list_by_tenant(tid, limit=20000)
+    month_counts: dict[str, int] = {}
+    for t in txns:
+        if t.status != TransactionStatus.VERIFIED:
+            continue
+        month = str(t.transaction_date)[:7]
+        if len(month) == 7:
+            month_counts[month] = month_counts.get(month, 0) + 1
+
+    for month, count in month_counts.items():
+        if month in by_period:
+            by_period[month]["verified_count"] = count
+            continue
+        by_period[month] = {
+            "id": None,
+            "period": month,
+            "fiscal_period": month,
+            "status": "suggested",
+            "transaction_count": count,
+            "verified_count": count,
+            "net_income": None,
+            "closed_at": None,
+            "source": "verified_txs",
+        }
+
+    return sorted(by_period.values(), key=lambda x: x["period"], reverse=True)
 
 
 class PeriodAction(BaseModel):

@@ -114,7 +114,10 @@ export type ChartAccount = {
   code?: string
   name?: string
   category?: string
+  account_type?: string
   subcategory?: string
+  description?: string | null
+  is_active?: boolean
   workspace_id?: string
   [key: string]: unknown
 }
@@ -137,13 +140,28 @@ export type Period = {
   period: string
   status?: string
   closed_at?: string | null
+  transaction_count?: number
+  verified_count?: number
+  source?: string
   [key: string]: unknown
+}
+
+export type PnLLineItem = {
+  code?: string
+  name?: string
+  amount?: number
+  txCount?: number
 }
 
 export type PnLReport = {
   revenue?: number
   expenses?: number
   net_income?: number
+  totalRevenue?: number
+  totalExpenses?: number
+  netIncome?: number
+  revenueItems?: PnLLineItem[]
+  expenseItems?: PnLLineItem[]
   lines?: Array<{ account?: string; amount?: number; category?: string }>
   [key: string]: unknown
 }
