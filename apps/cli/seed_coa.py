@@ -1,7 +1,7 @@
 """
-Seed Chart of Accounts with OpenAI embeddings (LedgerAI default CoA).
+Seed Chart of Accounts WITHOUT OpenAI embeddings (free path).
 
-  python -m apps.cli.seed_coa --tenant 00000000-0000-0000-0000-000000000001
+  python -m apps.cli.seed_coa --tenant <uuid>
 """
 from __future__ import annotations
 
@@ -14,8 +14,6 @@ from pathlib import Path
 _ROOT = Path(__file__).parent.parent.parent
 if str(_ROOT) not in sys.path:
     sys.path.insert(0, str(_ROOT))
-
-from src.infrastructure.repositories.vector_repository import VectorRepository
 
 DEFAULT_ACCOUNTS = [
     ("1010", "Cash and Cash Equivalents", "asset", "Current Assets"),
@@ -60,26 +58,26 @@ DEFAULT_ACCOUNTS = [
 async def _run(tenant_id: uuid.UUID) -> None:
     from src.infrastructure.repositories.supabase_client import get_supabase_client
 
-    repo = VectorRepository()
     client = get_supabase_client()
     for code, name, account_type, subcategory in DEFAULT_ACCOUNTS:
-        await repo.upsert_account_embedding(
-            tenant_id=tenant_id,
-            code=code,
-            name=name,
-            account_type=account_type,
-            description=subcategory,
-        )
-        client.table("chart_of_accounts").update(
-            {"subcategory": subcategory, "is_active": True}
-        ).eq("tenant_id", str(tenant_id)).eq("code", code).execute()
+        client.table("chart_of_accounts").upsert(
+            {
+                "tenant_id": str(tenant_id),
+                "code": code,
+                "name": name,
+                "account_type": account_type,
+                "subcategory": subcategory,
+                "is_active": True,
+            },
+            on_conflict="tenant_id,code",
+        ).execute()
         print(f"  seeded {code} {name}")
-    print(f"Done — {len(DEFAULT_ACCOUNTS)} accounts for tenant {tenant_id}")
+    print(f"Done — {len(DEFAULT_ACCOUNTS)} accounts (no embeddings / $0) for {tenant_id}")
 
 
 def main() -> None:
-    parser = argparse.ArgumentParser(description="Seed Chart of Accounts embeddings")
-    parser.add_argument("--tenant", required=True, help="Tenant / workspace UUID")
+    parser = argparse.ArgumentParser(description="Seed CoA without paid embeddings")
+    parser.add_argument("--tenant", required=True, help="Workspace / tenant UUID")
     args = parser.parse_args()
     asyncio.run(_run(uuid.UUID(args.tenant)))
 

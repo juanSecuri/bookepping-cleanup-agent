@@ -3,7 +3,6 @@
 **Este archivo es la fuente de verdad del producto.**  
 Cualquier sprint, feature o deploy debe alinearse aquí. Se actualiza cuando la empresa prioriza o cambia el alcance.
 
-Relacionado: roadmap técnico de cloud en las secciones 6–8.  
 Agentes / Cursor: regla `.cursor/rules/ledgerai-project-parameters.mdc` (always apply).
 
 ---
@@ -26,203 +25,228 @@ El agente debe entonces:
 
 ### Ciclo de sprint
 
-1. **Entrada:** feedback de la empresa (prioridad del mes, clientes, formatos, bancos) vía “tarea de la fecha…”.  
-2. **Sprint:** 1 objetivo medible (ej. “Excel extracto → movimientos verificados en UI”).  
-3. **Definition of Done:** *full verificado* (sección 3), no “parece que funciona”.  
-4. **Salida:** demo corta + checklist marcada en este doc + notas de costo si se tocó un vendor.  
-5. **No** abrir frentes nuevos hasta cerrar la tarea activa del sprint.
+1. **Entrada:** feedback de la empresa vía “tarea de la fecha…”.  
+2. **Sprint:** 1 objetivo medible.  
+3. **Definition of Done:** *full verificado* (sección 3).  
+4. **Salida:** demo corta + checklist + notas de costo si aplica.  
+5. **No** abrir frentes nuevos hasta cerrar la tarea activa.
 
-Orden por defecto (ajustable por la empresa):
+### Orden de sprints (ajustado 2026-08-24 — empresa)
 
 | Orden | Tema | Estado |
 |------:|------|--------|
-| 1 | PDF / Drive anidado + clasificación statement vs factura | En progreso / parcial |
-| 2 | Excel / CSV end-to-end | Pendiente validar |
-| 3 | Imagen (recibo/factura) | Pendiente validar |
-| 4 | Audio | Pendiente validar |
-| 5 | Upload web + móvil (PWA / cámara) además de Drive | Pendiente |
-| 6 | Auth + multi-usuario | Pendiente |
-| 7 | Deploy internet (Vercel UI + API Render/Railway) | Pendiente |
-| 8 | P&L / balance / reportes por mes pulidos | Parcial |
-| 9 | Planes comerciales del producto (si aplica) | Idea |
+| 0 | **Constraint costos:** agente “gratis” = parsers/código + free tiers; minimizar APIs de pago | **Activo — decisión de arquitectura** |
+| 1 | Pipeline end-to-end: leer → transcribir → clasificar CoA → conciliar → reportes | Objetivo producto (multi-sprint) |
+| 2 | Extracción PDF/Excel **sin LlamaParse de pago** (pdfplumber / openpyxl / reglas) | Siguiente implementación |
+| 3 | Clasificación CoA por reglas + keywords (+ embeddings locales opcionales) | Pendiente |
+| 4 | Conciliación de cuentas (movimientos ↔ txs) full verificado | Parcial |
+| 5 | Reportes: **Balance**, **P&L**, **Cash flow** mensual y anual + emitir por periodo | Parcial (solo P&L básico) |
+| 6 | Imagen OCR gratis (Tesseract) / Audio local (faster-whisper) | Pendiente |
+| 7 | Upload web responsive (PC + celular en navegador; no PWA) | **En curso / deploy** |
+| 8 | Auth (si aplica) | Futuro |
+| 9 | **Deploy Render free** (API + UI en un Web Service) | **Activo — este sprint** |
 
 ---
 
-## 1. Visión (qué es y qué no es)
+## 1. Visión del producto (empresa 2026-08-24)
 
-**Sí:** agente de **bookkeeping cleanup** — poner al día libros atrasados, organizar por mes, clasificar, conciliar, cerrar, generar **P&L** (y luego balance).
+### Qué debe hacer el agente (pipeline obligatorio)
 
-**Web app = el producto:** usable desde **PC y celular en el navegador**, no solo “PC con Drive conectado”.
+1. **Tomar** la información (Drive, upload PC/móvil, Excel, PDF, imagen, audio).  
+2. **Leer / transcribir** el contenido a datos estructurados.  
+3. **Clasificar** cada gasto/ingreso según el **plan de cuentas**.  
+4. Cuando los gastos estén clasificados → **conciliar todas las cuentas**.  
+5. **Generar reportes** por periodo (mes / año):  
+   - Balance general (Balance Sheet)  
+   - Estado de pérdidas y ganancias (P&L)  
+   - Flujo de efectivo (Cash flow)  
+6. **Emitir** los estados financieros de la empresa para cada periodo cerrado.
 
-**No:** depender solo de que Google Drive esté linkeado. Drive es *un* canal. La app debe absorber documentos como lo haría un contador en el día a día.
+### Qué no es negociable para la empresa
+
+- **No quieren pagar un “agente IA” comercial / APIs caras como dependencia principal.**  
+- Preferencia: **herramientas gratuitas** y **automatizar con código** (parsers, reglas, open source).  
+- Es una **web** (navegador, responsive en celular), no una “web app”/PWA obligatoria. Drive es un canal, no el único.
+
+### Nombre del “agente”
+
+Sigue siendo un **agente de bookkeeping cleanup**, pero la inteligencia debe ser **mayormente determinística** (código + reglas + OCR open source). Un LLM de pago solo como **fallback opcional** y documentado en costos — no como requisito para que el producto funcione.
 
 ---
 
 ## 2. Canales de entrada (multi-herramienta)
 
-Todo debe llegar al mismo pipeline: **ingesta → clasificar → revisar → conciliar → cerrar**.
-
 | Canal | Origen | Prioridad | Notas |
 |-------|--------|-----------|--------|
-| Google Drive | Carpetas anidadas (banco → cuenta → año) | Alta (ya hay base) | Sync / browse / import |
-| Subida web (PC) | Drag & drop / file picker | Alta | PDF, Excel, img, audio |
-| Subida móvil (navegador) | Cámara / archivos del teléfono | Alta (web app) | Misma API que PC; UX touch |
-| CSV / Excel local | Export bancos / listados | Alta | Parser real, no solo “registrado” |
-| (Futuro) Email inbound | Facturas al correo | Baja | Tras canales anteriores |
-| (Futuro) API / Zapier | Integraciones | Baja | Cuando haya clientes externos |
-
-**Regla:** si un formato está en el menú, debe estar **verificado** en PC y, cuando exista UI móvil, en viewport móvil. Si no, marcar “experimental” o quitarlo de la UI.
+| Google Drive | Carpetas anidadas | Alta | Ya hay base |
+| Subida web (PC) | Drag & drop | Alta | PDF, Excel, img, audio |
+| Subida móvil | Cámara / archivos | Alta | Misma API |
+| CSV / Excel | Export bancos | Alta | Parser real con openpyxl/pandas (gratis) |
+| (Futuro) Email | Facturas | Baja | Después |
 
 ---
 
 ## 3. Full verificado (Definition of Done)
 
-Una capacidad no está hecha hasta cumplir:
+Una capacidad no está hecha hasta:
 
-- [ ] Flujo feliz documentado (pasos + captura o checklist)  
-- [ ] Al menos 2 casos reales o fixtures (no solo mock)  
-- [ ] Estados visibles: `processing` → `extracted` / `failed` + mensaje útil  
-- [ ] Trazabilidad: origen (Drive path / upload / móvil), tipo, APIs usadas  
-- [ ] Resultado en el sitio correcto (estado → Conciliación; factura → Transacciones)  
-- [ ] Sin quedar colgado en `processing` tras reinicio (reintento o fail claro)  
-- [ ] Sin secretos en git; env vars documentadas  
+- [ ] Flujo feliz documentado  
+- [ ] ≥2 casos reales o fixtures  
+- [ ] Estados `processing` → `extracted` / `failed` claros  
+- [ ] Trazabilidad (origen, tipo, método de extracción: código vs API)  
+- [ ] Resultado en sitio correcto (banco → Conciliación; factura → Transacciones; reportes → periodo)  
+- [ ] **Sin dependencia obligatoria de API de pago** para el camino feliz (salvo lo que la empresa apruebe por escrito)  
 
-### Checklist por formato
+### Checklist formatos
 
-**PDF / Drive**
-
-- [x] Nested folders browse/import (base)  
-- [ ] Clasificación estable con path completo  
-- [ ] Regresión post-restart  
-
-**Excel / CSV**
-
-- [ ] Upload + Drive  
-- [ ] Extracto vs listado  
-- [ ] Filas → movimientos/txs  
-- [ ] Hojas / encodings  
-
-**Imagen**
-
-- [ ] JPG/PNG upload (PC + móvil)  
-- [ ] Vision → vendor, monto, fecha  
-- [ ] Casos difíciles  
-
-**Audio**
-
-- [ ] MP3/WAV/M4A  
-- [ ] Whisper → estructura  
-- [ ] UI + estados  
+**PDF / Drive** — base OK; falta camino gratis + regresión.  
+**Excel / CSV** — pendiente parser real.  
+**Imagen** — pendiente (Tesseract recomendado).  
+**Audio** — pendiente (faster-whisper / Groq free tier).  
+**Reportes** — P&L parcial; Balance + Cash flow pendientes.
 
 ---
 
-## 4. Costos y planes — “¿qué gasto y a cuánto?”
+## 4. Costos — “¿qué gasto y a cuánto?” (constraint empresa)
 
-Estimaciones orientativas en USD (revisar precios oficiales al contratar; cambian).  
-Objetivo: saber **qué se paga, por qué, y cuándo subir de plan**.
+### 4.0 Política (2026-08-24)
 
-### 4.1 Infraestructura (para que la web app viva en internet)
+| Principio | Detalle |
+|-----------|---------|
+| Default | **$0 en APIs de IA** para el flujo principal |
+| Permitido gratis | Supabase Free, Vercel Free, Render Free (con sleep), Drive API quota, Groq free tier (opcional) |
+| Evitar como dependencia | LlamaParse pago, OpenAI pago, “AI bookkeeping” SaaS |
+| Si hace falta pagar | Solo infra mínima (host despierto) y **con aprobación**; registrar en §4.3 |
 
-| Servicio | Para qué | Free / bajo costo | Plan “fluido” (demo a clientes) | ¿Cuándo pagar? |
-|----------|----------|-------------------|----------------------------------|----------------|
-| **Vercel** | Frontend SPA | Free suele bastar | Pro ~$20/user/mes si límites | Tráfico / team |
-| **Render** (o Railway/Fly) | API FastAPI + workers | Free = duerme (~cold start) | Starter ~$7–25/mes | Demos en vivo, OCR largo |
-| **Supabase** | DB + (futuro) Auth/Storage | Free | Pro ~$25/mes | Más datos, backups, auth serio |
-| **Storage** (Supabase/S3) | PDFs fuera del disco efímero | Free tier pequeño | Pay-as-you-go | Deploy cloud obligatorio |
+### 4.1 Recomendación de stack **gratis / código** (Juan → empresa)
 
-**Mínimo viable en producción ligera (orden de magnitud):**  
-~$0–15/mes (free + sleep) para pruebas internas → **~$40–80/mes** para algo presentable (API siempre up + Supabase Pro + storage).
+| Capacidad hoy (pago) | Reemplazo recomendado (gratis) | Notas |
+|----------------------|--------------------------------|--------|
+| LlamaParse (PDF tablas) | **pdfplumber** + **pypdf** + parsers de tablas propios | Más trabajo inicial; control total; $0 |
+| OpenAI structure (factura) | Regex / plantillas por vendor + reglas de montos/fechas | Fallback LLM **opcional** |
+| OpenAI embeddings CoA | Matching por **keywords / aliases** en plan de cuentas; opcional **sentence-transformers** local | Sin API |
+| OpenAI Vision (foto) | **Tesseract OCR** (+ preprocess OpenCV si hace falta) | $0, corre en servidor |
+| Groq Whisper | **faster-whisper** local, o Groq **free tier** con límite | Preferir local si el host aguanta CPU |
+| Hosting | Vercel Free (UI) + Render Free / self-host | Cold start OK para interno |
+| DB | Supabase Free | Vigilar límites |
 
-### 4.2 Inteligencia / extracción (el costo variable del producto)
+**Honestidad:** OCR bancario “perfecto” con solo pdfplumber es más frágil que LlamaParse; se compensa con **fixtures por banco** (Chase, Wells, etc.) y reglas. Eso es lo que la empresa pide: **automatizar con código**, no alquilar un cerebro.
 
-| Servicio | Para qué | Señal de costo | Plan / tip |
-|----------|----------|----------------|------------|
-| **LlamaParse** | OCR PDF / tablas bancarias | Por página / créditos | Free para probar → **pago al subir volumen de estados** |
-| **OpenAI** | Facturas, estructura, embeddings CoA | Tokens | Pay-as-you-go; fijar modelo barato para clasificación |
-| **Groq** | Whisper (audio) | Minutos / requests | Free/low; validar antes de depender |
-| **Google Cloud / Drive API** | Drive OAuth + download | Quota API (suele free generoso) | Proyecto GCP en producción + OAuth HTTPS |
+**Costo real casi inevitable a largo plazo (no es “agente IA”):** electricidad/CPU del servidor, o un VPS barato (~$5–7/mes) si Free se queda corto. Eso no es “pagar OpenAI”.
 
-**Regla de gasto:** no contratar stacks “AI bookkeeping” que dupliquen LlamaParse + OpenAI + Supabase. Preferir **subir el plan de lo que ya está cableado** cuando el sprint de ese canal esté *full verificado*.
+### 4.2 Infra (referencia)
 
-### 4.3 Registro de gasto del proyecto (llenar en cada sprint)
+| Servicio | Free | Pago típico si se aprueba |
+|----------|------|---------------------------|
+| Vercel | Sí (UI) | Pro ~$20 |
+| Render | Sí (sleep) | Starter ~$7–25 |
+| Supabase | Sí | Pro ~$25 |
 
-| Fecha | Vendor | Plan | USD/mes o uso | Motivo | Aprobado por |
-|-------|--------|------|---------------|--------|--------------|
-| — | — | — | — | — | — |
+### 4.3 Registro de gasto
 
-### 4.4 (Futuro) Planes del producto LedgerAI hacia clientes
+| Fecha | Vendor | Plan | USD | Motivo | Aprobado |
+|-------|--------|------|-----|--------|----------|
+| 2026-08-24 | — | Política $0 IA | 0 | Empresa no quiere pagar agente IA | Empresa |
 
-Idea (no cerrada; la empresa decide):
+### 4.4 Planes del producto hacia clientes (TBD empresa)
 
-| Plan producto | Incluye (borrador) | Precio (TBD) |
-|---------------|--------------------|--------------|
-| Cleanup puntuales | 1 espacio, N docs/mes, Drive + upload | TBD |
-| Contabilidad continua | Varios espacios, cierre mensual, P&L | TBD |
-| Estudio / white-label | Multi-cliente, SSO, SLA | TBD |
-
-Los costos de §4.1–4.2 alimentan el margen de estos planes.
-
----
-
-## 5. Producto web: PC + celular
-
-- **Responsive** obligatorio en pantallas de trabajo (Documentos, Transacciones, Conciliación).  
-- Móvil: subir foto de recibo / PDF del banco sin pasar por Drive.  
-- PWA (instalar en teléfono) = sprint futuro tras upload móvil estable.  
-- Drive sigue siendo potente para carpetas históricas; **no es el único camino**.
+Sin cambio; el margen no puede depender de APIs caras por documento.
 
 ---
 
-## 6. Despliegue internet (cuando toque el sprint)
+## 5. Pipeline funcional objetivo (estados financieros)
 
-Vercel = UI. API = Render/Railway/Fly (timeouts + background jobs). Supabase = datos.
+```
+Ingesta → Transcripción/extracción → Clasificación CoA
+    → Conciliación de cuentas → Cierre de periodo
+    → Emisión: Balance + P&L + Cash flow (mensual / anual)
+```
 
-Detalle checklist / env vars: mantener actualizado abajo.
-
-### Env (nunca en git)
-
-`SUPABASE_*`, `OPENAI_API_KEY`, `LLAMA_CLOUD_API_KEY`, `GROQ_API_KEY`, Google OAuth, `PORT`, CORS del origen Vercel.
-
-### Checklist deploy
-
-- [ ] Build frontend + API health  
-- [ ] OAuth Drive con redirect HTTPS  
-- [ ] Jobs OCR async (no cortar a 30s)  
-- [ ] Storage cloud (no solo `/tmp`)  
-- [ ] Auth si hay usuarios reales  
+| Reporte | Estado actual | Objetivo |
+|---------|---------------|----------|
+| P&L | Parcial (totales) | Por periodo, emitible |
+| Balance general | No / mínimo | Activo = Pasivo + Patrimonio |
+| Cash flow | No | Operativo / inversión / financiamiento; mes y año |
+| Emisión por periodo | Cierre básico | PDF/Excel export profesional |
 
 ---
 
-## 7. Compras futuras — criterio
+## 6. Producto web (responsive, no “app”)
 
-¿Hace el pipeline **más fluido y verificable** (menos fallos OCR, menos espera, mejor UX móvil)?  
-Si no → no comprar.
+- Es una **web** en el navegador, no una web-app/PWA obligatoria.  
+- **Responsive** en móvil (Documentos, Transacciones, Conciliación, Reportes).  
+- Subida desde PC/celular vía navegador; Drive sigue siendo un canal más.  
+- No priorizar “instalar en el teléfono” hasta que la empresa lo pida.
 
-Prioridad de pago típica:
+---
 
-1. API hosting despierto (Render Starter)  
-2. LlamaParse / OpenAI según volumen real medido  
-3. Supabase Pro + Storage  
-4. Vercel Pro solo si hace falta  
+## 7. Despliegue en Render (gratis)
+
+**Sí se puede desplegar en Render free**, con matices:
+
+| Tema | Realidad Free |
+|------|----------------|
+| Un Web Service con `python run.py` (API + `frontend/dist`) | Sí |
+| Bind `0.0.0.0:$PORT` | Obligatorio (ya soportado) |
+| Disco | **Efímero** — uploads temporales se pierden al reiniciar |
+| Inactividad | ~15 min sin tráfico → **sleep**; 1.er request lento (cold start) |
+| PDFs largos | Mejor en background (ya hay patrón) |
+| DB | Seguimos con **Supabase** (no hace falta Postgres de Render) |
+
+**Conclusión:** demos internas OK en Free. Si no aceptan el “despertar”, hace falta plan de pago mínimo.
+
+Cuando toque el sprint: build frontend en el build command + `EXTRACTION_MODE=local` + secrets en Dashboard.
+
+Env: no exigir `OPENAI` / `LLAMAPARSE` con camino local activo.
+
+### 7.1 Config Render (repo)
+
+| Archivo | Uso |
+|---------|-----|
+| `render.yaml` | Blueprint free Web Service `ledgerai` |
+| `bin/render-build.sh` | `pip install -e .` + Node 20 + `frontend` build |
+| `runtime.txt` | Python 3.11.9 |
+
+**Start:** `python run.py` (respeta `$PORT`, bind `0.0.0.0`).  
+**Health:** `GET /health`  
+**Repo:** `https://github.com/juanSecuri/bookepping-cleanup-agent` (branch `main`).
+
+Secrets obligatorios en Dashboard / MCP: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.  
+Drive opcional: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REFRESH_TOKEN`.
 
 ---
 
 ## 8. Feedback de la empresa (log)
 
-Cada decisión de negocio que mueva el backlog:
-
 | Fecha | Quién / tema | Decisión | Sprint impactado |
 |-------|--------------|----------|------------------|
-| — | — | — | — |
+| 2026-08-24 | Juan / revisión | Auditoría + entorno de prueba | Sprint revisión |
+| **2026-08-24** | **Empresa (vía Juan)** | **No pagar agente IA: herramientas gratis / automatizar con código.** Pipeline: leer→clasificar CoA→conciliar→Balance/P&L/Cashflow. | **Sprint free-pipeline** |
+| 2026-08-24 | Implementación | Default `EXTRACTION_MODE=local`: pdfplumber + reglas CoA; OpenAI/LlamaParse/Groq opcionales (`cloud`). Seed CoA sin embeddings. | free-pipeline T1 |
+| 2026-08-24 | Juan / producto | Web responsive (no PWA); deploy Render free + GitHub | **Deploy Render** |
 
 ---
 
 ## 9. Principios técnicos (siempre)
 
-- Arquitectura limpia: use cases / repos / API / UI separados  
-- Clean code: sin demos eternas, sin secretos en repo  
-- Observabilidad de pipeline: carpeta, tipo, APIs, preview de extracción  
+- Arquitectura limpia; clean code  
+- **Código primero, API de pago última opción**  
 - Full verificado > feature a medias  
+- Un foco por sprint  
+- Observabilidad: origen + método de extracción  
+
+---
+
+## 10. Sprint activo sugerido (post 2026-08-24 empresa)
+
+**Nombre:** `Sprint-2026-08-24-free-pipeline`  
+**Objetivo medible:** Definir e iniciar el camino de extracción **$0** (sin LlamaParse/OpenAI obligatorios) y mapear gaps de Balance + Cash flow.
+
+**Tarea 1 (foco ahora):** Documento de arquitectura “local extraction” + spike pdfplumber en 1 PDF Chase/Wells real (¿sale tabla usable?).  
+**Tarea 2:** Clasificador CoA por reglas (sin embeddings de pago).  
+**Tarea 3:** Modelo de reportes Balance + Cash flow (dominio + API stub).  
+**Tarea 4:** P&L emitible por periodo (mejorar lo existente).  
+**Luego:** Excel parser, Tesseract, whisper local, móvil, deploy.
 
 ---
 

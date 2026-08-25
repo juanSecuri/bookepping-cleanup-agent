@@ -17,7 +17,8 @@ dependencies = [
     # AI / LLM providers
     "groq>=0.9",
     "openai>=1.35",
-    # Document extraction
+    # Document extraction — local (pdfplumber) preferred; llama-parse optional
+    "pdfplumber>=0.11",
     "llama-parse>=0.4",
     # Database
     "supabase>=2.5",
@@ -26,6 +27,10 @@ dependencies = [
     # Report generation
     "openpyxl>=3.1",
     "reportlab>=4.2",
+    # Google Drive
+    "google-api-python-client>=2.100",
+    "google-auth>=2.29",
+    "google-auth-oauthlib>=1.2",
     # Utilities
     "python-dotenv>=1.0",
     "python-multipart>=0.0.9",

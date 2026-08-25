@@ -15,7 +15,7 @@ export default function Landing() {
 
   return (
     <div className="landing-mesh relative min-h-screen overflow-hidden text-white">
-      <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-6 py-6">
+      <header className="relative z-10 mx-auto flex max-w-6xl items-center justify-between px-4 py-5 sm:px-6 sm:py-6">
         <div className="font-display text-2xl tracking-tight text-amber-400 sm:text-3xl">
           LedgerAI
         </div>
@@ -28,24 +28,24 @@ export default function Landing() {
         </button>
       </header>
 
-      <main className="relative z-10 mx-auto flex min-h-[calc(100vh-5.5rem)] max-w-6xl flex-col justify-center px-6 pb-16 pt-8">
+      <main className="relative z-10 mx-auto flex min-h-[calc(100dvh-5.5rem)] max-w-6xl flex-col justify-center px-4 pb-12 pt-6 sm:px-6 sm:pb-16 sm:pt-8">
         <section className="max-w-2xl animate-fade-up">
-          <h1 className="font-display text-6xl leading-[0.95] tracking-tight text-white sm:text-7xl lg:text-8xl">
+          <h1 className="font-display text-[2.75rem] leading-[0.95] tracking-tight text-white sm:text-6xl md:text-7xl lg:text-8xl">
             LedgerAI
           </h1>
-          <p className="mt-6 max-w-lg text-lg leading-relaxed text-white/65 sm:text-xl">
+          <p className="mt-5 max-w-lg text-base leading-relaxed text-white/65 sm:mt-6 sm:text-lg md:text-xl">
             {t('landing.subtitle')}
           </p>
           <Link
             to="/workspaces"
-            className="mt-10 inline-flex items-center gap-2 rounded-lg bg-amber-500 px-6 py-3.5 text-sm font-semibold text-[#080c14] shadow-[0_8px_30px_rgb(217_145_40_/_0.35)] transition hover:bg-amber-400 hover:shadow-[0_10px_36px_rgb(217_145_40_/_0.45)]"
+            className="mt-8 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-amber-500 px-6 py-3.5 text-sm font-semibold text-[#080c14] shadow-[0_8px_30px_rgb(217_145_40_/_0.35)] transition hover:bg-amber-400 hover:shadow-[0_10px_36px_rgb(217_145_40_/_0.45)] sm:mt-10 sm:w-auto"
           >
             {t('landing.cta')}
             <ArrowRight className="h-4 w-4" />
           </Link>
         </section>
 
-        <section className="mt-24 animate-fade-up-delay-2 border-t border-white/10 pt-12">
+        <section className="mt-16 animate-fade-up-delay-2 border-t border-white/10 pt-10 sm:mt-24 sm:pt-12">
           <p className="mb-6 text-xs font-medium uppercase tracking-[0.22em] text-amber-500/80">
             {t('landing.featuresHeading')}
           </p>

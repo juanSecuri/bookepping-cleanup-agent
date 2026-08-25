@@ -54,6 +54,12 @@ html,
 body,
 #root {
   min-height: 100%;
+  min-height: 100dvh;
+}
+
+html {
+  overflow-x: hidden;
+  -webkit-text-size-adjust: 100%;
 }
 
 body {
@@ -62,6 +68,13 @@ body {
   background: var(--background);
   color: var(--foreground);
   -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* Tables / wide content: horizontal scroll without breaking the page */
+.table-scroll {
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .font-display {

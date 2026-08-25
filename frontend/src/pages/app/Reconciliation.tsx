@@ -186,107 +186,200 @@ export default function Reconciliation() {
       )}
 
       {filtered.length > 0 && (
-        <div className="soft-shadow overflow-x-auto rounded-xl border border-border bg-card">
-          <table className="w-full min-w-[800px] text-left text-sm">
-            <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
-              <tr>
-                <th className="px-4 py-3 font-medium">{t('documents.date')}</th>
-                <th className="px-4 py-3 font-medium">{t('transactions.description')}</th>
-                <th className="px-4 py-3 font-medium">{t('transactions.amount')}</th>
-                <th className="px-4 py-3 font-medium">{t('reconciliation.matched')}</th>
-                <th className="px-4 py-3 font-medium">{t('reconciliation.txId')}</th>
-                <th className="px-4 py-3 font-medium">{t('common.actions')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filtered.map((m) => {
-                const matched = isMatched(m)
-                return (
-                  <tr key={m.id} className="border-b border-border last:border-0">
-                    <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
-                      {String(m.date ?? '—')}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="font-medium">{m.description || m.id}</div>
-                      {(m.bank || m.bank_name) && (
-                        <div className="text-xs text-muted-foreground">
-                          {String(m.bank ?? m.bank_name)}
-                        </div>
-                      )}
-                    </td>
-                    <td className="px-4 py-3 tabular-nums whitespace-nowrap">
+        <>
+          <div className="space-y-3 md:hidden">
+            {filtered.map((m) => {
+              const matched = isMatched(m)
+              return (
+                <article
+                  key={m.id}
+                  className="soft-shadow rounded-xl border border-border bg-card p-4"
+                >
+                  <div className="mb-2 flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <p className="font-medium">{m.description || m.id}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {String(m.date ?? '—')}
+                        {(m.bank || m.bank_name) && ` · ${String(m.bank ?? m.bank_name)}`}
+                      </p>
+                    </div>
+                    <span className="shrink-0 tabular-nums text-sm font-semibold">
                       {m.amount != null ? Number(m.amount).toLocaleString() : '—'}
-                    </td>
-                    <td className="px-4 py-3">
-                      <span
-                        className={cn(
-                          'rounded-md px-2 py-0.5 text-xs font-medium',
-                          matched
-                            ? 'bg-emerald-50 text-emerald-800'
-                            : 'bg-amber-50 text-amber-800',
-                        )}
-                      >
-                        {matched
-                          ? t('reconciliation.matchedYes')
-                          : t('reconciliation.matchedNo')}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
-                      {shortId(m.transaction_id)}
-                    </td>
-                    <td className="px-4 py-3">
-                      {matched ? (
-                        <button
-                          type="button"
-                          onClick={() => void doUnmatch(m.id)}
-                          className="inline-flex items-center gap-1 text-sm text-destructive"
-                        >
-                          <Unlink className="h-3.5 w-3.5" />
-                          {t('reconciliation.unmatch')}
-                        </button>
-                      ) : matchId === m.id ? (
-                        <div className="flex items-center gap-2">
-                          <input
-                            className="rounded border border-border px-2 py-1 text-xs"
-                            placeholder="transaction_id"
-                            value={txId}
-                            onChange={(e) => setTxId(e.target.value)}
-                          />
-                          <button
-                            type="button"
-                            onClick={() => void doMatch(m.id)}
-                            className="text-sm font-medium text-primary"
-                          >
-                            OK
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => setMatchId(null)}
-                            className="text-sm text-muted-foreground"
-                          >
-                            {t('common.cancel')}
-                          </button>
-                        </div>
-                      ) : (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setMatchId(m.id)
-                            setTxId('')
-                          }}
-                          className="inline-flex items-center gap-1 text-sm text-primary"
-                        >
-                          <Link2 className="h-3.5 w-3.5" />
-                          {t('reconciliation.match')}
-                        </button>
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span
+                      className={cn(
+                        'rounded-md px-2 py-0.5 text-xs font-medium',
+                        matched
+                          ? 'bg-emerald-50 text-emerald-800'
+                          : 'bg-amber-50 text-amber-800',
                       )}
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+                    >
+                      {matched
+                        ? t('reconciliation.matchedYes')
+                        : t('reconciliation.matchedNo')}
+                    </span>
+                    {matched && (
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {shortId(m.transaction_id)}
+                      </span>
+                    )}
+                  </div>
+                  <div className="mt-3">
+                    {matched ? (
+                      <button
+                        type="button"
+                        onClick={() => void doUnmatch(m.id)}
+                        className="inline-flex items-center gap-1 text-sm text-destructive"
+                      >
+                        <Unlink className="h-3.5 w-3.5" />
+                        {t('reconciliation.unmatch')}
+                      </button>
+                    ) : matchId === m.id ? (
+                      <div className="flex flex-wrap items-center gap-2">
+                        <input
+                          className="min-w-0 flex-1 rounded border border-border px-2 py-1.5 text-xs"
+                          placeholder="transaction_id"
+                          value={txId}
+                          onChange={(e) => setTxId(e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => void doMatch(m.id)}
+                          className="text-sm font-medium text-primary"
+                        >
+                          OK
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMatchId(null)}
+                          className="text-sm text-muted-foreground"
+                        >
+                          {t('common.cancel')}
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setMatchId(m.id)
+                          setTxId('')
+                        }}
+                        className="inline-flex items-center gap-1 text-sm text-primary"
+                      >
+                        <Link2 className="h-3.5 w-3.5" />
+                        {t('reconciliation.match')}
+                      </button>
+                    )}
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+
+          <div className="soft-shadow table-scroll hidden rounded-xl border border-border bg-card md:block">
+            <table className="w-full min-w-[800px] text-left text-sm">
+              <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
+                <tr>
+                  <th className="px-4 py-3 font-medium">{t('documents.date')}</th>
+                  <th className="px-4 py-3 font-medium">{t('transactions.description')}</th>
+                  <th className="px-4 py-3 font-medium">{t('transactions.amount')}</th>
+                  <th className="px-4 py-3 font-medium">{t('reconciliation.matched')}</th>
+                  <th className="px-4 py-3 font-medium">{t('reconciliation.txId')}</th>
+                  <th className="px-4 py-3 font-medium">{t('common.actions')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((m) => {
+                  const matched = isMatched(m)
+                  return (
+                    <tr key={m.id} className="border-b border-border last:border-0">
+                      <td className="px-4 py-3 whitespace-nowrap text-muted-foreground">
+                        {String(m.date ?? '—')}
+                      </td>
+                      <td className="px-4 py-3">
+                        <div className="font-medium">{m.description || m.id}</div>
+                        {(m.bank || m.bank_name) && (
+                          <div className="text-xs text-muted-foreground">
+                            {String(m.bank ?? m.bank_name)}
+                          </div>
+                        )}
+                      </td>
+                      <td className="px-4 py-3 tabular-nums whitespace-nowrap">
+                        {m.amount != null ? Number(m.amount).toLocaleString() : '—'}
+                      </td>
+                      <td className="px-4 py-3">
+                        <span
+                          className={cn(
+                            'rounded-md px-2 py-0.5 text-xs font-medium',
+                            matched
+                              ? 'bg-emerald-50 text-emerald-800'
+                              : 'bg-amber-50 text-amber-800',
+                          )}
+                        >
+                          {matched
+                            ? t('reconciliation.matchedYes')
+                            : t('reconciliation.matchedNo')}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 font-mono text-xs text-muted-foreground">
+                        {shortId(m.transaction_id)}
+                      </td>
+                      <td className="px-4 py-3">
+                        {matched ? (
+                          <button
+                            type="button"
+                            onClick={() => void doUnmatch(m.id)}
+                            className="inline-flex items-center gap-1 text-sm text-destructive"
+                          >
+                            <Unlink className="h-3.5 w-3.5" />
+                            {t('reconciliation.unmatch')}
+                          </button>
+                        ) : matchId === m.id ? (
+                          <div className="flex items-center gap-2">
+                            <input
+                              className="rounded border border-border px-2 py-1 text-xs"
+                              placeholder="transaction_id"
+                              value={txId}
+                              onChange={(e) => setTxId(e.target.value)}
+                            />
+                            <button
+                              type="button"
+                              onClick={() => void doMatch(m.id)}
+                              className="text-sm font-medium text-primary"
+                            >
+                              OK
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setMatchId(null)}
+                              className="text-sm text-muted-foreground"
+                            >
+                              {t('common.cancel')}
+                            </button>
+                          </div>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setMatchId(m.id)
+                              setTxId('')
+                            }}
+                            className="inline-flex items-center gap-1 text-sm text-primary"
+                          >
+                            <Link2 className="h-3.5 w-3.5" />
+                            {t('reconciliation.match')}
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   )

@@ -135,6 +135,11 @@ async def create_workspace(body: WorkspaceCreate) -> dict:
         timezone=body.timezone,
     )
     saved = await WorkspaceRepository().save(ws)
+    # Auto-seed free CoA so classification works immediately
+    try:
+        await seed_chart_of_accounts(SeedCoABody(workspace_id=str(saved.id)))
+    except Exception:
+        pass
     return saved.model_dump(mode="json")
 
 
@@ -509,26 +514,40 @@ class SeedCoABody(BaseModel):
 
 @api.post("/chart-of-accounts/seed")
 async def seed_chart_of_accounts(body: SeedCoABody) -> dict:
-    """Seed default LedgerAI CoA + embeddings for a workspace."""
+    """Seed default LedgerAI CoA without paid embeddings ($0 / local stack)."""
     from apps.cli.seed_coa import DEFAULT_ACCOUNTS
     from src.infrastructure.repositories.supabase_client import get_supabase_client
-    from src.infrastructure.repositories.vector_repository import VectorRepository
 
-    tid = uuid.UUID(body.workspace_id)
-    repo = VectorRepository()
+    tid = body.workspace_id
     client = get_supabase_client()
+    seeded = 0
+    errors: list[str] = []
     for code, name, account_type, subcategory in DEFAULT_ACCOUNTS:
-        await repo.upsert_account_embedding(
-            tenant_id=tid,
-            code=code,
-            name=name,
-            account_type=account_type,
-            description=subcategory,
-        )
-        client.table("chart_of_accounts").update(
-            {"subcategory": subcategory, "is_active": True}
-        ).eq("tenant_id", str(tid)).eq("code", code).execute()
-    return {"workspace_id": body.workspace_id, "seeded": len(DEFAULT_ACCOUNTS)}
+        row = {
+            "tenant_id": tid,
+            "code": code,
+            "name": name,
+            "account_type": account_type,
+            "description": subcategory,
+            "subcategory": subcategory,
+            "is_active": True,
+        }
+        try:
+            client.table("chart_of_accounts").upsert(
+                row, on_conflict="tenant_id,code"
+            ).execute()
+            seeded += 1
+        except Exception as exc:
+            errors.append(f"{code}: {exc}")
+    if seeded == 0 and errors:
+        raise HTTPException(500, f"CoA seed failed: {errors[0]}")
+    return {
+        "workspace_id": body.workspace_id,
+        "seeded": seeded,
+        "embeddings": False,
+        "engine": "local_rules",
+        "errors": errors[:5],
+    }
 
 
 # ── Movements / Reconciliation ────────────────────────────────────────────────
@@ -762,6 +781,38 @@ async def pnl_report(
     }
 
 
+@api.get("/reports/statements")
+async def financial_statements_report(
+    workspace_id: str,
+    period: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+) -> dict:
+    """Emit P&L + Balance + Cash flow for a month (YYYY-MM), year (YYYY), or date range."""
+    from src.use_cases.emit_period_reports import EmitPeriodReportsUseCase
+
+    bundle = await EmitPeriodReportsUseCase().execute(
+        uuid.UUID(workspace_id),
+        period=period,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    return {
+        "workspace_id": bundle.workspace_id,
+        "period_label": bundle.period_label,
+        "date_from": bundle.date_from,
+        "date_to": bundle.date_to,
+        "currency": bundle.currency,
+        "transaction_count": bundle.transaction_count,
+        "engine": bundle.engine,
+        "pnl": bundle.pnl,
+        "balance_sheet": bundle.balance_sheet,
+        "cash_flow": bundle.cash_flow,
+        "cash_flow_monthly": bundle.cash_flow_monthly,
+        "cash_flow_annual": bundle.cash_flow_annual,
+    }
+
+
 # Legacy ingest endpoint
 @api.post("/ingest")
 async def ingest_legacy(
@@ -958,11 +1009,11 @@ async def drive_import_files(body: DriveImportFilesBody, background_tasks: Backg
 
             folder = _folder_group_from_path(path, name)
             if plan.kind == "statement":
-                apis = "Google Drive, LlamaParse, OpenAI embeddings (CoA)"
+                apis = "pdfplumber (local $0), reglas CoA"
             elif plan.kind == "spreadsheet":
                 apis = "Google Drive"
             else:
-                apis = "Google Drive, LlamaParse, OpenAI"
+                apis = "pdfplumber (local $0), reglas CoA"
             doc = DocumentRecord(
                 workspace_id=wid,
                 file_name=name,
@@ -1035,10 +1086,10 @@ async def drive_import_files(body: DriveImportFilesBody, background_tasks: Backg
 
 def doc_apis_for_kind(kind: str) -> str:
     if kind == "statement":
-        return "Google Drive, LlamaParse, OpenAI embeddings (CoA)"
+        return "pdfplumber (local $0), reglas CoA"
     if kind == "spreadsheet":
         return "Google Drive"
-    return "Google Drive, LlamaParse, OpenAI"
+    return "pdfplumber (local $0), reglas CoA"
 
 
 async def _ingest_queued_drive_docs(workspace_id: str, queued: list[dict]) -> None:

@@ -13,9 +13,10 @@ Antes de implementar features, deploys o “mejoras”, alinear con:
 
 1. **Sprints** vía mensaje **“Tarea de la fecha YYYY-MM-DD”** (+ lo que ya llevan): generar sprint priorizado **tarea por tarea**, profesional, un foco activo.
 2. **Full verificado** (Definition of Done del doc) — no dar por hecho Excel, imagen ni audio hasta validarlos.
-3. **Multi-canal:** no solo Google Drive. Web app = PC + móvil (upload/cámara) + Drive + Excel/CSV.
-4. **Costos:** al tocar vendors (LlamaParse, OpenAI, Render, Supabase, Vercel), anotar plan/gasto en la sección de costos del doc.
-5. **Deploy internet** es un sprint futuro (Vercel UI + API en Render/Railway); no improvisar sin el checklist del doc.
-6. No volverse loco: priorizar y cerrar una tarea bien antes de la siguiente.
+3. **Multi-canal:** no solo Google Drive. Es una **web responsive** (PC + celular en el navegador; no PWA obligatoria) + Drive + Excel/CSV.
+4. **Costos (empresa 2026-08-24):** el agente debe poder funcionar **sin APIs de IA de pago**. Preferir parsers/código open source (pdfplumber, openpyxl, Tesseract, faster-whisper, reglas CoA). LLM de pago solo como fallback opcional y aprobado.
+5. **Pipeline objetivo:** leer → transcribir → clasificar plan de cuentas → conciliar → emitir Balance + P&L + Cash flow (mensual/anual) por periodo.
+6. **Deploy:** Render free es viable (con sleep/cold start); no improvisar sin checklist del doc.
+7. No volverse loco: priorizar y cerrar una tarea bien antes de la siguiente.
 
 Si el usuario pide algo fuera de orden, avisar el trade-off y ofrecer meterlo al backlog del `PROJECT_PARAMETERS.md`.

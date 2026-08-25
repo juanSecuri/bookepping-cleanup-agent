@@ -173,100 +173,172 @@ export default function Transactions() {
       )}
 
       {rows.length > 0 && (
-        <div className="soft-shadow overflow-x-auto rounded-xl border border-border bg-card">
-          <table className="w-full min-w-[960px] text-left text-sm">
-            <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
-              <tr>
-                <th className="w-10 px-3 py-3" />
-                <th className="px-3 py-3 font-medium">{t('transactions.date')}</th>
-                <th className="px-3 py-3 font-medium">{t('transactions.description')}</th>
-                <th className="px-3 py-3 font-medium">{t('transactions.vendor')}</th>
-                <th className="px-3 py-3 font-medium">{t('transactions.account')}</th>
-                <th className="px-3 py-3 font-medium">{t('transactions.amount')}</th>
-                <th className="px-3 py-3 font-medium">{t('transactions.type')}</th>
-                <th className="px-3 py-3 font-medium">{t('transactions.confidence')}</th>
-                <th className="px-3 py-3 font-medium">{t('transactions.status')}</th>
-                <th className="px-3 py-3 font-medium">{t('common.actions')}</th>
-              </tr>
-            </thead>
-            <tbody>
-              {rows.map((tx) => {
-                const pct = confidencePct(tx)
-                return (
-                  <tr key={tx.id} className="border-b border-border last:border-0">
-                    <td className="px-3 py-3">
-                      <input
-                        type="checkbox"
-                        checked={selected.has(tx.id)}
-                        onChange={() => toggle(tx.id)}
-                      />
-                    </td>
-                    <td className="px-3 py-3 whitespace-nowrap text-muted-foreground">
-                      {txDate(tx)}
-                    </td>
-                    <td className="px-3 py-3">
-                      <div className="max-w-[220px] truncate font-medium">
-                        {tx.description || tx.id}
-                      </div>
-                    </td>
-                    <td className="px-3 py-3 text-muted-foreground">{txVendor(tx)}</td>
-                    <td className="px-3 py-3">
-                      <span className="max-w-[180px] truncate block">{txAccount(tx)}</span>
-                    </td>
-                    <td className="px-3 py-3 tabular-nums whitespace-nowrap">
+        <>
+          <div className="space-y-3 md:hidden">
+            {rows.map((tx) => {
+              const pct = confidencePct(tx)
+              return (
+                <article
+                  key={tx.id}
+                  className="soft-shadow rounded-xl border border-border bg-card p-4"
+                >
+                  <div className="mb-2 flex items-start gap-3">
+                    <input
+                      type="checkbox"
+                      className="mt-1"
+                      checked={selected.has(tx.id)}
+                      onChange={() => toggle(tx.id)}
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate font-medium">{tx.description || tx.id}</p>
+                      <p className="mt-0.5 text-xs text-muted-foreground">
+                        {txDate(tx)} · {txVendor(tx)}
+                      </p>
+                    </div>
+                    <span className="shrink-0 tabular-nums text-sm font-semibold">
                       {tx.amount != null
                         ? Number(tx.amount).toLocaleString(undefined, {
                             style: 'currency',
                             currency: tx.currency || 'USD',
                           })
                         : '—'}
-                    </td>
-                    <td className="px-3 py-3 capitalize text-muted-foreground">{txType(tx)}</td>
-                    <td className="px-3 py-3">
-                      {pct != null ? (
-                        <span
-                          className={cn(
-                            'inline-flex rounded-md px-2 py-0.5 text-xs font-medium tabular-nums',
-                            confidenceClass(pct),
-                          )}
-                        >
-                          {pct}%
-                        </span>
-                      ) : (
-                        '—'
-                      )}
-                    </td>
-                    <td className="px-3 py-3">
-                      <span className="rounded-md bg-secondary px-2 py-0.5 text-xs capitalize">
-                        {String(tx.status ?? '—')}
+                    </span>
+                  </div>
+                  <p className="mb-3 truncate text-xs text-muted-foreground">{txAccount(tx)}</p>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-md bg-secondary px-2 py-0.5 text-xs capitalize">
+                      {String(tx.status ?? '—')}
+                    </span>
+                    {pct != null && (
+                      <span
+                        className={cn(
+                          'inline-flex rounded-md px-2 py-0.5 text-xs font-medium tabular-nums',
+                          confidenceClass(pct),
+                        )}
+                      >
+                        {pct}%
                       </span>
-                    </td>
-                    <td className="px-3 py-3">
-                      <div className="flex gap-1">
-                        <button
-                          type="button"
-                          title={t('transactions.approve')}
-                          onClick={() => void approve(tx.id)}
-                          className="rounded-md p-1.5 text-primary hover:bg-secondary"
-                        >
-                          <Check className="h-4 w-4" />
-                        </button>
-                        <button
-                          type="button"
-                          title={t('transactions.reject')}
-                          onClick={() => void reject(tx.id)}
-                          className="rounded-md p-1.5 text-destructive hover:bg-secondary"
-                        >
-                          <X className="h-4 w-4" />
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                )
-              })}
-            </tbody>
-          </table>
-        </div>
+                    )}
+                    <span className="text-xs capitalize text-muted-foreground">{txType(tx)}</span>
+                    <div className="ml-auto flex gap-1">
+                      <button
+                        type="button"
+                        title={t('transactions.approve')}
+                        onClick={() => void approve(tx.id)}
+                        className="rounded-md p-2 text-primary hover:bg-secondary"
+                      >
+                        <Check className="h-4 w-4" />
+                      </button>
+                      <button
+                        type="button"
+                        title={t('transactions.reject')}
+                        onClick={() => void reject(tx.id)}
+                        className="rounded-md p-2 text-destructive hover:bg-secondary"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              )
+            })}
+          </div>
+
+          <div className="soft-shadow table-scroll hidden rounded-xl border border-border bg-card md:block">
+            <table className="w-full min-w-[960px] text-left text-sm">
+              <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
+                <tr>
+                  <th className="w-10 px-3 py-3" />
+                  <th className="px-3 py-3 font-medium">{t('transactions.date')}</th>
+                  <th className="px-3 py-3 font-medium">{t('transactions.description')}</th>
+                  <th className="px-3 py-3 font-medium">{t('transactions.vendor')}</th>
+                  <th className="px-3 py-3 font-medium">{t('transactions.account')}</th>
+                  <th className="px-3 py-3 font-medium">{t('transactions.amount')}</th>
+                  <th className="px-3 py-3 font-medium">{t('transactions.type')}</th>
+                  <th className="px-3 py-3 font-medium">{t('transactions.confidence')}</th>
+                  <th className="px-3 py-3 font-medium">{t('transactions.status')}</th>
+                  <th className="px-3 py-3 font-medium">{t('common.actions')}</th>
+                </tr>
+              </thead>
+              <tbody>
+                {rows.map((tx) => {
+                  const pct = confidencePct(tx)
+                  return (
+                    <tr key={tx.id} className="border-b border-border last:border-0">
+                      <td className="px-3 py-3">
+                        <input
+                          type="checkbox"
+                          checked={selected.has(tx.id)}
+                          onChange={() => toggle(tx.id)}
+                        />
+                      </td>
+                      <td className="px-3 py-3 whitespace-nowrap text-muted-foreground">
+                        {txDate(tx)}
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="max-w-[220px] truncate font-medium">
+                          {tx.description || tx.id}
+                        </div>
+                      </td>
+                      <td className="px-3 py-3 text-muted-foreground">{txVendor(tx)}</td>
+                      <td className="px-3 py-3">
+                        <span className="block max-w-[180px] truncate">{txAccount(tx)}</span>
+                      </td>
+                      <td className="px-3 py-3 tabular-nums whitespace-nowrap">
+                        {tx.amount != null
+                          ? Number(tx.amount).toLocaleString(undefined, {
+                              style: 'currency',
+                              currency: tx.currency || 'USD',
+                            })
+                          : '—'}
+                      </td>
+                      <td className="px-3 py-3 capitalize text-muted-foreground">{txType(tx)}</td>
+                      <td className="px-3 py-3">
+                        {pct != null ? (
+                          <span
+                            className={cn(
+                              'inline-flex rounded-md px-2 py-0.5 text-xs font-medium tabular-nums',
+                              confidenceClass(pct),
+                            )}
+                          >
+                            {pct}%
+                          </span>
+                        ) : (
+                          '—'
+                        )}
+                      </td>
+                      <td className="px-3 py-3">
+                        <span className="rounded-md bg-secondary px-2 py-0.5 text-xs capitalize">
+                          {String(tx.status ?? '—')}
+                        </span>
+                      </td>
+                      <td className="px-3 py-3">
+                        <div className="flex gap-1">
+                          <button
+                            type="button"
+                            title={t('transactions.approve')}
+                            onClick={() => void approve(tx.id)}
+                            className="rounded-md p-1.5 text-primary hover:bg-secondary"
+                          >
+                            <Check className="h-4 w-4" />
+                          </button>
+                          <button
+                            type="button"
+                            title={t('transactions.reject')}
+                            onClick={() => void reject(tx.id)}
+                            className="rounded-md p-1.5 text-destructive hover:bg-secondary"
+                          >
+                            <X className="h-4 w-4" />
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </>
       )}
     </div>
   )

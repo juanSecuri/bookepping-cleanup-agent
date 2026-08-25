@@ -250,6 +250,41 @@ export const api = {
     if (params.date_to) q.set('date_to', params.date_to)
     return request<PnLReport>(`/api/reports/pnl?${q}`)
   },
+  financialStatements: (params: {
+    workspace_id: string
+    period?: string
+    date_from?: string
+    date_to?: string
+  }) => {
+    const q = new URLSearchParams({ workspace_id: params.workspace_id })
+    if (params.period) q.set('period', params.period)
+    if (params.date_from) q.set('date_from', params.date_from)
+    if (params.date_to) q.set('date_to', params.date_to)
+    return request<{
+      period_label?: string
+      transaction_count?: number
+      engine?: string
+      pnl?: PnLReport
+      balance_sheet?: {
+        assets?: Array<{ code?: string; name?: string; amount?: number }>
+        liabilities?: Array<{ code?: string; name?: string; amount?: number }>
+        equity?: Array<{ code?: string; name?: string; amount?: number }>
+        totalAssets?: number
+        totalLiabilities?: number
+        totalEquity?: number
+        note?: string
+      }
+      cash_flow?: {
+        operating?: { inflows?: number; outflows?: number; net?: number }
+        investing?: { inflows?: number; outflows?: number; net?: number }
+        financing?: { inflows?: number; outflows?: number; net?: number }
+        netChange?: number
+        note?: string
+      }
+      cash_flow_monthly?: Array<{ period?: string; inflows?: number; outflows?: number; net?: number }>
+      cash_flow_annual?: Array<{ period?: string; inflows?: number; outflows?: number; net?: number }>
+    }>(`/api/reports/statements?${q}`)
+  },
 
   driveStatus: () => request<DriveStatus>('/api/drive/status'),
   driveLink: (body: { workspace_id: string; folder_id: string; folder_name?: string }) =>

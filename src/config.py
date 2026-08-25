@@ -1,4 +1,4 @@
-"""Centralised application settings — OpenAI-first (no Anthropic)."""
+"""Centralised application settings — local/free extraction by default."""
 from __future__ import annotations
 
 from functools import lru_cache
@@ -15,9 +15,12 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    openai_api_key: SecretStr = Field(...)
-    groq_api_key: SecretStr = Field(...)
-    llamaparse_api_key: SecretStr = Field(...)
+    # local = pdfplumber + reglas CoA ($0). cloud = OpenAI/LlamaParse/Groq (pago/límites).
+    extraction_mode: str = Field(default="local")
+
+    openai_api_key: SecretStr = Field(default=SecretStr(""))
+    groq_api_key: SecretStr = Field(default=SecretStr(""))
+    llamaparse_api_key: SecretStr = Field(default=SecretStr(""))
 
     supabase_url: str = Field(...)
     supabase_service_role_key: SecretStr = Field(...)
@@ -35,6 +38,14 @@ class Settings(BaseSettings):
     google_drive_default_folder_id: str = Field(
         default="1db-aXczr9hHkv207U5gjEDmUfitN8MmT"
     )
+
+    @property
+    def use_local_extraction(self) -> bool:
+        return (self.extraction_mode or "local").strip().lower() in {
+            "local",
+            "free",
+            "offline",
+        }
 
 
 @lru_cache(maxsize=1)

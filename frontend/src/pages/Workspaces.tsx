@@ -84,7 +84,7 @@ export default function Workspaces() {
   return (
     <div className="workspaces-shell min-h-screen text-foreground">
       <header className="border-b border-border/60 bg-card/80 backdrop-blur-md">
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-6 py-4">
+        <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4 sm:px-6">
           <Link to="/" className="font-display text-xl tracking-tight text-primary">
             LedgerAI
           </Link>
@@ -98,23 +98,23 @@ export default function Workspaces() {
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-6 py-12">
-        <div className="mb-10 flex flex-wrap items-end justify-between gap-6">
+      <main className="mx-auto max-w-5xl px-4 py-8 sm:px-6 sm:py-12">
+        <div className="mb-10 flex flex-wrap items-end justify-between gap-4 sm:gap-6">
           <div className="max-w-xl animate-fade-up">
             <p className="mb-2 text-[11px] font-semibold uppercase tracking-[0.2em] text-primary/80">
               LedgerAI · v1.0
             </p>
-            <h1 className="font-display text-4xl tracking-tight sm:text-5xl">
+            <h1 className="font-display text-3xl tracking-tight sm:text-4xl md:text-5xl">
               {t('workspaces.title')}
             </h1>
-            <p className="mt-3 text-base leading-relaxed text-muted-foreground">
+            <p className="mt-3 text-sm leading-relaxed text-muted-foreground sm:text-base">
               {t('workspaces.subtitle')}
             </p>
           </div>
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="inline-flex items-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-[var(--shadow-soft)] transition hover:opacity-95"
+            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-[var(--shadow-soft)] transition hover:opacity-95 sm:w-auto"
           >
             <Plus className="h-4 w-4" />
             {t('workspaces.create')}

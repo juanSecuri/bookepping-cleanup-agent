@@ -97,7 +97,7 @@ export default function ChartOfAccounts() {
                 {rows.length} {t('coa.count')}
               </span>
             </div>
-            <div className="soft-shadow overflow-x-auto rounded-xl border border-border bg-card">
+            <div className="soft-shadow table-scroll rounded-xl border border-border bg-card">
               <table className="w-full min-w-[480px] text-left text-sm">
                 <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
                   <tr>
