@@ -48,7 +48,7 @@ El agente debe entonces:
 | 10 | Export Excel + tablas TanStack | **DONE** |
 | 11 | Imagen OCR / Audio local | **DONE** |
 | 12 | Auth | **Futuro** (fuera de alcance $0 MVP — no implementar) |
-| — | **Harden MVP** (`harden-mvp-2026-08-26`) | **Activo** — mes extracto auto, preview archivo, health/docs |
+| — | Harden MVP (`harden-mvp-2026-08-26`) | **DONE** (cerrado 2026-08-26 EOD) |
 
 ---
 
@@ -241,6 +241,7 @@ Env: `EXTRACTION_MODE=local` por defecto.
 | 2026-08-26 | Implementación | `cash_flow_type` + vistas SQL + CSV/XLSX ingest + export xlsx | **sql-views-excel** |
 | 2026-08-26 | Implementación | Tesseract+Docker, audio whisper/Groq, split Docs, TanStack txs | **ocr-audio-ux-docker** |
 | **2026-08-26** | **Harden MVP** | Auto `statement_month` desde PDF; preview archivo en Docs; params/checklist; Auth sigue futuro | **harden-mvp-2026-08-26** |
+| **2026-08-26** | **Cierre de día (Juan)** | Parar desarrollo; MVP $0 cerrado para hoy. Próximo: Auth u otro backlog solo con “Tarea de la fecha…” | **EOD** |
 
 ---
 
@@ -284,22 +285,15 @@ Split-screen extracto/OCR en Documentos | TanStack Table en Transacciones | Expo
 
 ---
 
-## 11. Sprint activo (2026-08-26)
+## 11. Sprint activo
 
-**Nombre:** `harden-mvp-2026-08-26`  
-**Objetivo medible:** Cerrar gaps de producto para *full verificado* / polish sin Auth.
+**Estado 2026-08-26 EOD:** **cerrado.** Sin foco activo hasta nueva “Tarea de la fecha…”.
 
-| # | Tarea | DoD |
-|---|--------|-----|
-| 1 | Docs params: sprints 0–11 DONE; Auth futuro; checklist §3 | **Hecho** |
-| 2 | Auto `statement_month` desde texto PDF si payload missing/default | **Hecho** |
-| 3 | `GET /api/documents/{id}/file` + preview PDF/imagen en Docs | **Hecho** |
-| 4 | Health check `/health` en Render (manual si MCP no puede) | Documentado |
-| 5 | Auth / email | **Futuro** — fuera de $0 MVP |
+**Último sprint:** `harden-mvp-2026-08-26` — DONE.
 
-**Auth:** permanece **futuro** (no es requisito del MVP $0).
+**Live:** https://ledgerai-0wyy.onrender.com (Docker · YASNAY · cola · CoA · reportes · OCR).
 
-**Ops:** servicio Docker live `https://ledgerai-0wyy.onrender.com`. Health: Dashboard → Settings → Health Checks → `/health` si aún vacío.
+**Pendiente futuro (no hoy):** Auth · Email facturas · exceljs multipestaña (opcional) · Health Check Path en Dashboard si falta (`/health`).
 
 ---
 
