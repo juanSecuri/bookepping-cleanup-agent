@@ -150,10 +150,8 @@ class DocumentQueueWorker:
                 }
             )
             await docs.save(failed)
-        finally:
-            # Drop local upload copies after attempt (Drive can re-download)
-            if claimed.source == "upload" and claimed.local_path:
-                Path(claimed.local_path).unlink(missing_ok=True)
+        # Keep local_path on disk for split-screen preview while the instance
+        # is warm (Render Free disk is ephemeral — gone on restart/sleep).
         return True
 
     async def _resolve_file(self, doc: DocumentRecord) -> Path:
@@ -230,9 +228,17 @@ class DocumentQueueWorker:
                     }
                 )
         elif kind == "statement":
+            from src.infrastructure.reconciliation.statement_chain import (
+                DEFAULT_STATEMENT_MONTH_PLACEHOLDER,
+            )
+
             bank_name = payload.get("bank_name") or doc.vendor or "Bank"
             account = payload.get("bank_account_number") or "0000"
-            month = payload.get("statement_month") or "2026-01"
+            # Missing/placeholder month → ProcessStatement detects from PDF text.
+            month = (
+                str(payload.get("statement_month") or "").strip()
+                or DEFAULT_STATEMENT_MONTH_PLACEHOLDER
+            )
             report = await container.process_statement.execute(
                 path,
                 wid,
@@ -241,6 +247,7 @@ class DocumentQueueWorker:
                 month,
                 source_document_id=doc.id,
             )
+            month = report.statement_month or month
             chain_line = ""
             if report.chain_alert:
                 chain_line = f"CADENAZO: {report.chain_alert}\n"

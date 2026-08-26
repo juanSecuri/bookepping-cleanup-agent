@@ -14,6 +14,9 @@ from src.infrastructure.repositories.supabase_client import get_supabase_client
 
 TABLE = "statement_periods"
 
+# Placeholder used by queue when Drive/upload omit the month — treat as "detect me".
+DEFAULT_STATEMENT_MONTH_PLACEHOLDER = "2026-01"
+
 _OPENING_RE = re.compile(
     r"(?:beginning|opening|previous|prior)\s+(?:balance|bal\.?)[:\s]*\$?\s*\(?([\d,]+\.?\d*)\)?",
     re.IGNORECASE,
@@ -22,6 +25,83 @@ _CLOSING_RE = re.compile(
     r"(?:ending|closing|new|current)\s+(?:balance|bal\.?)[:\s]*\$?\s*\(?([\d,]+\.?\d*)\)?",
     re.IGNORECASE,
 )
+
+_MONTH_NAME_TO_NUM = {
+    "jan": 1,
+    "january": 1,
+    "ene": 1,
+    "enero": 1,
+    "feb": 2,
+    "february": 2,
+    "febrero": 2,
+    "mar": 3,
+    "march": 3,
+    "marzo": 3,
+    "apr": 4,
+    "april": 4,
+    "abr": 4,
+    "abril": 4,
+    "may": 5,
+    "mayo": 5,
+    "jun": 6,
+    "june": 6,
+    "junio": 6,
+    "jul": 7,
+    "july": 7,
+    "julio": 7,
+    "aug": 8,
+    "august": 8,
+    "ago": 8,
+    "agosto": 8,
+    "sep": 9,
+    "sept": 9,
+    "september": 9,
+    "septiembre": 9,
+    "oct": 10,
+    "october": 10,
+    "octubre": 10,
+    "nov": 11,
+    "november": 11,
+    "noviembre": 11,
+    "dec": 12,
+    "december": 12,
+    "dic": 12,
+    "diciembre": 12,
+}
+
+# Statement Period: January 1, 2026 - January 31, 2026 (end date wins)
+_PERIOD_NAMED_RE = re.compile(
+    r"(?:statement\s+period|periodo\s+(?:del\s+)?extracto|billing\s+period)"
+    r"\s*[:\-]?\s*"
+    r"(?:[A-Za-zÁÉÍÓÚáéíóúñÑ]+\.?\s+\d{1,2},?\s+\d{4}\s*[-–—to]+\s*)?"
+    r"([A-Za-zÁÉÍÓÚáéíóúñÑ]+)\.?\s+(\d{1,2}),?\s+(\d{4})",
+    re.IGNORECASE,
+)
+
+# Statement Period: 01/01/2026 - 01/31/2026 or 2026-01-01 through 2026-01-31
+_PERIOD_NUMERIC_RE = re.compile(
+    r"(?:statement\s+period|periodo\s+(?:del\s+)?extracto|billing\s+period)"
+    r"\s*[:\-]?\s*"
+    r"(?:\d{1,4}[/-]\d{1,2}[/-]\d{1,4}\s*[-–—to]+\s*)?"
+    r"(\d{1,4})[/-](\d{1,2})[/-](\d{1,4})",
+    re.IGNORECASE,
+)
+
+# Period ending / Statement ending January 31, 2026
+_ENDING_NAMED_RE = re.compile(
+    r"(?:period|statement|ciclo)\s+end(?:ing|s)?\s*[:\-]?\s*"
+    r"([A-Za-zÁÉÍÓÚáéíóúñÑ]+)\.?\s+(\d{1,2}),?\s+(\d{4})",
+    re.IGNORECASE,
+)
+
+_ENDING_NUMERIC_RE = re.compile(
+    r"(?:period|statement|ciclo)\s+end(?:ing|s)?\s*[:\-]?\s*"
+    r"(\d{1,4})[/-](\d{1,2})[/-](\d{1,4})",
+    re.IGNORECASE,
+)
+
+# ISO date near "Statement Period" line as last resort
+_ISO_DATE_RE = re.compile(r"\b(20\d{2})-(\d{2})-(\d{2})\b")
 
 
 def _parse_money(raw: str) -> Decimal | None:
@@ -43,6 +123,94 @@ def extract_statement_balances(text: str) -> tuple[Decimal | None, Decimal | Non
     for m in _CLOSING_RE.finditer(text or ""):
         closing = _parse_money(m.group(1)) or closing
     return opening, closing
+
+
+def _yyyy_mm(year: int, month: int) -> str | None:
+    if year < 1990 or year > 2100 or month < 1 or month > 12:
+        return None
+    return f"{year:04d}-{month:02d}"
+
+
+def _month_from_name(name: str) -> int | None:
+    return _MONTH_NAME_TO_NUM.get(name.strip().lower().rstrip("."))
+
+
+def _yyyy_mm_from_numeric(a: str, b: str, c: str) -> str | None:
+    """Parse MM/DD/YYYY, DD/MM/YYYY, or YYYY-MM-DD style triples."""
+    x, y, z = int(a), int(b), int(c)
+    if x >= 1000:  # YYYY-M-D
+        return _yyyy_mm(x, y)
+    if z >= 1000:  # M/D/YYYY or D/M/YYYY — prefer US bank (M/D/Y) when month valid
+        if 1 <= x <= 12:
+            return _yyyy_mm(z, x)
+        if 1 <= y <= 12:
+            return _yyyy_mm(z, y)
+    return None
+
+
+def detect_statement_month(text: str) -> str | None:
+    """
+    Detect YYYY-MM from bank PDF text (Statement Period / period ending).
+
+    Prefers the end date of a stated period. Returns None if nothing reliable.
+    """
+    if not text or not text.strip():
+        return None
+
+    for m in _PERIOD_NAMED_RE.finditer(text):
+        month = _month_from_name(m.group(1))
+        if month:
+            got = _yyyy_mm(int(m.group(3)), month)
+            if got:
+                return got
+
+    for m in _PERIOD_NUMERIC_RE.finditer(text):
+        got = _yyyy_mm_from_numeric(m.group(1), m.group(2), m.group(3))
+        if got:
+            return got
+
+    for m in _ENDING_NAMED_RE.finditer(text):
+        month = _month_from_name(m.group(1))
+        if month:
+            got = _yyyy_mm(int(m.group(3)), month)
+            if got:
+                return got
+
+    for m in _ENDING_NUMERIC_RE.finditer(text):
+        got = _yyyy_mm_from_numeric(m.group(1), m.group(2), m.group(3))
+        if got:
+            return got
+
+    # Last resort: ISO dates near a period keyword line
+    lower = text.lower()
+    for keyword in ("statement period", "periodo", "period ending", "billing period"):
+        idx = lower.find(keyword)
+        if idx < 0:
+            continue
+        window = text[idx : idx + 160]
+        dates = list(_ISO_DATE_RE.finditer(window))
+        if dates:
+            last = dates[-1]
+            got = _yyyy_mm(int(last.group(1)), int(last.group(2)))
+            if got:
+                return got
+
+    return None
+
+
+def needs_statement_month_detection(statement_month: str | None) -> bool:
+    """True when queue/payload month is missing or the known placeholder default."""
+    if not statement_month or not str(statement_month).strip():
+        return True
+    return str(statement_month).strip() == DEFAULT_STATEMENT_MONTH_PLACEHOLDER
+
+
+def resolve_statement_month(payload_month: str | None, text: str) -> str:
+    """Use payload month unless missing/default — then detect from text, else placeholder."""
+    if not needs_statement_month_detection(payload_month):
+        return str(payload_month).strip()
+    detected = detect_statement_month(text)
+    return detected or DEFAULT_STATEMENT_MONTH_PLACEHOLDER
 
 
 def prior_month(yyyy_mm: str) -> str | None:

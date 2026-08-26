@@ -49,6 +49,125 @@ function isSelectableFile(node: DriveBrowseNode) {
   )
 }
 
+function docPreviewKind(doc: Document): 'pdf' | 'image' | 'other' {
+  const name = String(doc.filename || doc.name || doc.file_name || '').toLowerCase()
+  const ft = String(doc.file_type || '').toLowerCase()
+  if (name.endsWith('.pdf') || ft === 'pdf' || ft.includes('pdf')) return 'pdf'
+  if (
+    /\.(png|jpe?g|webp|gif|tif|tiff)$/i.test(name) ||
+    ft.startsWith('image') ||
+    ft === 'png' ||
+    ft === 'jpg' ||
+    ft === 'jpeg'
+  ) {
+    return 'image'
+  }
+  return 'other'
+}
+
+function DocumentFilePreview({
+  doc,
+  workspaceId,
+}: {
+  doc: Document
+  workspaceId: string
+}) {
+  const [failed, setFailed] = useState(false)
+  const [ready, setReady] = useState(false)
+  const kind = docPreviewKind(doc)
+  const url = api.documentFileUrl(String(doc.id), workspaceId)
+
+  useEffect(() => {
+    let cancelled = false
+    setFailed(false)
+    setReady(false)
+    if (kind === 'other') return
+    ;(async () => {
+      try {
+        let res = await fetch(url, { method: 'HEAD', cache: 'no-store' })
+        if (res.status === 405 || res.status === 501) {
+          res = await fetch(url, { method: 'GET', cache: 'no-store', headers: { Range: 'bytes=0-0' } })
+        }
+        if (cancelled) return
+        if (!res.ok) {
+          setFailed(true)
+          return
+        }
+        setReady(true)
+      } catch {
+        if (!cancelled) setFailed(true)
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [url, kind, doc.id])
+
+  if (kind === 'other') {
+    return (
+      <div className="flex max-h-72 min-h-[12rem] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-card p-4 text-center text-xs text-muted-foreground">
+        <p>Vista previa en pantalla para PDF e imágenes. El texto extraído está a la izquierda.</p>
+        <a
+          className="rounded-md border border-border px-3 py-1.5 font-medium text-foreground hover:bg-muted"
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Intentar abrir / descargar
+        </a>
+      </div>
+    )
+  }
+
+  if (failed) {
+    return (
+      <div className="flex max-h-72 min-h-[12rem] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-card p-4 text-center text-xs text-muted-foreground">
+        <p>
+          Archivo no disponible en disco (Render Free es efímero tras reinicio). El texto OCR a la
+          izquierda sigue disponible.
+        </p>
+      </div>
+    )
+  }
+
+  if (!ready) {
+    return (
+      <div className="flex max-h-72 min-h-[12rem] items-center justify-center rounded-lg border border-dashed border-border bg-card p-4 text-xs text-muted-foreground">
+        Cargando vista previa…
+      </div>
+    )
+  }
+
+  return (
+    <div className="overflow-hidden rounded-lg border border-border bg-card">
+      {kind === 'pdf' ? (
+        <iframe
+          title={String(doc.filename || doc.name || 'PDF')}
+          src={url}
+          className="h-72 w-full bg-background"
+        />
+      ) : (
+        <img
+          src={url}
+          alt={String(doc.filename || doc.name || 'Imagen')}
+          className="max-h-72 w-full object-contain"
+          onError={() => setFailed(true)}
+        />
+      )}
+      <div className="border-t border-border px-3 py-2 text-center">
+        <a
+          className="text-xs font-medium text-primary hover:underline"
+          href={url}
+          target="_blank"
+          rel="noreferrer"
+        >
+          Abrir en pestaña
+        </a>
+      </div>
+    </div>
+  )
+}
+
 function BrowseTree({
   node,
   depth = 0,
@@ -689,20 +808,7 @@ export default function Documents() {
                               <p className="mb-1 text-xs font-medium text-muted-foreground">
                                 Vista documento
                               </p>
-                              <div className="flex max-h-72 min-h-[12rem] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-card p-4 text-center text-xs text-muted-foreground">
-                                <p>
-                                  Split-screen: OCR a la izquierda; archivo a la derecha si sigue en
-                                  disco (Render Free es efímero).
-                                </p>
-                                <a
-                                  className="rounded-md border border-border px-3 py-1.5 font-medium text-foreground hover:bg-muted"
-                                  href={api.documentFileUrl(String(doc.id), workspaceId)}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                >
-                                  Abrir / descargar archivo
-                                </a>
-                              </div>
+                              <DocumentFilePreview doc={doc} workspaceId={workspaceId} />
                             </div>
                           </div>
                         </div>

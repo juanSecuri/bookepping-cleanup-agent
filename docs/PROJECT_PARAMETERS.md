@@ -35,19 +35,20 @@ El agente debe entonces:
 
 | Orden | Tema | Estado |
 |------:|------|--------|
-| 0 | Constraint costos: $0 APIs IA; parsers + reglas | **Cerrado (decisión)** |
-| 1 | Pipeline E2E: ingerir → leer → clasificar CoA → conciliar → emitir | Objetivo producto |
-| 2 | Extracción local PDF/Excel (pdfplumber / openpyxl) | **Hecho** (PDF + CSV/XLSX) |
-| 3 | **Cola async + 1 archivo a la vez** (sobrevivir Render Free 512MB / OOM) | **Hecho** |
-| 4 | CoA determinista: `account_rules` + limpieza regex + suspense + aprendizaje pasivo | **Hecho** |
-| 5 | Controles auditor: cadenazo saldos bancarios; Owner's Draws → Patrimonio | **Hecho** |
-| 6 | Reportes SQL (vistas Supabase): Balance cuadre + P&L + Cash flow (`cash_flow_type`) | **Hecho** |
-| 7 | Cierre anual: reset P&L → Retained Earnings | **Hecho** |
-| 8 | UX cold-start + banner; split-screen extracto/OCR | **Hecho** (banner + split Docs) |
-| 9 | Deploy Render free | **Live** (Docker + Tesseract) |
-| 10 | Export Excel + tablas TanStack | **Hecho** (openpyxl export + TanStack txs) |
-| 11 | Imagen OCR / Audio local | **Hecho** (Tesseract; audio whisper/Groq) |
-| 12 | Auth | **Futuro** (fuera de alcance $0 MVP) |
+| 0 | Constraint costos: $0 APIs IA; parsers + reglas | **DONE** |
+| 1 | Pipeline E2E: ingerir → leer → clasificar CoA → conciliar → emitir | **DONE** (MVP) |
+| 2 | Extracción local PDF/Excel (pdfplumber / openpyxl) | **DONE** |
+| 3 | **Cola async + 1 archivo a la vez** (sobrevivir Render Free 512MB / OOM) | **DONE** |
+| 4 | CoA determinista: `account_rules` + limpieza regex + suspense + aprendizaje pasivo | **DONE** |
+| 5 | Controles auditor: cadenazo saldos bancarios; Owner's Draws → Patrimonio | **DONE** |
+| 6 | Reportes SQL (vistas Supabase): Balance cuadre + P&L + Cash flow (`cash_flow_type`) | **DONE** |
+| 7 | Cierre anual: reset P&L → Retained Earnings | **DONE** |
+| 8 | UX cold-start + banner; split-screen extracto/OCR | **DONE** |
+| 9 | Deploy Render free | **DONE** (Docker + Tesseract live) |
+| 10 | Export Excel + tablas TanStack | **DONE** |
+| 11 | Imagen OCR / Audio local | **DONE** |
+| 12 | Auth | **Futuro** (fuera de alcance $0 MVP — no implementar) |
+| — | **Harden MVP** (`harden-mvp-2026-08-26`) | **Activo** — mes extracto auto, preview archivo, health/docs |
 
 ---
 
@@ -93,22 +94,24 @@ Sigue siendo un **agente de bookkeeping cleanup**, pero la inteligencia debe ser
 
 Una capacidad no está hecha hasta:
 
-- [ ] Flujo feliz documentado  
-- [ ] ≥2 casos reales o fixtures  
-- [ ] Estados `processing` → `extracted` / `failed` claros  
-- [ ] Trazabilidad (origen, tipo, método de extracción: código vs API)  
-- [ ] Resultado en sitio correcto (banco → Conciliación; factura → Transacciones; reportes → periodo)  
-- [ ] **Sin dependencia obligatoria de API de pago** para el camino feliz (salvo lo que la empresa apruebe por escrito)  
+- [x] Flujo feliz documentado  
+- [x] ≥2 casos reales o fixtures  
+- [x] Estados `processing` → `extracted` / `failed` claros  
+- [x] Trazabilidad (origen, tipo, método de extracción: código vs API)  
+- [x] Resultado en sitio correcto (banco → Conciliación; factura → Transacciones; reportes → periodo)  
+- [x] **Sin dependencia obligatoria de API de pago** para el camino feliz (salvo lo que la empresa apruebe por escrito)  
 
 ### Checklist formatos
 
-**PDF / Drive** — OK (cola 1-a-1 + pdfplumber).  
+**PDF / Drive** — OK (cola 1-a-1 + pdfplumber; `statement_month` auto desde texto).  
 **Excel / CSV** — OK (openpyxl/csv → txs).  
 **Imagen** — OK (Tesseract eng+spa; Docker).  
 **Audio** — OK (faster-whisper opcional / Groq free tier + reglas CoA; sin OpenAI).  
 **Reportes** — OK (P&L + Balance + CF O/I/F + vistas SQL + export xlsx).  
 **Cold start / RAM** — OK (banner + cola 1-a-1).  
-**Auth** — futuro (no bloquea MVP).
+**Docker / Render** — OK (live `ledgerai-0wyy`; health path `/health` — ver `RENDER_DOCKER.md`).  
+**Auth** — **futuro** (no bloquea MVP $0).  
+**Email** — **futuro** (canal §2 baja prioridad).
 
 ---
 
@@ -212,9 +215,10 @@ Ingesta → Transcripción/extracción → Clasificación CoA
 | `bin/render-build.sh` | `pip install -e .` + Node 20 + `frontend` build |
 | `runtime.txt` | Python 3.11.9 |
 
-**URL live:** `https://ledgerai-6ate.onrender.com`  
-**Start:** `python run.py` · **Health:** `GET /health`  
-**Repo:** `https://github.com/juanSecuri/bookepping-cleanup-agent` (`main`).
+**URL live:** `https://ledgerai-0wyy.onrender.com`  
+**Start:** `python run.py` (Docker) · **Health:** `GET /health`  
+**Repo:** `https://github.com/juanSecuri/bookepping-cleanup-agent` (`main`).  
+**Service:** `srv-da7j2pdg1s2s738243cg` — si Health Check Path está vacío en Dashboard, Juan debe setear **Settings → Health Checks → `/health`** (Blueprint ya lo declara; MCP no puede editarlo en servicio existente).
 
 Secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`; Drive OAuth opcional.
 
@@ -236,6 +240,7 @@ Env: `EXTRACTION_MODE=local` por defecto.
 | 2026-08-26 | Implementación | Cierre anual → RE 3020 (`fiscal_year_closes`) | **fiscal-year-close** |
 | 2026-08-26 | Implementación | `cash_flow_type` + vistas SQL + CSV/XLSX ingest + export xlsx | **sql-views-excel** |
 | 2026-08-26 | Implementación | Tesseract+Docker, audio whisper/Groq, split Docs, TanStack txs | **ocr-audio-ux-docker** |
+| **2026-08-26** | **Harden MVP** | Auto `statement_month` desde PDF; preview archivo en Docs; params/checklist; Auth sigue futuro | **harden-mvp-2026-08-26** |
 
 ---
 
@@ -281,17 +286,20 @@ Split-screen extracto/OCR en Documentos | TanStack Table en Transacciones | Expo
 
 ## 11. Sprint activo (2026-08-26)
 
-**Nombre:** `Sprint-2026-08-26-ocr-audio-ux-docker`  
-**Objetivo medible:** Cerrar formatos imagen/audio + UX backlog + deploy Docker con Tesseract.
+**Nombre:** `harden-mvp-2026-08-26`  
+**Objetivo medible:** Cerrar gaps de producto para *full verificado* / polish sin Auth.
 
 | # | Tarea | DoD |
 |---|--------|-----|
-| 1–5 | Cola → … → SQL/Excel | **Hecho** |
-| **6 (foco)** | Tesseract + voice local/Groq + split Docs + TanStack + Dockerfile | Upload foto/audio → txs |
+| 1 | Docs params: sprints 0–11 DONE; Auth futuro; checklist §3 | **Hecho** |
+| 2 | Auto `statement_month` desde texto PDF si payload missing/default | **Hecho** |
+| 3 | `GET /api/documents/{id}/file` + preview PDF/imagen en Docs | **Hecho** |
+| 4 | Health check `/health` en Render (manual si MCP no puede) | Documentado |
+| 5 | Auth / email | **Futuro** — fuera de $0 MVP |
 
 **Auth:** permanece **futuro** (no es requisito del MVP $0).
 
-**Ops:** `render.yaml` pasa a `runtime: docker`. Si el servicio ya existía como Python native, sincronizar Blueprint o cambiar runtime en Dashboard a Docker.
+**Ops:** servicio Docker live `https://ledgerai-0wyy.onrender.com`. Health: Dashboard → Settings → Health Checks → `/health` si aún vacío.
 
 ---
 

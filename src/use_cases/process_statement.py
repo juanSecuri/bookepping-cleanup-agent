@@ -21,6 +21,7 @@ from src.infrastructure.ocr.local_pdf_client import LocalPdfClient
 from src.infrastructure.reconciliation.statement_chain import (
     StatementPeriodRepository,
     extract_statement_balances,
+    resolve_statement_month,
 )
 from src.infrastructure.repositories.bank_movement_repository import BankMovementRepository
 from src.infrastructure.repositories.supabase_client import get_supabase_client
@@ -45,6 +46,7 @@ class ProcessingReport:
     chain_alert: str | None = None
     opening_balance: float | None = None
     closing_balance: float | None = None
+    statement_month: str | None = None
 
 
 class ProcessStatementUseCase:
@@ -79,6 +81,7 @@ class ProcessStatementUseCase:
         raw_text = ""
         if settings.use_local_extraction:
             raw_text = await self._local_pdf.extract_text_async(file_path)
+            statement_month = resolve_statement_month(statement_month, raw_text)
             movements = self._local_pdf._movements_from_text(
                 text=raw_text,
                 tenant_id=tenant_id,
@@ -98,13 +101,14 @@ class ProcessStatementUseCase:
             from src.infrastructure.ocr.llama_parse_client import LlamaParseClient
 
             engine = "llamaparse"
-            movements = await LlamaParseClient().parse_bank_statement(
-                file_path, tenant_id, bank_name, bank_account_number, statement_month
-            )
             try:
                 raw_text = await self._local_pdf.extract_text_async(file_path)
             except Exception:
                 raw_text = ""
+            statement_month = resolve_statement_month(statement_month, raw_text)
+            movements = await LlamaParseClient().parse_bank_statement(
+                file_path, tenant_id, bank_name, bank_account_number, statement_month
+            )
 
         opening, closing = extract_statement_balances(raw_text)
         chain = self._periods.upsert_and_validate(
@@ -160,6 +164,7 @@ class ProcessStatementUseCase:
             chain_alert=chain.alert_message,
             opening_balance=float(opening) if opening is not None else None,
             closing_balance=float(closing) if closing is not None else None,
+            statement_month=statement_month,
         )
 
     async def _mirror_transaction(

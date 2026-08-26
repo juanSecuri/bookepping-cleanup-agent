@@ -3,6 +3,7 @@ LedgerAI FastAPI — REST API under /api + SPA static serve.
 """
 from __future__ import annotations
 
+import mimetypes
 import tempfile
 import uuid
 from contextlib import asynccontextmanager
@@ -299,10 +300,12 @@ async def download_document_file(document_id: str, workspace_id: str | None = No
             "Archivo local ya no está en disco (filesystem efímero). "
             "Reimporta desde Drive o vuelve a subir.",
         )
+    media, _ = mimetypes.guess_type(doc.file_name or path.name)
     return FileResponse(
         path,
         filename=doc.file_name,
-        media_type="application/octet-stream",
+        media_type=media or "application/octet-stream",
+        content_disposition_type="inline",
     )
 
 
