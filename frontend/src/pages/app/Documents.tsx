@@ -559,7 +559,7 @@ export default function Documents() {
           type="file"
           className="hidden"
           multiple
-          accept=".pdf,.csv,.xlsx,.xls,.png,.jpg,.jpeg,.webp"
+          accept=".pdf,.csv,.xlsx,.xls,.png,.jpg,.jpeg,.webp,.tif,.tiff,.mp3,.wav,.m4a,.ogg,.webm"
           onChange={(e) => e.target.files && void uploadFiles(e.target.files)}
         />
       </label>
@@ -672,13 +672,39 @@ export default function Documents() {
                           {doc.error_message != null && (
                             <p className="text-destructive">{String(doc.error_message)}</p>
                           )}
-                          <pre className="max-h-48 overflow-auto whitespace-pre-wrap rounded-lg border border-border bg-card p-3 text-xs leading-relaxed text-muted-foreground">
-                            {String(
-                              doc.extract_preview ||
-                                doc.raw_extracted_text ||
-                                'Aún no hay texto extraído (si está en processing, espera 1–3 min y recarga).',
-                            )}
-                          </pre>
+                          <div className="grid gap-3 lg:grid-cols-2">
+                            <div>
+                              <p className="mb-1 text-xs font-medium text-muted-foreground">
+                                Texto extraído / OCR
+                              </p>
+                              <pre className="max-h-72 overflow-auto whitespace-pre-wrap rounded-lg border border-border bg-card p-3 text-xs leading-relaxed text-muted-foreground">
+                                {String(
+                                  doc.extract_preview ||
+                                    doc.raw_extracted_text ||
+                                    'Aún no hay texto extraído (si está en processing, espera 1–3 min y recarga).',
+                                )}
+                              </pre>
+                            </div>
+                            <div>
+                              <p className="mb-1 text-xs font-medium text-muted-foreground">
+                                Vista documento
+                              </p>
+                              <div className="flex max-h-72 min-h-[12rem] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-card p-4 text-center text-xs text-muted-foreground">
+                                <p>
+                                  Split-screen: OCR a la izquierda; archivo a la derecha si sigue en
+                                  disco (Render Free es efímero).
+                                </p>
+                                <a
+                                  className="rounded-md border border-border px-3 py-1.5 font-medium text-foreground hover:bg-muted"
+                                  href={api.documentFileUrl(String(doc.id), workspaceId)}
+                                  target="_blank"
+                                  rel="noreferrer"
+                                >
+                                  Abrir / descargar archivo
+                                </a>
+                              </div>
+                            </div>
+                          </div>
                         </div>
                       )}
                     </li>

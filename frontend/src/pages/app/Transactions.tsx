@@ -1,6 +1,14 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import { Check, X } from 'lucide-react'
+import {
+  flexRender,
+  getCoreRowModel,
+  getSortedRowModel,
+  useReactTable,
+  type ColumnDef,
+  type SortingState,
+} from '@tanstack/react-table'
 import {
   api,
   type ChartAccount,
@@ -55,6 +63,7 @@ export default function Transactions() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
+  const [sorting, setSorting] = useState<SortingState>([{ id: 'date', desc: true }])
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -189,6 +198,132 @@ export default function Transactions() {
         {t('transactions.assign')}
       </button>
     )
+
+  const columns = useMemo<ColumnDef<Transaction>[]>(
+    () => [
+      {
+        id: 'select',
+        header: '',
+        enableSorting: false,
+        cell: ({ row }) => (
+          <input
+            type="checkbox"
+            checked={selected.has(row.original.id)}
+            onChange={() => toggle(row.original.id)}
+          />
+        ),
+      },
+      {
+        id: 'date',
+        accessorFn: (tx) => txDate(tx),
+        header: t('transactions.date'),
+      },
+      {
+        id: 'description',
+        accessorFn: (tx) => String(tx.description || tx.id),
+        header: t('transactions.description'),
+        cell: ({ row }) => (
+          <div>
+            <div className="max-w-[240px] truncate font-medium">
+              {row.original.description || row.original.id}
+            </div>
+            {assignId === row.original.id && assignControls(row.original)}
+          </div>
+        ),
+      },
+      {
+        id: 'vendor',
+        accessorFn: (tx) => txVendor(tx),
+        header: t('transactions.vendor'),
+      },
+      {
+        id: 'account',
+        accessorFn: (tx) => txAccount(tx),
+        header: t('transactions.account'),
+      },
+      {
+        id: 'amount',
+        accessorFn: (tx) => Number(tx.amount ?? 0),
+        header: t('transactions.amount'),
+        cell: ({ row }) =>
+          row.original.amount != null
+            ? Number(row.original.amount).toLocaleString(undefined, {
+                style: 'currency',
+                currency: row.original.currency || 'USD',
+              })
+            : '—',
+      },
+      {
+        id: 'confidence',
+        accessorFn: (tx) => confidencePct(tx) ?? -1,
+        header: t('transactions.confidence'),
+        cell: ({ row }) => {
+          const pct = confidencePct(row.original)
+          if (pct == null) return '—'
+          return (
+            <span
+              className={cn(
+                'inline-flex rounded-md px-2 py-0.5 text-xs font-medium tabular-nums',
+                confidenceClass(pct),
+              )}
+            >
+              {pct}%
+            </span>
+          )
+        },
+      },
+      {
+        id: 'actions',
+        header: t('common.actions'),
+        enableSorting: false,
+        cell: ({ row }) => {
+          const tx = row.original
+          return (
+            <div className="flex flex-wrap gap-1">
+              {assignId !== tx.id && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setAssignId(tx.id)
+                    setAssignCode('')
+                  }}
+                  className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs hover:border-primary/40"
+                >
+                  {t('transactions.assign')}
+                </button>
+              )}
+              <button
+                type="button"
+                title={t('transactions.approve')}
+                onClick={() => void approve(tx.id)}
+                className="cursor-pointer rounded-md p-1.5 text-primary hover:bg-secondary"
+              >
+                <Check className="h-4 w-4" />
+              </button>
+              <button
+                type="button"
+                title={t('transactions.reject')}
+                onClick={() => void reject(tx.id)}
+                className="cursor-pointer rounded-md p-1.5 text-destructive hover:bg-secondary"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+          )
+        },
+      },
+    ],
+    [accounts, assignCode, assignId, selected, t],
+  )
+
+  const table = useReactTable({
+    data: rows,
+    columns,
+    state: { sorting },
+    onSortingChange: setSorting,
+    getCoreRowModel: getCoreRowModel(),
+    getSortedRowModel: getSortedRowModel(),
+  })
 
   return (
     <div>
@@ -332,99 +467,37 @@ export default function Transactions() {
           <div className="soft-shadow table-scroll hidden rounded-xl border border-border bg-card md:block">
             <table className="w-full min-w-[960px] text-left text-sm">
               <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
-                <tr>
-                  <th className="w-10 px-3 py-3" />
-                  <th className="px-3 py-3 font-medium">{t('transactions.date')}</th>
-                  <th className="px-3 py-3 font-medium">{t('transactions.description')}</th>
-                  <th className="px-3 py-3 font-medium">{t('transactions.vendor')}</th>
-                  <th className="px-3 py-3 font-medium">{t('transactions.account')}</th>
-                  <th className="px-3 py-3 font-medium">{t('transactions.amount')}</th>
-                  <th className="px-3 py-3 font-medium">{t('transactions.confidence')}</th>
-                  <th className="px-3 py-3 font-medium">{t('common.actions')}</th>
-                </tr>
+                {table.getHeaderGroups().map((hg) => (
+                  <tr key={hg.id}>
+                    {hg.headers.map((header) => (
+                      <th
+                        key={header.id}
+                        className={cn(
+                          'px-3 py-3 font-medium',
+                          header.column.getCanSort() && 'cursor-pointer select-none',
+                        )}
+                        onClick={header.column.getToggleSortingHandler()}
+                      >
+                        {flexRender(header.column.columnDef.header, header.getContext())}
+                        {{ asc: ' ↑', desc: ' ↓' }[header.column.getIsSorted() as string] ?? null}
+                      </th>
+                    ))}
+                  </tr>
+                ))}
               </thead>
               <tbody>
-                {rows.map((tx) => {
-                  const pct = confidencePct(tx)
-                  return (
-                    <tr key={tx.id} className="border-b border-border last:border-0 align-top">
-                      <td className="px-3 py-3">
-                        <input
-                          type="checkbox"
-                          checked={selected.has(tx.id)}
-                          onChange={() => toggle(tx.id)}
-                        />
+                {table.getRowModel().rows.map((row) => (
+                  <tr
+                    key={row.id}
+                    className="border-b border-border last:border-0 align-top"
+                  >
+                    {row.getVisibleCells().map((cell) => (
+                      <td key={cell.id} className="px-3 py-3">
+                        {flexRender(cell.column.columnDef.cell, cell.getContext())}
                       </td>
-                      <td className="px-3 py-3 whitespace-nowrap text-muted-foreground">
-                        {txDate(tx)}
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="max-w-[240px] truncate font-medium">
-                          {tx.description || tx.id}
-                        </div>
-                        {assignId === tx.id && assignControls(tx)}
-                      </td>
-                      <td className="px-3 py-3 text-muted-foreground">{txVendor(tx)}</td>
-                      <td className="px-3 py-3">
-                        <span className="block max-w-[180px] truncate">{txAccount(tx)}</span>
-                      </td>
-                      <td className="px-3 py-3 tabular-nums whitespace-nowrap">
-                        {tx.amount != null
-                          ? Number(tx.amount).toLocaleString(undefined, {
-                              style: 'currency',
-                              currency: tx.currency || 'USD',
-                            })
-                          : '—'}
-                      </td>
-                      <td className="px-3 py-3">
-                        {pct != null ? (
-                          <span
-                            className={cn(
-                              'inline-flex rounded-md px-2 py-0.5 text-xs font-medium tabular-nums',
-                              confidenceClass(pct),
-                            )}
-                          >
-                            {pct}%
-                          </span>
-                        ) : (
-                          '—'
-                        )}
-                      </td>
-                      <td className="px-3 py-3">
-                        <div className="flex flex-wrap gap-1">
-                          {assignId !== tx.id && (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setAssignId(tx.id)
-                                setAssignCode('')
-                              }}
-                              className="cursor-pointer rounded-md border border-border px-2 py-1 text-xs hover:border-primary/40"
-                            >
-                              {t('transactions.assign')}
-                            </button>
-                          )}
-                          <button
-                            type="button"
-                            title={t('transactions.approve')}
-                            onClick={() => void approve(tx.id)}
-                            className="cursor-pointer rounded-md p-1.5 text-primary hover:bg-secondary"
-                          >
-                            <Check className="h-4 w-4" />
-                          </button>
-                          <button
-                            type="button"
-                            title={t('transactions.reject')}
-                            onClick={() => void reject(tx.id)}
-                            className="cursor-pointer rounded-md p-1.5 text-destructive hover:bg-secondary"
-                          >
-                            <X className="h-4 w-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  )
-                })}
+                    ))}
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>

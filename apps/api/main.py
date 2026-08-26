@@ -88,15 +88,37 @@ def _status_map(status: str | None) -> str | None:
 
 def _file_type(filename: str) -> DocumentFileType:
     ext = Path(filename).suffix.lower()
-    if ext in {".jpg", ".jpeg", ".png", ".gif", ".webp"}:
+    if ext in {".jpg", ".jpeg", ".png", ".gif", ".webp", ".tif", ".tiff", ".bmp"}:
         return DocumentFileType.IMAGE
     if ext == ".pdf":
         return DocumentFileType.PDF
     if ext in {".csv", ".xlsx", ".xls"}:
         return DocumentFileType.CSV
-    if ext in {".mp3", ".wav", ".m4a", ".ogg", ".webm"}:
+    if ext in {".mp3", ".wav", ".m4a", ".ogg", ".webm", ".mp4", ".mpeg", ".mpga"}:
         return DocumentFileType.AUDIO
     return DocumentFileType.OTHER
+
+
+def _pipeline_kind_for_upload(ftype: DocumentFileType) -> str:
+    if ftype == DocumentFileType.CSV:
+        return "spreadsheet"
+    if ftype == DocumentFileType.IMAGE:
+        return "invoice"
+    if ftype == DocumentFileType.AUDIO:
+        return "invoice"
+    return "invoice"
+
+
+def _apis_used_for_upload(ftype: DocumentFileType) -> str:
+    if ftype == DocumentFileType.PDF:
+        return "pdfplumber (local $0), reglas CoA"
+    if ftype == DocumentFileType.CSV:
+        return "openpyxl/csv + reglas CoA"
+    if ftype == DocumentFileType.IMAGE:
+        return "tesseract OCR + reglas CoA"
+    if ftype == DocumentFileType.AUDIO:
+        return "whisper/groq + reglas CoA"
+    return "local"
 
 
 def _tx_json(tx: FinancialTransaction) -> dict:
@@ -255,9 +277,33 @@ async def list_documents(workspace_id: str | None = None, tenant_id: str | None 
                 "pipeline_kind": r.pipeline_kind or ("upload" if r.source == "upload" else "pending"),
                 "apis_used": r.apis_used,
                 "extract_preview": (r.raw_extracted_text or "")[:1200] or None,
+                "local_path": r.local_path,
+                "file_type": r.file_type.value if hasattr(r.file_type, "value") else r.file_type,
             }
         )
     return out
+
+
+@api.get("/documents/{document_id}/file")
+async def download_document_file(document_id: str, workspace_id: str | None = None):
+    """Serve local ephemeral file if still on disk (Render Free — may 404 after restart)."""
+    doc = await DocumentRepository().get_by_id(uuid.UUID(document_id))
+    if not doc:
+        raise HTTPException(404, "Document not found")
+    if workspace_id and str(doc.workspace_id) != workspace_id:
+        raise HTTPException(404, "Document not found")
+    path = Path(doc.local_path) if doc.local_path else None
+    if not path or not path.exists():
+        raise HTTPException(
+            410,
+            "Archivo local ya no está en disco (filesystem efímero). "
+            "Reimporta desde Drive o vuelve a subir.",
+        )
+    return FileResponse(
+        path,
+        filename=doc.file_name,
+        media_type="application/octet-stream",
+    )
 
 
 @api.post("/documents/upload")
@@ -276,7 +322,7 @@ async def upload_document(
     ftype = _file_type(filename)
     worker = get_document_worker()
 
-    kind = "spreadsheet" if ftype == DocumentFileType.CSV else "invoice"
+    kind = _pipeline_kind_for_upload(ftype)
 
     doc = await worker.enqueue_file(
         workspace_id=wid,
@@ -285,15 +331,7 @@ async def upload_document(
         file_type=ftype,
         source="upload",
         pipeline_kind=kind,
-        apis_used=(
-            "pdfplumber (local $0), reglas CoA"
-            if ftype == DocumentFileType.PDF
-            else (
-                "openpyxl/csv + reglas CoA"
-                if ftype == DocumentFileType.CSV
-                else "local"
-            )
-        ),
+        apis_used=_apis_used_for_upload(ftype),
         queue_payload={"plan_kind": kind},
         raw_note="En cola — procesamiento secuencial (1 archivo).",
     )

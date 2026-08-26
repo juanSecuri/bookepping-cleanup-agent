@@ -27,6 +27,9 @@ dependencies = [
     # Report generation
     "openpyxl>=3.1",
     "reportlab>=4.2",
+    # Local OCR ($0) — requires tesseract-ocr binary (Docker)
+    "pytesseract>=0.3.10",
+    "Pillow>=10.3",
     # Google Drive
     "google-api-python-client>=2.100",
     "google-auth>=2.29",
@@ -47,6 +50,10 @@ dev = [
     "respx>=0.21",
     "ruff>=0.4",
     "mypy>=1.10",
+]
+audio = [
+    # Heavy — prefer Groq free tier on Render Free 512MB
+    "faster-whisper>=1.0",
 ]
 
 [project.scripts]

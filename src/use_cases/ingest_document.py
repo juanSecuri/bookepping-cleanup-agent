@@ -2,11 +2,12 @@
 IngestDocument use-case.
 
 Default EXTRACTION_MODE=local ($0):
-  invoice PDF → pdfplumber + regex structure + rule CoA
+  invoice PDF → pdfplumber + regex + rule CoA
   bank PDF    → LocalPdfClient (via ProcessStatement elsewhere)
-  image/audio → explicit error until Tesseract / faster-whisper sprints
+  image       → Tesseract OCR + rule CoA
+  audio       → faster-whisper tiny or Groq free tier + rule CoA
 
-Cloud mode (optional, paid/limited): OpenAI / LlamaParse / Groq.
+Cloud mode (optional): OpenAI / LlamaParse / Groq structure.
 """
 from __future__ import annotations
 
@@ -23,12 +24,14 @@ from src.domain.models.enums import DocumentSource, TransactionType
 from src.domain.models.transaction import ExtractionMetadata, FinancialTransaction
 from src.infrastructure.classification.cash_flow import infer_cash_flow_type
 from src.infrastructure.classification.rule_coa import RuleCoAClassifier
+from src.infrastructure.llm.local_voice import LocalVoiceTranscriber
 from src.infrastructure.ocr.local_pdf_client import LocalPdfClient
+from src.infrastructure.ocr.tesseract_client import TesseractOcrClient
 from src.infrastructure.repositories.bank_movement_repository import BankMovementRepository
 from src.infrastructure.repositories.supabase_client import get_supabase_client
 from src.infrastructure.repositories.transaction_repository import TransactionRepository
 
-_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
+_IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp", ".tif", ".tiff", ".bmp"}
 _AUDIO_EXTENSIONS = {".mp3", ".mp4", ".mpeg", ".mpga", ".m4a", ".wav", ".webm", ".ogg"}
 _PDF_EXTENSION = ".pdf"
 _TEXT_EXTENSIONS = {".txt"}
@@ -50,11 +53,15 @@ class IngestDocumentUseCase:
         movement_repo: BankMovementRepository | None = None,
         local_pdf: LocalPdfClient | None = None,
         coa: RuleCoAClassifier | None = None,
+        ocr: TesseractOcrClient | None = None,
+        voice: LocalVoiceTranscriber | None = None,
     ) -> None:
         self._transactions = transaction_repo or TransactionRepository()
         self._movements = movement_repo or BankMovementRepository()
         self._local_pdf = local_pdf or LocalPdfClient()
         self._coa = coa or RuleCoAClassifier()
+        self._ocr = ocr or TesseractOcrClient()
+        self._voice = voice or LocalVoiceTranscriber()
 
     async def execute(
         self,
@@ -70,9 +77,13 @@ class IngestDocumentUseCase:
 
         if ext in _IMAGE_EXTENSIONS:
             if settings.use_local_extraction:
-                raise ExtractionError(
-                    "Image OCR is free via Tesseract but not wired yet. "
-                    "Sprint pendiente — meanwhile use PDF/Excel or EXTRACTION_MODE=cloud."
+                text = await self._ocr.extract_text_async(file_path)
+                return await self._structure_local_text(
+                    text,
+                    file_path,
+                    tenant_id,
+                    DocumentSource.PHOTO,
+                    engine="tesseract",
                 )
             from src.infrastructure.llm.openai_client import OpenAIClient
 
@@ -81,9 +92,13 @@ class IngestDocumentUseCase:
 
         if ext in _AUDIO_EXTENSIONS:
             if settings.use_local_extraction:
-                raise ExtractionError(
-                    "Audio transcription is free via faster-whisper but not wired yet. "
-                    "Sprint pendiente — or EXTRACTION_MODE=cloud with Groq free tier."
+                transcript, engine = await self._voice.transcribe_async(file_path)
+                return await self._structure_local_text(
+                    transcript,
+                    file_path,
+                    tenant_id,
+                    DocumentSource.AUDIO,
+                    engine=engine,
                 )
             from src.infrastructure.llm.openai_client import OpenAIClient
             from src.infrastructure.llm.voice_client import VoiceClient
@@ -169,6 +184,8 @@ class IngestDocumentUseCase:
         file_path: Path,
         tenant_id: uuid.UUID,
         source: DocumentSource,
+        *,
+        engine: str = "local_pdfplumber+rules",
     ) -> FinancialTransaction:
         amount = self._guess_amount(text)
         tx_date = self._guess_date(text)
@@ -180,7 +197,7 @@ class IngestDocumentUseCase:
         meta = ExtractionMetadata(
             source=source,
             raw_file_path=str(file_path),
-            extraction_model="local_pdfplumber+rules",
+            extraction_model=f"{engine}+rules_coa",
             confidence_score=max(0.4, match.confidence * 0.9),
             raw_text=text[:8000],
         )

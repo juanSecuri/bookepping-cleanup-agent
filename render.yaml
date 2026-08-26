@@ -1,28 +1,28 @@
-# LedgerAI — single free Web Service (API + responsive SPA)
+# LedgerAI — Docker Web Service (Tesseract + ffmpeg for OCR/audio)
 # Blueprint: https://dashboard.render.com/blueprint/new?repo=https://github.com/juanSecuri/bookepping-cleanup-agent
 services:
   - type: web
     name: ledgerai
-    runtime: python
+    runtime: docker
     plan: free
     region: oregon
     branch: main
-    buildCommand: bash bin/render-build.sh
-    startCommand: python run.py
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
     healthCheckPath: /health
     envVars:
       - key: APP_ENV
         value: production
       - key: EXTRACTION_MODE
         value: local
+      - key: WHISPER_BACKEND
+        value: auto
       - key: LOG_LEVEL
         value: INFO
       - key: DEFAULT_CURRENCY
         value: USD
       - key: FISCAL_YEAR_START_MONTH
         value: "1"
-      - key: PYTHON_VERSION
-        value: "3.11.9"
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY
@@ -32,4 +32,6 @@ services:
       - key: GOOGLE_OAUTH_CLIENT_SECRET
         sync: false
       - key: GOOGLE_OAUTH_REFRESH_TOKEN
+        sync: false
+      - key: GROQ_API_KEY
         sync: false

@@ -37,17 +37,17 @@ El agente debe entonces:
 |------:|------|--------|
 | 0 | Constraint costos: $0 APIs IA; parsers + reglas | **Cerrado (decisión)** |
 | 1 | Pipeline E2E: ingerir → leer → clasificar CoA → conciliar → emitir | Objetivo producto |
-| 2 | Extracción local PDF/Excel (pdfplumber / openpyxl) | **Parcial+** (PDF + CSV/XLSX) |
+| 2 | Extracción local PDF/Excel (pdfplumber / openpyxl) | **Hecho** (PDF + CSV/XLSX) |
 | 3 | **Cola async + 1 archivo a la vez** (sobrevivir Render Free 512MB / OOM) | **Hecho** |
 | 4 | CoA determinista: `account_rules` + limpieza regex + suspense + aprendizaje pasivo | **Hecho** |
 | 5 | Controles auditor: cadenazo saldos bancarios; Owner's Draws → Patrimonio | **Hecho** |
-| 6 | Reportes SQL (vistas Supabase): Balance cuadre + P&L + Cash flow (`cash_flow_type`) | **Hecho** (vistas + export xlsx) |
+| 6 | Reportes SQL (vistas Supabase): Balance cuadre + P&L + Cash flow (`cash_flow_type`) | **Hecho** |
 | 7 | Cierre anual: reset P&L → Retained Earnings | **Hecho** |
-| 8 | UX cold-start + banner “despertando”; split-screen PDF (después) | Parcial (deploy live) |
-| 9 | Deploy Render free | **Live** (mejorar cola/RAM) |
-| 10 | Export Excel profesional (exceljs); tablas TanStack (después) | Backlog |
-| 11 | Imagen OCR / Audio local | Pendiente |
-| 12 | Auth | Futuro |
+| 8 | UX cold-start + banner; split-screen extracto/OCR | **Hecho** (banner + split Docs) |
+| 9 | Deploy Render free | **Live** (Docker + Tesseract) |
+| 10 | Export Excel + tablas TanStack | **Hecho** (openpyxl export + TanStack txs) |
+| 11 | Imagen OCR / Audio local | **Hecho** (Tesseract; audio whisper/Groq) |
+| 12 | Auth | **Futuro** (fuera de alcance $0 MVP) |
 
 ---
 
@@ -102,12 +102,13 @@ Una capacidad no está hecha hasta:
 
 ### Checklist formatos
 
-**PDF / Drive** — base OK; falta camino gratis + regresión + **cola 1-a-1**.  
-**Excel / CSV** — pendiente parser real.  
-**Imagen** — pendiente (Tesseract recomendado).  
-**Audio** — pendiente (faster-whisper / Groq free tier).  
-**Reportes** — P&L parcial; Balance + Cash flow mínimos (API); falta cuadre SQL + export.  
-**Cold start / RAM** — deploy live; **falta cola 1-a-1 y UX despertar**.
+**PDF / Drive** — OK (cola 1-a-1 + pdfplumber).  
+**Excel / CSV** — OK (openpyxl/csv → txs).  
+**Imagen** — OK (Tesseract eng+spa; Docker).  
+**Audio** — OK (faster-whisper opcional / Groq free tier + reglas CoA; sin OpenAI).  
+**Reportes** — OK (P&L + Balance + CF O/I/F + vistas SQL + export xlsx).  
+**Cold start / RAM** — OK (banner + cola 1-a-1).  
+**Auth** — futuro (no bloquea MVP).
 
 ---
 
@@ -234,6 +235,7 @@ Env: `EXTRACTION_MODE=local` por defecto.
 | 2026-08-26 | Implementación | Cadenazo `statement_periods` + Owner's Draws 3030 + Balance A=P+E + CF O/I/F | **cadenazo-equity** |
 | 2026-08-26 | Implementación | Cierre anual → RE 3020 (`fiscal_year_closes`) | **fiscal-year-close** |
 | 2026-08-26 | Implementación | `cash_flow_type` + vistas SQL + CSV/XLSX ingest + export xlsx | **sql-views-excel** |
+| 2026-08-26 | Implementación | Tesseract+Docker, audio whisper/Groq, split Docs, TanStack txs | **ocr-audio-ux-docker** |
 
 ---
 
@@ -271,23 +273,25 @@ Limpieza regex previa (quitar refs de factura, auth codes, fechas ruidosas).
 - **Balance:** Activo = Pasivo + Patrimonio **incluyendo utilidad neta del ejercicio** como línea virtual.  
 - **Cash flow:** método directo + `cash_flow_type` (Operating / Investing / Financing).
 
-### 10.4 Backlog UX (no foco ahora)
+### 10.4 Backlog UX (cerrado 2026-08-26)
 
-Split-screen PDF | TanStack Table | Export exceljs multipestaña.
+Split-screen extracto/OCR en Documentos | TanStack Table en Transacciones | Export openpyxl (exceljs multipestaña sigue opcional).
 
 ---
 
 ## 11. Sprint activo (2026-08-26)
 
-**Nombre:** `Sprint-2026-08-26-sql-views-excel`  
-**Objetivo medible:** `cash_flow_type` + vistas SQL + parser CSV/XLSX + export Excel de reportes.
+**Nombre:** `Sprint-2026-08-26-ocr-audio-ux-docker`  
+**Objetivo medible:** Cerrar formatos imagen/audio + UX backlog + deploy Docker con Tesseract.
 
 | # | Tarea | DoD |
 |---|--------|-----|
-| 1–4 | Cola → rules → cadenazo → cierre anual | **Hecho** |
-| **5 (foco)** | Migración `010` + ingest spreadsheet + `/api/reports/sql` + export.xlsx | Upload Excel → txs; Export en Reportes |
+| 1–5 | Cola → … → SQL/Excel | **Hecho** |
+| **6 (foco)** | Tesseract + voice local/Groq + split Docs + TanStack + Dockerfile | Upload foto/audio → txs |
 
-**Fuera de este sprint:** TanStack, split-screen, Tesseract, audio, auth.
+**Auth:** permanece **futuro** (no es requisito del MVP $0).
+
+**Ops:** `render.yaml` pasa a `runtime: docker`. Si el servicio ya existía como Python native, sincronizar Blueprint o cambiar runtime en Dashboard a Docker.
 
 ---
 

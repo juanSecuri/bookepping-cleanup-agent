@@ -190,6 +190,8 @@ export const api = {
     request<Document>('/api/documents', { method: 'POST', body: JSON.stringify(body) }),
   uploadDocument: (form: FormData) =>
     request<Document>('/api/documents/upload', { method: 'POST', body: form }),
+  documentFileUrl: (document_id: string, workspace_id: string) =>
+    `${API_BASE}/api/documents/${encodeURIComponent(document_id)}/file?workspace_id=${encodeURIComponent(workspace_id)}`,
 
   listTransactions: (params: { tenant_id: string; status?: string; suspense?: boolean }) => {
     const q = new URLSearchParams({ tenant_id: params.tenant_id })
