@@ -349,6 +349,34 @@ export const api = {
     ),
 
 
+  listFiscalYears: (workspace_id: string) =>
+    request<{ years: Array<Record<string, unknown>> }>(
+      `/api/fiscal-years?workspace_id=${encodeURIComponent(workspace_id)}`,
+    ),
+  closeFiscalYear: (fiscal_year: string, body: {
+    workspace_id: string
+    notes?: string
+    allow_suspense?: boolean
+  }) =>
+    request<{
+      fiscal_year: string
+      status: string
+      net_income: number
+      total_revenue: number
+      total_expenses: number
+      retained_earnings_after: number
+      transaction_count: number
+      note?: string
+    }>(`/api/fiscal-years/${encodeURIComponent(fiscal_year)}/close`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
+  reopenFiscalYear: (fiscal_year: string, workspace_id: string) =>
+    request<{ fiscal_year: string; status?: string }>(
+      `/api/fiscal-years/${encodeURIComponent(fiscal_year)}/reopen`,
+      { method: 'POST', body: JSON.stringify({ workspace_id }) },
+    ),
+
   driveStatus: () => request<DriveStatus>('/api/drive/status'),
   driveLink: (body: { workspace_id: string; folder_id: string; folder_name?: string }) =>
     request<{ workspace_id?: string; drive_folder_id?: string; drive_folder_name?: string }>(

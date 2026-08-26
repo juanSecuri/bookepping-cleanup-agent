@@ -74,13 +74,19 @@ class EmitPeriodReportsUseCase:
             label = f"{date_from or '…'} → {date_to or '…'}"
 
         txns = await self._transactions.list_by_tenant(workspace_id, limit=20000)
-        verified = [t for t in txns if t.status == TransactionStatus.VERIFIED]
+        verified = [
+            t
+            for t in txns
+            if t.status in (TransactionStatus.VERIFIED, TransactionStatus.CLOSED)
+        ]
         if date_from:
             verified = [t for t in verified if str(t.transaction_date) >= date_from]
         if date_to:
             verified = [t for t in verified if str(t.transaction_date) <= date_to]
 
         coa_types = self._coa_types(str(workspace_id))
+        as_of_year = self._as_of_year(period, date_to, date_from)
+        prior_re = self._prior_retained_earnings(str(workspace_id), as_of_year)
 
         revenue_map: dict[str, dict] = {}
         expense_map: dict[str, dict] = {}
@@ -230,20 +236,34 @@ class EmitPeriodReportsUseCase:
             if v["code"] != "3020"
         ]
         # Utilidad / (pérdida) del ejercicio → Patrimonio (inyectada; no se pierde en P&L)
-        prior_re = equity_map.get("3020")
-        re_amount = float(prior_re["amount"]) if prior_re else 0.0
+        prior_re_row = equity_map.get("3020")
+        re_tx_amount = float(prior_re_row["amount"]) if prior_re_row else 0.0
+        if prior_re != 0:
+            equity_lines.append(
+                {
+                    "code": "3020-PY",
+                    "name": f"Utilidades retenidas (años cerrados antes de {as_of_year})",
+                    "amount": float(prior_re),
+                    "txCount": 0,
+                }
+            )
         equity_lines.append(
             {
                 "code": "3020",
                 "name": "Utilidad del ejercicio (Retained Earnings)",
-                "amount": net_income + re_amount,
-                "txCount": (prior_re["txCount"] if prior_re else 0) + len(verified),
+                "amount": net_income + re_tx_amount,
+                "txCount": (prior_re_row["txCount"] if prior_re_row else 0) + len(verified),
             }
         )
         total_assets = sum(a["amount"] for a in assets)
         total_liabilities = sum(a["amount"] for a in liabilities)
         total_equity = sum(a["amount"] for a in equity_lines)
-        imbalance = total_assets - (total_liabilities + total_equity)
+        # Prior RE is permanent capital from closed years; period cash proxy only
+        # reflects activity in the filter window — exclude 3020-PY from equation check.
+        equity_for_equation = sum(
+            a["amount"] for a in equity_lines if a["code"] != "3020-PY"
+        )
+        imbalance = total_assets - (total_liabilities + equity_for_equation)
 
         op_in_f = float(operating_in)
         op_out_f = float(operating_out)
@@ -326,11 +346,13 @@ class EmitPeriodReportsUseCase:
             "totalEquity": total_equity,
             "imbalance": imbalance,
             "balanced": abs(imbalance) < 0.02,
-            "equation": "Assets = Liabilities + Equity (incl. utilidad del ejercicio)",
+            "priorRetainedEarnings": float(prior_re),
+            "asOfYear": as_of_year,
+            "equation": "Assets = Liabilities + Equity (actividad del periodo; RE previa informativa)",
             "note": (
-                "Balance desde txs verificadas: cash proxy; "
-                "Owner's Draws reducen Patrimonio; "
-                "utilidad neta del periodo se inyecta en 3020."
+                "Balance desde txs verificadas/cerradas: cash proxy del periodo; "
+                "Owner's Draws reducen Patrimonio; utilidad del periodo en 3020; "
+                "RE de años cerrados en 3020-PY (no entra al cuadre del periodo)."
             ),
         }
 
@@ -382,3 +404,26 @@ class EmitPeriodReportsUseCase:
         if tx_type == TransactionType.INCOME:
             return "income"
         return "expense"
+
+    @staticmethod
+    def _as_of_year(
+        period: str | None,
+        date_to: str | None,
+        date_from: str | None,
+    ) -> str:
+        if period and len(period) >= 4 and period[:4].isdigit():
+            return period[:4]
+        if date_to and len(date_to) >= 4 and date_to[:4].isdigit():
+            return date_to[:4]
+        if date_from and len(date_from) >= 4 and date_from[:4].isdigit():
+            return date_from[:4]
+        from datetime import date as date_cls
+
+        return str(date_cls.today().year)
+
+    def _prior_retained_earnings(self, tenant_id: str, as_of_year: str) -> Decimal:
+        from src.use_cases.close_fiscal_year import FiscalYearCloseRepository
+
+        return FiscalYearCloseRepository().sum_prior_retained(
+            uuid.UUID(tenant_id), as_of_year
+        )

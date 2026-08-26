@@ -30,6 +30,7 @@ from src.domain.models.enums import (
 from src.domain.models.transaction import ExtractionMetadata, FinancialTransaction
 from src.infrastructure.repositories.document_repository import DocumentRecord, DocumentRepository
 from src.infrastructure.repositories.workspace_repository import Workspace, WorkspaceRepository
+from src.use_cases.close_fiscal_year import FiscalYearAlreadyClosedError
 from src.use_cases.close_period import PeriodAlreadyClosedError
 
 _FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
@@ -765,7 +766,7 @@ async def list_periods(workspace_id: str | None = None, tenant_id: str | None = 
     txns = await c.transactions.list_by_tenant(tid, limit=20000)
     month_counts: dict[str, int] = {}
     for t in txns:
-        if t.status != TransactionStatus.VERIFIED:
+        if t.status not in (TransactionStatus.VERIFIED, TransactionStatus.CLOSED):
             continue
         month = str(t.transaction_date)[:7]
         if len(month) == 7:
@@ -827,6 +828,65 @@ async def reopen_period(fiscal_period: str, body: PeriodAction) -> dict:
     reopened = ledger.model_copy(update={"status": "open", "closed_at": None})
     saved = await c.ledgers.save(reopened)
     return {"period": saved.fiscal_period, "status": saved.status}
+
+
+class FiscalYearBody(BaseModel):
+    workspace_id: str
+    notes: str | None = None
+    allow_suspense: bool = False
+    currency: str = "USD"
+
+
+@api.get("/fiscal-years")
+async def list_fiscal_years(workspace_id: str) -> dict:
+    from src.use_cases.close_fiscal_year import FiscalYearCloseRepository
+
+    tid = uuid.UUID(workspace_id)
+    rows = FiscalYearCloseRepository().list_all(tid)
+    return {"workspace_id": workspace_id, "years": rows}
+
+
+@api.post("/fiscal-years/{fiscal_year}/close")
+async def close_fiscal_year(fiscal_year: str, body: FiscalYearBody) -> dict:
+    """Cierre anual: utilidad neta del año → Retained Earnings (3020)."""
+    try:
+        result = await get_container().close_fiscal_year.execute(
+            uuid.UUID(body.workspace_id),
+            fiscal_year,
+            currency=body.currency,
+            notes=body.notes,
+            allow_suspense=body.allow_suspense,
+        )
+    except FiscalYearAlreadyClosedError as exc:
+        raise HTTPException(409, str(exc)) from exc
+    except BookkeepingError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return {
+        "fiscal_year": result.fiscal_year,
+        "status": result.status,
+        "total_revenue": result.total_revenue,
+        "total_expenses": result.total_expenses,
+        "net_income": result.net_income,
+        "equity_draws_net": result.equity_draws_net,
+        "transaction_count": result.transaction_count,
+        "prior_retained_earnings": result.prior_retained_earnings,
+        "retained_earnings_after": result.retained_earnings_after,
+        "note": (
+            "P&L del año queda histórico; el neto se acumula en utilidades retenidas "
+            "para balances de años siguientes."
+        ),
+    }
+
+
+@api.post("/fiscal-years/{fiscal_year}/reopen")
+async def reopen_fiscal_year(fiscal_year: str, body: FiscalYearBody) -> dict:
+    try:
+        row = await get_container().close_fiscal_year.reopen(
+            uuid.UUID(body.workspace_id), fiscal_year
+        )
+    except BookkeepingError as exc:
+        raise HTTPException(422, str(exc)) from exc
+    return {"fiscal_year": fiscal_year, "status": row.get("status"), "row": row}
 
 
 @api.get("/reports/pnl")

@@ -173,13 +173,28 @@ export default function Reports() {
   const [loadingPnl, setLoadingPnl] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [pnlLoaded, setPnlLoaded] = useState(false)
+  const [fiscalYears, setFiscalYears] = useState<
+    Array<{
+      fiscal_year?: string
+      status?: string
+      net_income?: number
+      retained_earnings_after?: number
+      transaction_count?: number
+    }>
+  >([])
+  const [yearInput, setYearInput] = useState(() => String(new Date().getFullYear()))
+  const [closingYear, setClosingYear] = useState(false)
 
   const loadPeriods = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const data = await api.listPeriods({ workspace_id: workspaceId })
-      setPeriods(Array.isArray(data) ? data : [])
+      const [periodsData, yearsData] = await Promise.all([
+        api.listPeriods({ workspace_id: workspaceId }),
+        api.listFiscalYears(workspaceId),
+      ])
+      setPeriods(Array.isArray(periodsData) ? periodsData : [])
+      setFiscalYears(Array.isArray(yearsData.years) ? yearsData.years : [])
     } catch (e) {
       setError(e instanceof Error ? e.message : t('common.error'))
       setPeriods([])
@@ -251,6 +266,36 @@ export default function Reports() {
     setError(null)
     try {
       await api.reopenPeriod(period, workspaceId)
+      await loadPeriods()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('common.error'))
+    }
+  }
+
+  async function closeFiscalYear() {
+    setClosingYear(true)
+    setError(null)
+    try {
+      const res = await api.closeFiscalYear(yearInput, {
+        workspace_id: workspaceId,
+        allow_suspense: false,
+      })
+      await loadPeriods()
+      setError(null)
+      alert(
+        `Año ${res.fiscal_year} cerrado. NI ${money(res.net_income)} → RE acumulada ${money(res.retained_earnings_after)}.`,
+      )
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('common.error'))
+    } finally {
+      setClosingYear(false)
+    }
+  }
+
+  async function reopenFiscalYear(year: string) {
+    setError(null)
+    try {
+      await api.reopenFiscalYear(year, workspaceId)
       await loadPeriods()
     } catch (e) {
       setError(e instanceof Error ? e.message : t('common.error'))
@@ -527,6 +572,60 @@ export default function Reports() {
               </BarChart>
             </ResponsiveContainer>
           </div>
+        )}
+      </section>
+
+      <section className="mb-8">
+        <h2 className="mb-3 text-lg font-semibold tracking-tight">Cierre anual</h2>
+        <p className="mb-3 max-w-2xl text-sm text-muted-foreground">
+          Al cerrar el año, la utilidad neta del P&amp;L se acumula en Utilidades retenidas (3020)
+          para los balances siguientes. Requiere txs verificadas y sin Suspense (9999).
+        </p>
+        <div className="mb-4 flex flex-wrap items-end gap-3">
+          <label className="text-sm">
+            Año
+            <input
+              className="mt-1 block w-28 rounded-md border border-border bg-background px-3 py-2"
+              value={yearInput}
+              onChange={(e) => setYearInput(e.target.value.replace(/\D/g, '').slice(0, 4))}
+              placeholder="2025"
+            />
+          </label>
+          <button
+            type="button"
+            disabled={closingYear || yearInput.length !== 4}
+            onClick={() => void closeFiscalYear()}
+            className={btnPrimary}
+          >
+            {closingYear ? 'Cerrando…' : `Cerrar año ${yearInput}`}
+          </button>
+        </div>
+        {fiscalYears.length > 0 && (
+          <ul className="space-y-2">
+            {fiscalYears.map((y) => (
+              <li
+                key={String(y.fiscal_year)}
+                className="soft-shadow flex flex-wrap items-center justify-between gap-3 rounded-xl border border-border bg-card px-4 py-3"
+              >
+                <div>
+                  <p className="font-medium">{y.fiscal_year}</p>
+                  <p className="text-sm text-muted-foreground">
+                    {y.status} · NI {money(Number(y.net_income ?? 0))} ·{' '}
+                    {Number(y.transaction_count ?? 0)} txs
+                  </p>
+                </div>
+                {y.status === 'closed' && y.fiscal_year && (
+                  <button
+                    type="button"
+                    className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted"
+                    onClick={() => void reopenFiscalYear(String(y.fiscal_year))}
+                  >
+                    Reabrir año
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 

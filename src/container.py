@@ -8,6 +8,7 @@ from src.infrastructure.ocr.local_pdf_client import LocalPdfClient
 from src.infrastructure.repositories.bank_movement_repository import BankMovementRepository
 from src.infrastructure.repositories.monthly_ledger_repository import MonthlyLedgerRepository
 from src.infrastructure.repositories.transaction_repository import TransactionRepository
+from src.use_cases.close_fiscal_year import CloseFiscalYearUseCase
 from src.use_cases.close_period import ClosePeriodUseCase
 from src.use_cases.generate_financial_statements import GenerateFinancialStatementsUseCase
 from src.use_cases.ingest_document import IngestDocumentUseCase
@@ -46,6 +47,9 @@ class AppContainer:
         self.close_period = ClosePeriodUseCase(
             transaction_repo=self.transactions,
             ledger_repo=self.ledgers,
+        )
+        self.close_fiscal_year = CloseFiscalYearUseCase(
+            transaction_repo=self.transactions,
         )
         self.statements = GenerateFinancialStatementsUseCase()
 
