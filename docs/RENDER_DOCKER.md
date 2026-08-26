@@ -1,39 +1,22 @@
-# Render — pasar LedgerAI a Docker (OCR Tesseract)
+# Render — LedgerAI (Docker, un solo servicio)
 
-El servicio **ledgerai** hoy corre como **Python nativo**. Para fotos (Tesseract) hace falta el binario del sistema → **Docker**.
+**Servicio actual (Docker + Tesseract):**  
+https://dashboard.render.com/web/srv-da7j2pdg1s2s738243cg  
 
-El repo ya tiene `Dockerfile` + `render.yaml` con `runtime: docker`.
+**URL:** https://ledgerai-0wyy.onrender.com  
 
-## Pasos en el Dashboard (1 vez, ~2 min)
+Runtime: **Docker** (`./Dockerfile`) — incluye `tesseract-ocr` + `ffmpeg`.  
+Plan: Free · Oregon · auto-deploy desde `main`.
 
-1. Abre el servicio: https://dashboard.render.com/web/srv-da6h3r0u01pc7383bo60  
-2. **Settings** → **Build & Deploy**  
-3. **Runtime** → cambia de **Python 3** a **Docker**  
-4. Confirma:
-   - **Dockerfile Path:** `./Dockerfile` (o `Dockerfile`)
-   - **Docker Context:** `.`
-5. **Health Check Path:** `/health`  
-6. Guarda (**Save Changes**) — Render redesplegará solo.
+## Health
 
-## Variables de entorno (ya configurables)
+`GET https://ledgerai-0wyy.onrender.com/health`
 
-| Key | Valor recomendado |
-|-----|-------------------|
-| `EXTRACTION_MODE` | `local` |
-| `WHISPER_BACKEND` | `auto` |
-| `SUPABASE_URL` | (ya debe estar) |
-| `SUPABASE_SERVICE_ROLE_KEY` | (ya debe estar) |
-| `GOOGLE_OAUTH_*` | (si usas Drive) |
-| `GROQ_API_KEY` | opcional — audio gratis vía Groq si no cabe whisper en 512MB |
+## Env requeridas (Dashboard → Environment)
 
-## Verificar
+- `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`
+- `EXTRACTION_MODE=local`, `WHISPER_BACKEND=auto`
+- `GOOGLE_OAUTH_*` (Drive)
+- opcional: `GROQ_API_KEY` (audio más fiable en Free 512MB)
 
-- URL: https://ledgerai-6ate.onrender.com  
-- `GET /health` → 200  
-- UI YASNAY (verde + champagne)  
-- Subir una foto de factura → debe OCR (no error “Tesseract binary missing”)
-
-## No hace falta
-
-- Crear otro servicio  
-- Blueprint nuevo (salvo que quieras sincronizar el YAML completo)
+No guardes secretos en git.
