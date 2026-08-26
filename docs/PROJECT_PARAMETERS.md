@@ -37,12 +37,12 @@ El agente debe entonces:
 |------:|------|--------|
 | 0 | Constraint costos: $0 APIs IA; parsers + reglas | **Cerrado (decisión)** |
 | 1 | Pipeline E2E: ingerir → leer → clasificar CoA → conciliar → emitir | Objetivo producto |
-| 2 | Extracción local PDF/Excel (pdfplumber / openpyxl) | Parcial (PDF base) |
+| 2 | Extracción local PDF/Excel (pdfplumber / openpyxl) | **Parcial+** (PDF + CSV/XLSX) |
 | 3 | **Cola async + 1 archivo a la vez** (sobrevivir Render Free 512MB / OOM) | **Hecho** |
 | 4 | CoA determinista: `account_rules` + limpieza regex + suspense + aprendizaje pasivo | **Hecho** |
 | 5 | Controles auditor: cadenazo saldos bancarios; Owner's Draws → Patrimonio | **Hecho** |
-| 6 | Reportes SQL (vistas Supabase): Balance cuadre + P&L + Cash flow (`cash_flow_type`) | Parcial (API local + O/I/F) |
-| 7 | Cierre anual: reset P&L → Retained Earnings | **Foco activo — Sprint 2026-08-26** |
+| 6 | Reportes SQL (vistas Supabase): Balance cuadre + P&L + Cash flow (`cash_flow_type`) | **Hecho** (vistas + export xlsx) |
+| 7 | Cierre anual: reset P&L → Retained Earnings | **Hecho** |
 | 8 | UX cold-start + banner “despertando”; split-screen PDF (después) | Parcial (deploy live) |
 | 9 | Deploy Render free | **Live** (mejorar cola/RAM) |
 | 10 | Export Excel profesional (exceljs); tablas TanStack (después) | Backlog |
@@ -233,6 +233,7 @@ Env: `EXTRACTION_MODE=local` por defecto.
 | 2026-08-26 | Implementación | Cola secuencial + cold-start live; luego `account_rules` + Suspense + aprendizaje | **account-rules** |
 | 2026-08-26 | Implementación | Cadenazo `statement_periods` + Owner's Draws 3030 + Balance A=P+E + CF O/I/F | **cadenazo-equity** |
 | 2026-08-26 | Implementación | Cierre anual → RE 3020 (`fiscal_year_closes`) | **fiscal-year-close** |
+| 2026-08-26 | Implementación | `cash_flow_type` + vistas SQL + CSV/XLSX ingest + export xlsx | **sql-views-excel** |
 
 ---
 
@@ -278,17 +279,15 @@ Split-screen PDF | TanStack Table | Export exceljs multipestaña.
 
 ## 11. Sprint activo (2026-08-26)
 
-**Nombre:** `Sprint-2026-08-26-fiscal-year-close`  
-**Objetivo medible:** Cierre anual — utilidad neta → Retained Earnings (3020) para balances posteriores.
+**Nombre:** `Sprint-2026-08-26-sql-views-excel`  
+**Objetivo medible:** `cash_flow_type` + vistas SQL + parser CSV/XLSX + export Excel de reportes.
 
 | # | Tarea | DoD |
 |---|--------|-----|
-| 1–3 | Cola + account_rules + cadenazo/draws | **Hecho** |
-| **4 (foco)** | `fiscal_year_closes` + API/UI cierre/reapertura + RE previa en Balance | Reportes → Cerrar año |
+| 1–4 | Cola → rules → cadenazo → cierre anual | **Hecho** |
+| **5 (foco)** | Migración `010` + ingest spreadsheet + `/api/reports/sql` + export.xlsx | Upload Excel → txs; Export en Reportes |
 
-**Estado:** migración `009_fiscal_year_closes.sql`.
-
-**Fuera de este sprint:** TanStack, exceljs, split-screen, Tesseract, auth, Zapier/Make (integración externa opcional).
+**Fuera de este sprint:** TanStack, split-screen, Tesseract, audio, auth.
 
 ---
 

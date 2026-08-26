@@ -15,6 +15,7 @@ from src.config import get_settings
 from src.domain.models.bank_movement import BankMovement
 from src.domain.models.enums import DocumentSource, TransactionType
 from src.domain.models.transaction import ExtractionMetadata, FinancialTransaction
+from src.infrastructure.classification.cash_flow import infer_cash_flow_type
 from src.infrastructure.classification.rule_coa import RuleCoAClassifier
 from src.infrastructure.ocr.local_pdf_client import LocalPdfClient
 from src.infrastructure.reconciliation.statement_chain import (
@@ -22,6 +23,7 @@ from src.infrastructure.reconciliation.statement_chain import (
     extract_statement_balances,
 )
 from src.infrastructure.repositories.bank_movement_repository import BankMovementRepository
+from src.infrastructure.repositories.supabase_client import get_supabase_client
 from src.infrastructure.repositories.transaction_repository import TransactionRepository
 from src.use_cases.reconcile_ledger import ReconcileLedgerUseCase, ReconciliationResult
 
@@ -174,6 +176,8 @@ class ProcessStatementUseCase:
             if movement.debit_amount > 0
             else TransactionType.INCOME
         )
+        acct_type = self._coa_type(movement.tenant_id, code)
+        cf = infer_cash_flow_type(account_code=code, account_type=acct_type)
         vendor = movement.description.split("  ")[0][:128]
         meta = ExtractionMetadata(
             source=DocumentSource.BANK_STATEMENT,
@@ -196,9 +200,26 @@ class ProcessStatementUseCase:
             ai_suggested_account_name=movement.chart_of_accounts_name,
             vendor_name=vendor,
             bank_movement_id=movement.id,
+            cash_flow_type=cf,
             metadata=meta,
         )
         try:
             await self._transactions.save(tx)
         except Exception:
             logger.exception("Failed mirroring movement %s to transaction", movement.id)
+
+    def _coa_type(self, tenant_id: uuid.UUID, code: str | None) -> str | None:
+        if not code:
+            return None
+        client = get_supabase_client()
+        result = (
+            client.table("chart_of_accounts")
+            .select("account_type")
+            .eq("tenant_id", str(tenant_id))
+            .eq("code", code)
+            .limit(1)
+            .execute()
+        )
+        if not result.data:
+            return None
+        return str(result.data[0].get("account_type") or "") or None

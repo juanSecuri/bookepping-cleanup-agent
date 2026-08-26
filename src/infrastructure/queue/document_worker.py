@@ -10,6 +10,7 @@ from __future__ import annotations
 import asyncio
 import gc
 import logging
+import tempfile
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -17,10 +18,11 @@ from typing import Any
 
 from src.domain.models.enums import DocumentFileType, DocumentStatus
 from src.infrastructure.repositories.document_repository import DocumentRecord, DocumentRepository
+from src.use_cases.ingest_spreadsheet import SpreadsheetIngestUseCase
 
 logger = logging.getLogger("ledgerai.queue")
 
-_UPLOAD_DIR = Path(__import__("tempfile").gettempdir()) / "ledgerai_uploads"
+_UPLOAD_DIR = Path(tempfile.gettempdir()) / "ledgerai_uploads"
 _UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
@@ -192,24 +194,41 @@ class DocumentQueueWorker:
         now = datetime.now(timezone.utc)
 
         if kind == "spreadsheet" or ftype == DocumentFileType.CSV:
-            preview = (
-                path.read_text(encoding="utf-8", errors="ignore")[:4000]
-                if ftype == DocumentFileType.CSV
-                else (
-                    f"Excel registrado ({doc.file_name}). "
-                    "Parse tabular completo pendiente."
+            try:
+                txs = await SpreadsheetIngestUseCase(
+                    transaction_repo=container.transactions,
+                    coa=container.coa,
+                ).execute(path, wid)
+                preview = (
+                    f"APIs: openpyxl/csv + reglas CoA ($0)\n"
+                    f"Archivo: {doc.file_name}\n"
+                    f"Filas → transacciones: {len(txs)}\n"
+                    f"Cola: 1 archivo a la vez (Render Free)\n"
+                    f"Destino: Transacciones (pendiente de revisión)"
                 )
-            )
-            updated = doc.model_copy(
-                update={
-                    "status": DocumentStatus.EXTRACTED,
-                    "pipeline_kind": "spreadsheet" if kind == "spreadsheet" else doc.pipeline_kind,
-                    "apis_used": apis,
-                    "folder_group": folder or doc.folder_group,
-                    "raw_extracted_text": preview,
-                    "processed_at": now,
-                }
-            )
+                updated = doc.model_copy(
+                    update={
+                        "status": DocumentStatus.EXTRACTED,
+                        "pipeline_kind": "spreadsheet",
+                        "apis_used": "openpyxl/csv + reglas CoA",
+                        "folder_group": folder or doc.folder_group,
+                        "extraction_confidence": 0.85,
+                        "raw_extracted_text": preview,
+                        "processed_at": now,
+                    }
+                )
+            except Exception as exc:
+                logger.exception("Spreadsheet ingest failed for %s", doc.id)
+                updated = doc.model_copy(
+                    update={
+                        "status": DocumentStatus.FAILED,
+                        "pipeline_kind": "spreadsheet",
+                        "apis_used": "openpyxl/csv + reglas CoA",
+                        "error_message": str(exc)[:2000],
+                        "raw_extracted_text": str(exc)[:4000],
+                        "processed_at": now,
+                    }
+                )
         elif kind == "statement":
             bank_name = payload.get("bank_name") or doc.vendor or "Bank"
             account = payload.get("bank_account_number") or "0000"

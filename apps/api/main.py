@@ -13,7 +13,7 @@ from tempfile import NamedTemporaryFile
 
 from fastapi import APIRouter, BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -28,10 +28,18 @@ from src.domain.models.enums import (
     TransactionType,
 )
 from src.domain.models.transaction import ExtractionMetadata, FinancialTransaction
+from src.infrastructure.classification.cash_flow import infer_cash_flow_type
+from src.infrastructure.reconciliation.statement_chain import (
+    StatementPeriodRepository,
+    acknowledge_chain,
+)
+from src.infrastructure.reports.period_xlsx_export import bundle_to_xlsx_bytes
 from src.infrastructure.repositories.document_repository import DocumentRecord, DocumentRepository
+from src.infrastructure.repositories.supabase_client import get_supabase_client
 from src.infrastructure.repositories.workspace_repository import Workspace, WorkspaceRepository
 from src.use_cases.close_fiscal_year import FiscalYearAlreadyClosedError
 from src.use_cases.close_period import PeriodAlreadyClosedError
+from src.use_cases.emit_period_reports import EmitPeriodReportsUseCase
 
 _FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 _UPLOAD_DIR = Path(tempfile.gettempdir()) / "ledgerai_uploads"
@@ -84,7 +92,7 @@ def _file_type(filename: str) -> DocumentFileType:
         return DocumentFileType.IMAGE
     if ext == ".pdf":
         return DocumentFileType.PDF
-    if ext == ".csv":
+    if ext in {".csv", ".xlsx", ".xls"}:
         return DocumentFileType.CSV
     if ext in {".mp3", ".wav", ".m4a", ".ogg", ".webm"}:
         return DocumentFileType.AUDIO
@@ -277,9 +285,15 @@ async def upload_document(
         file_type=ftype,
         source="upload",
         pipeline_kind=kind,
-        apis_used="pdfplumber (local $0), reglas CoA"
-        if ftype == DocumentFileType.PDF
-        else ("csv-upload" if ftype == DocumentFileType.CSV else "local"),
+        apis_used=(
+            "pdfplumber (local $0), reglas CoA"
+            if ftype == DocumentFileType.PDF
+            else (
+                "openpyxl/csv + reglas CoA"
+                if ftype == DocumentFileType.CSV
+                else "local"
+            )
+        ),
         queue_payload={"plan_kind": kind},
         raw_note="En cola — procesamiento secuencial (1 archivo).",
     )
@@ -430,6 +444,22 @@ async def reclassify_transaction(transaction_id: str, body: ReclassifyBody) -> d
     }
     if body.type:
         updates["transaction_type"] = body.type
+    try:
+        coa = (
+            get_supabase_client()
+            .table("chart_of_accounts")
+            .select("account_type")
+            .eq("tenant_id", str(tx.tenant_id))
+            .eq("code", body.account_code)
+            .limit(1)
+            .execute()
+        )
+        acct_type = (coa.data[0].get("account_type") if coa.data else None) or None
+        updates["cash_flow_type"] = infer_cash_flow_type(
+            account_code=body.account_code, account_type=acct_type
+        )
+    except Exception:
+        updates["cash_flow_type"] = "operating"
     saved = await c.transactions.save(tx.model_copy(update=updates))
     learned = c.coa.learn_from_correction(
         saved.tenant_id,
@@ -896,8 +926,6 @@ async def pnl_report(
     date_to: str | None = None,
 ) -> dict:
     """P&L from verified txs — excludes Owner's Draws / equity (same engine as statements)."""
-    from src.use_cases.emit_period_reports import EmitPeriodReportsUseCase
-
     bundle = await EmitPeriodReportsUseCase().execute(
         uuid.UUID(workspace_id),
         date_from=date_from,
@@ -935,9 +963,6 @@ async def financial_statements_report(
     date_to: str | None = None,
 ) -> dict:
     """Emit P&L + Balance + Cash flow for a month (YYYY-MM), year (YYYY), or date range."""
-    from src.infrastructure.reconciliation.statement_chain import StatementPeriodRepository
-    from src.use_cases.emit_period_reports import EmitPeriodReportsUseCase
-
     bundle = await EmitPeriodReportsUseCase().execute(
         uuid.UUID(workspace_id),
         period=period,
@@ -965,8 +990,6 @@ async def financial_statements_report(
 @api.get("/reports/balance-chain")
 async def balance_chain_report(workspace_id: str) -> dict:
     """Cadenazo: periodos de extracto + alertas (apertura ≠ cierre mes anterior)."""
-    from src.infrastructure.reconciliation.statement_chain import StatementPeriodRepository
-
     tid = uuid.UUID(workspace_id)
     repo = StatementPeriodRepository()
     periods = repo.list_by_tenant(tid)
@@ -988,14 +1011,63 @@ class ChainAckBody(BaseModel):
 @api.post("/reports/balance-chain/ack")
 async def balance_chain_ack(body: ChainAckBody) -> dict:
     """Marca un cadenazo roto como revisado (quita pause)."""
-    from src.infrastructure.reconciliation.statement_chain import acknowledge_chain
-
     row = acknowledge_chain(
         uuid.UUID(body.workspace_id),
         body.statement_month,
         body.bank_account_number,
     )
     return {"ok": True, "period": row}
+
+
+@api.get("/reports/sql")
+async def sql_report_views(
+    workspace_id: str,
+    period: str | None = None,
+) -> dict:
+    """Agregados desde vistas Supabase (v_pnl_by_month, v_cash_flow_by_month, …)."""
+    client = get_supabase_client()
+    tid = workspace_id
+    pnl_q = client.table("v_pnl_by_month").select("*").eq("tenant_id", tid)
+    cf_q = client.table("v_cash_flow_by_month").select("*").eq("tenant_id", tid)
+    bal_q = client.table("v_balance_equity_proxy").select("*").eq("tenant_id", tid)
+    if period and len(period) == 7:
+        pnl_q = pnl_q.eq("period", period)
+        cf_q = cf_q.eq("period", period)
+    elif period and len(period) == 4:
+        bal_q = bal_q.eq("fiscal_year", period)
+        pnl_q = pnl_q.like("period", f"{period}-%")
+        cf_q = cf_q.like("period", f"{period}-%")
+    return {
+        "workspace_id": workspace_id,
+        "period": period,
+        "pnl_by_month": pnl_q.order("period").execute().data or [],
+        "cash_flow_by_month": cf_q.order("period").execute().data or [],
+        "balance_by_year": bal_q.order("fiscal_year").execute().data or [],
+        "engine": "supabase_sql_views",
+    }
+
+
+@api.get("/reports/export.xlsx")
+async def export_statements_xlsx(
+    workspace_id: str,
+    period: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+):
+    """Descarga P&L + Balance + Cash flow en Excel (openpyxl, $0)."""
+    bundle = await EmitPeriodReportsUseCase().execute(
+        uuid.UUID(workspace_id),
+        period=period,
+        date_from=date_from,
+        date_to=date_to,
+    )
+    data = bundle_to_xlsx_bytes(bundle)
+    fname = f"ledgerai-{bundle.period_label.replace(' ', '_')}.xlsx"
+    return Response(
+        content=data,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    )
 
 
 # Legacy ingest endpoint

@@ -63,6 +63,11 @@ class FinancialTransaction(BaseModel):
         pattern=r"^\d{4}-(0[1-9]|1[0-2])$",
         description="YYYY-MM — set when transaction is assigned to a closed period",
     )
+    cash_flow_type: str | None = Field(
+        default=None,
+        pattern=r"^(operating|investing|financing)$",
+        description="Direct cash-flow classification O/I/F",
+    )
 
     # Pipeline state
     status: TransactionStatus = Field(default=TransactionStatus.PENDING_REVIEW)

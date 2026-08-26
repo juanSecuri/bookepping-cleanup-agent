@@ -378,6 +378,17 @@ export default function Reports() {
             >
               {loadingPnl ? t('common.loading') : t('reports.load')}
             </button>
+            <a
+              className={cn(btnSecondary, 'flex-1 text-center sm:flex-none')}
+              href={api.exportStatementsUrl({
+                workspace_id: workspaceId,
+                period: periodInput || undefined,
+                date_from: dateFrom || undefined,
+                date_to: dateTo || undefined,
+              })}
+            >
+              Export Excel
+            </a>
           </div>
         </div>
 

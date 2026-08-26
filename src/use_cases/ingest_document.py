@@ -21,9 +21,11 @@ from src.domain.exceptions import ExtractionError
 from src.domain.models.bank_movement import BankMovement
 from src.domain.models.enums import DocumentSource, TransactionType
 from src.domain.models.transaction import ExtractionMetadata, FinancialTransaction
+from src.infrastructure.classification.cash_flow import infer_cash_flow_type
 from src.infrastructure.classification.rule_coa import RuleCoAClassifier
 from src.infrastructure.ocr.local_pdf_client import LocalPdfClient
 from src.infrastructure.repositories.bank_movement_repository import BankMovementRepository
+from src.infrastructure.repositories.supabase_client import get_supabase_client
 from src.infrastructure.repositories.transaction_repository import TransactionRepository
 
 _IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png", ".gif", ".webp"}
@@ -173,6 +175,8 @@ class IngestDocumentUseCase:
         vendor = self._guess_vendor(text, file_path.name)
         description = (vendor or file_path.stem)[:512]
         match = self._coa.classify(tenant_id, f"{description} {text[:400]}")
+        acct_type = self._coa_type(tenant_id, match.code)
+        cf = infer_cash_flow_type(account_code=match.code, account_type=acct_type)
         meta = ExtractionMetadata(
             source=source,
             raw_file_path=str(file_path),
@@ -192,9 +196,26 @@ class IngestDocumentUseCase:
             ai_suggested_account_code=match.code,
             ai_suggested_account_name=match.name,
             vendor_name=vendor,
+            cash_flow_type=cf,
             metadata=meta,
         )
         return await self._transactions.save(tx)
+
+    def _coa_type(self, tenant_id: uuid.UUID, code: str | None) -> str | None:
+        if not code:
+            return None
+        client = get_supabase_client()
+        result = (
+            client.table("chart_of_accounts")
+            .select("account_type")
+            .eq("tenant_id", str(tenant_id))
+            .eq("code", code)
+            .limit(1)
+            .execute()
+        )
+        if not result.data:
+            return None
+        return str(result.data[0].get("account_type") or "") or None
 
     def _guess_amount(self, text: str) -> Decimal:
         for pattern in (_AMOUNT_CANDIDATE, _ANY_MONEY):

@@ -559,6 +559,7 @@ export default function Documents() {
           type="file"
           className="hidden"
           multiple
+          accept=".pdf,.csv,.xlsx,.xls,.png,.jpg,.jpeg,.webp"
           onChange={(e) => e.target.files && void uploadFiles(e.target.files)}
         />
       </label>

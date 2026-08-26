@@ -377,6 +377,30 @@ export const api = {
       { method: 'POST', body: JSON.stringify({ workspace_id }) },
     ),
 
+  exportStatementsUrl: (params: {
+    workspace_id: string
+    period?: string
+    date_from?: string
+    date_to?: string
+  }) => {
+    const q = new URLSearchParams({ workspace_id: params.workspace_id })
+    if (params.period) q.set('period', params.period)
+    if (params.date_from) q.set('date_from', params.date_from)
+    if (params.date_to) q.set('date_to', params.date_to)
+    return `${API_BASE}/api/reports/export.xlsx?${q}`
+  },
+
+  sqlReportViews: (params: { workspace_id: string; period?: string }) => {
+    const q = new URLSearchParams({ workspace_id: params.workspace_id })
+    if (params.period) q.set('period', params.period)
+    return request<{
+      pnl_by_month?: Array<Record<string, unknown>>
+      cash_flow_by_month?: Array<Record<string, unknown>>
+      balance_by_year?: Array<Record<string, unknown>>
+      engine?: string
+    }>(`/api/reports/sql?${q}`)
+  },
+
   driveStatus: () => request<DriveStatus>('/api/drive/status'),
   driveLink: (body: { workspace_id: string; folder_id: string; folder_name?: string }) =>
     request<{ workspace_id?: string; drive_folder_id?: string; drive_folder_name?: string }>(

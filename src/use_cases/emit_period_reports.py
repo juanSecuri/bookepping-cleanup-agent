@@ -14,6 +14,7 @@ from dataclasses import dataclass, field
 from decimal import Decimal
 
 from src.domain.models.enums import TransactionStatus, TransactionType
+from src.infrastructure.classification.cash_flow import infer_cash_flow_type
 from src.infrastructure.repositories.supabase_client import get_supabase_client
 from src.infrastructure.repositories.transaction_repository import TransactionRepository
 
@@ -113,6 +114,8 @@ class EmitPeriodReportsUseCase:
 
         financing_in = Decimal("0")
         financing_out = Decimal("0")
+        investing_in = Decimal("0")
+        investing_out = Decimal("0")
         operating_in = Decimal("0")
         operating_out = Decimal("0")
 
@@ -120,6 +123,9 @@ class EmitPeriodReportsUseCase:
             code = t.chart_of_accounts_code or "9999"
             name = t.chart_of_accounts_name or "Uncategorized"
             acct_type = coa_types.get(code) or self._infer_type(t.transaction_type)
+            cf = t.cash_flow_type or infer_cash_flow_type(
+                account_code=code, account_type=acct_type
+            )
             month_key = str(t.transaction_date)[:7]
             year_key = str(t.transaction_date)[:4]
             is_equity = acct_type == "equity" or code in EQUITY_CODES
@@ -135,7 +141,6 @@ class EmitPeriodReportsUseCase:
             )
 
             if is_equity:
-                # Owner contributions / draws → Patrimonio + Financing CF (not P&L)
                 eq = equity_map.setdefault(
                     code,
                     {"code": code, "name": name, "amount": Decimal("0"), "txCount": 0},
@@ -143,7 +148,7 @@ class EmitPeriodReportsUseCase:
                 if t.transaction_type == TransactionType.INCOME:
                     cash["amount"] += t.amount
                     cash["txCount"] += 1
-                    eq["amount"] += t.amount  # contribution increases equity
+                    eq["amount"] += t.amount
                     eq["txCount"] += 1
                     financing_in += t.amount
                     monthly[month_key]["financing_in"] += t.amount
@@ -151,32 +156,44 @@ class EmitPeriodReportsUseCase:
                 else:
                     cash["amount"] -= t.amount
                     cash["txCount"] += 1
-                    eq["amount"] -= t.amount  # draws reduce equity
+                    eq["amount"] -= t.amount
                     eq["txCount"] += 1
                     financing_out += t.amount
                     monthly[month_key]["financing_out"] += t.amount
                     annual[year_key]["financing_out"] += t.amount
                 continue
 
-            if acct_type == "liability":
+            if acct_type == "liability" or cf == "financing":
                 li = liability_map.setdefault(
                     code, {"code": code, "name": name, "amount": Decimal("0"), "txCount": 0}
-                )
+                ) if acct_type == "liability" else None
                 if t.transaction_type == TransactionType.INCOME:
-                    # loan proceeds / liability increase with cash in
-                    li["amount"] += t.amount
+                    if li is not None:
+                        li["amount"] += t.amount
+                        li["txCount"] += 1
                     cash["amount"] += t.amount
+                    cash["txCount"] += 1
                     financing_in += t.amount
                     monthly[month_key]["financing_in"] += t.amount
                     annual[year_key]["financing_in"] += t.amount
                 else:
-                    # liability payment
-                    li["amount"] -= t.amount
+                    if li is not None:
+                        li["amount"] -= t.amount
+                        li["txCount"] += 1
                     cash["amount"] -= t.amount
+                    cash["txCount"] += 1
                     financing_out += t.amount
                     monthly[month_key]["financing_out"] += t.amount
                     annual[year_key]["financing_out"] += t.amount
-                li["txCount"] += 1
+                continue
+
+            if cf == "investing":
+                if t.transaction_type == TransactionType.INCOME:
+                    cash["amount"] += t.amount
+                    investing_in += t.amount
+                else:
+                    cash["amount"] -= t.amount
+                    investing_out += t.amount
                 cash["txCount"] += 1
                 continue
 
@@ -269,9 +286,12 @@ class EmitPeriodReportsUseCase:
         op_out_f = float(operating_out)
         fin_in_f = float(financing_in)
         fin_out_f = float(financing_out)
+        inv_in_f = float(investing_in)
+        inv_out_f = float(investing_out)
         net_operating = op_in_f - op_out_f
         net_financing = fin_in_f - fin_out_f
-        net_cash = net_operating + net_financing
+        net_investing = inv_in_f - inv_out_f
+        net_cash = net_operating + net_financing + net_investing
 
         cf_monthly = [
             {
@@ -362,7 +382,11 @@ class EmitPeriodReportsUseCase:
                 "outflows": op_out_f,
                 "net": net_operating,
             },
-            "investing": {"inflows": 0.0, "outflows": 0.0, "net": 0.0},
+            "investing": {
+                "inflows": inv_in_f,
+                "outflows": inv_out_f,
+                "net": net_investing,
+            },
             "financing": {
                 "inflows": fin_in_f,
                 "outflows": fin_out_f,
@@ -371,8 +395,8 @@ class EmitPeriodReportsUseCase:
             },
             "netChange": net_cash,
             "note": (
-                "Cash flow O/I/F local/$0: operativo = P&L; "
-                "financiación = equity draws/aportes + pasivos."
+                "Cash flow O/I/F vía cash_flow_type + CoA ($0). "
+                "Operativo = P&L; financiación = equity/pasivo; inversión = activos no caja."
             ),
         }
 
