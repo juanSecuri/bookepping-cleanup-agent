@@ -835,54 +835,36 @@ async def pnl_report(
     date_from: str | None = None,
     date_to: str | None = None,
 ) -> dict:
-    tid = uuid.UUID(workspace_id)
-    txns = await get_container().transactions.list_by_tenant(tid, limit=10000)
-    verified = [t for t in txns if t.status == TransactionStatus.VERIFIED]
-    if date_from:
-        verified = [t for t in verified if str(t.transaction_date) >= date_from]
-    if date_to:
-        verified = [t for t in verified if str(t.transaction_date) <= date_to]
+    """P&L from verified txs — excludes Owner's Draws / equity (same engine as statements)."""
+    from src.use_cases.emit_period_reports import EmitPeriodReportsUseCase
 
-    revenue_map: dict[str, dict] = {}
-    expense_map: dict[str, dict] = {}
-    for t in verified:
-        code = t.chart_of_accounts_code or "UNCAT"
-        name = t.chart_of_accounts_name or "Uncategorized"
-        target = revenue_map if t.transaction_type == TransactionType.INCOME else expense_map
-        if t.transaction_type not in (TransactionType.INCOME, TransactionType.EXPENSE):
-            continue
-        entry = target.setdefault(code, {"code": code, "name": name, "amount": Decimal("0"), "txCount": 0})
-        entry["amount"] += t.amount
-        entry["txCount"] += 1
-
-    revenue_items = sorted(
-        [{"code": v["code"], "name": v["name"], "amount": float(v["amount"]), "txCount": v["txCount"]} for v in revenue_map.values()],
-        key=lambda x: -x["amount"],
+    bundle = await EmitPeriodReportsUseCase().execute(
+        uuid.UUID(workspace_id),
+        date_from=date_from,
+        date_to=date_to,
     )
-    expense_items = sorted(
-        [{"code": v["code"], "name": v["name"], "amount": float(v["amount"]), "txCount": v["txCount"]} for v in expense_map.values()],
-        key=lambda x: -x["amount"],
+    pnl = dict(bundle.pnl)
+    net = float(pnl.get("netIncome") or pnl.get("net_income") or 0)
+    rev = float(pnl.get("totalRevenue") or pnl.get("revenue") or 0)
+    revenue_items = pnl.get("revenueItems") or []
+    expense_items = pnl.get("expenseItems") or []
+    pnl.update(
+        {
+            "grossMargin": (net / rev * 100) if rev else 0,
+            "lines": [
+                *[
+                    {"account": i["name"], "amount": i["amount"], "category": "revenue"}
+                    for i in revenue_items
+                ],
+                *[
+                    {"account": i["name"], "amount": i["amount"], "category": "expense"}
+                    for i in expense_items
+                ],
+            ],
+            "transactionCount": bundle.transaction_count,
+        }
     )
-    total_revenue = sum(i["amount"] for i in revenue_items)
-    total_expenses = sum(i["amount"] for i in expense_items)
-    net = total_revenue - total_expenses
-
-    return {
-        "revenue": total_revenue,
-        "expenses": total_expenses,
-        "net_income": net,
-        "totalRevenue": total_revenue,
-        "totalExpenses": total_expenses,
-        "netIncome": net,
-        "grossMargin": (net / total_revenue * 100) if total_revenue else 0,
-        "revenueItems": revenue_items,
-        "expenseItems": expense_items,
-        "lines": [
-            *[{"account": i["name"], "amount": i["amount"], "category": "revenue"} for i in revenue_items],
-            *[{"account": i["name"], "amount": i["amount"], "category": "expense"} for i in expense_items],
-        ],
-        "transactionCount": len(verified),
-    }
+    return pnl
 
 
 @api.get("/reports/statements")
@@ -893,6 +875,7 @@ async def financial_statements_report(
     date_to: str | None = None,
 ) -> dict:
     """Emit P&L + Balance + Cash flow for a month (YYYY-MM), year (YYYY), or date range."""
+    from src.infrastructure.reconciliation.statement_chain import StatementPeriodRepository
     from src.use_cases.emit_period_reports import EmitPeriodReportsUseCase
 
     bundle = await EmitPeriodReportsUseCase().execute(
@@ -901,6 +884,7 @@ async def financial_statements_report(
         date_from=date_from,
         date_to=date_to,
     )
+    chain_alerts = StatementPeriodRepository().list_alerts(uuid.UUID(workspace_id))
     return {
         "workspace_id": bundle.workspace_id,
         "period_label": bundle.period_label,
@@ -914,7 +898,44 @@ async def financial_statements_report(
         "cash_flow": bundle.cash_flow,
         "cash_flow_monthly": bundle.cash_flow_monthly,
         "cash_flow_annual": bundle.cash_flow_annual,
+        "balance_chain_alerts": chain_alerts,
     }
+
+
+@api.get("/reports/balance-chain")
+async def balance_chain_report(workspace_id: str) -> dict:
+    """Cadenazo: periodos de extracto + alertas (apertura ≠ cierre mes anterior)."""
+    from src.infrastructure.reconciliation.statement_chain import StatementPeriodRepository
+
+    tid = uuid.UUID(workspace_id)
+    repo = StatementPeriodRepository()
+    periods = repo.list_by_tenant(tid)
+    alerts = [p for p in periods if p.get("chain_ok") is False or p.get("paused")]
+    return {
+        "workspace_id": workspace_id,
+        "periods": periods,
+        "alerts": alerts,
+        "alert_count": len(alerts),
+    }
+
+
+class ChainAckBody(BaseModel):
+    workspace_id: str
+    statement_month: str
+    bank_account_number: str
+
+
+@api.post("/reports/balance-chain/ack")
+async def balance_chain_ack(body: ChainAckBody) -> dict:
+    """Marca un cadenazo roto como revisado (quita pause)."""
+    from src.infrastructure.reconciliation.statement_chain import acknowledge_chain
+
+    row = acknowledge_chain(
+        uuid.UUID(body.workspace_id),
+        body.statement_month,
+        body.bank_account_number,
+    )
+    return {"ok": True, "period": row}
 
 
 # Legacy ingest endpoint

@@ -302,19 +302,52 @@ export const api = {
         totalAssets?: number
         totalLiabilities?: number
         totalEquity?: number
+        imbalance?: number
+        balanced?: boolean
+        equation?: string
         note?: string
       }
       cash_flow?: {
         operating?: { inflows?: number; outflows?: number; net?: number }
         investing?: { inflows?: number; outflows?: number; net?: number }
-        financing?: { inflows?: number; outflows?: number; net?: number }
+        financing?: { inflows?: number; outflows?: number; net?: number; note?: string }
         netChange?: number
         note?: string
       }
       cash_flow_monthly?: Array<{ period?: string; inflows?: number; outflows?: number; net?: number }>
       cash_flow_annual?: Array<{ period?: string; inflows?: number; outflows?: number; net?: number }>
+      balance_chain_alerts?: Array<{
+        statement_month?: string
+        bank_account_number?: string
+        bank_name?: string
+        chain_ok?: boolean | null
+        paused?: boolean
+        chain_delta?: number | null
+        alert_message?: string | null
+        opening_balance?: number | null
+        closing_balance?: number | null
+      }>
     }>(`/api/reports/statements?${q}`)
   },
+
+  balanceChain: (workspace_id: string) =>
+    request<{
+      workspace_id: string
+      periods: Array<Record<string, unknown>>
+      alerts: Array<Record<string, unknown>>
+      alert_count: number
+    }>(`/api/reports/balance-chain?workspace_id=${encodeURIComponent(workspace_id)}`),
+
+  ackBalanceChain: (body: {
+    workspace_id: string
+    statement_month: string
+    bank_account_number: string
+  }) =>
+    request<{ ok: boolean; period?: Record<string, unknown> }>(
+      '/api/reports/balance-chain/ack',
+      { method: 'POST', body: JSON.stringify(body) },
+    ),
+
 
   driveStatus: () => request<DriveStatus>('/api/drive/status'),
   driveLink: (body: { workspace_id: string; folder_id: string; folder_name?: string }) =>

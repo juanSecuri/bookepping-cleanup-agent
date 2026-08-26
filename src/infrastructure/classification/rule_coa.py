@@ -54,7 +54,11 @@ DEFAULT_SEED_RULES: list[tuple[list[str], str, str]] = [
     (["payment thank", "autopay", "online payment", "thank you"], "1010", "Cash and Cash Equivalents"),
     (["deposit", "wire in", "ach credit"], "1010", "Cash and Cash Equivalents"),
     (["costco", "walmart", "target", "amazon", "exxon", "shell", "chevron", "fuel"], "5010", "Cost of Goods Sold"),
-    (["owner draw", "owners draw", "personal", "retiro socio"], "3010", "Owner's Equity"),
+    (
+        ["owner draw", "owners draw", "personal", "retiro socio", "owner's draw", "draws"],
+        "3030",
+        "Owner's Draws / Retiros del Socio",
+    ),
 ]
 
 

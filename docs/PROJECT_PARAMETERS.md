@@ -38,10 +38,10 @@ El agente debe entonces:
 | 0 | Constraint costos: $0 APIs IA; parsers + reglas | **Cerrado (decisión)** |
 | 1 | Pipeline E2E: ingerir → leer → clasificar CoA → conciliar → emitir | Objetivo producto |
 | 2 | Extracción local PDF/Excel (pdfplumber / openpyxl) | Parcial (PDF base) |
-| 3 | **Cola async + 1 archivo a la vez** (sobrevivir Render Free 512MB / OOM) | **Foco activo — Sprint 2026-08-26** |
-| 4 | CoA determinista: `account_rules` + limpieza regex + suspense + aprendizaje pasivo | Siguiente |
-| 5 | Controles auditor: cadenazo saldos bancarios; Owner's Draws → Patrimonio | Pendiente |
-| 6 | Reportes SQL (vistas Supabase): Balance cuadre + P&L + Cash flow (`cash_flow_type`) | Parcial (API local) |
+| 3 | **Cola async + 1 archivo a la vez** (sobrevivir Render Free 512MB / OOM) | **Hecho** |
+| 4 | CoA determinista: `account_rules` + limpieza regex + suspense + aprendizaje pasivo | **Hecho** |
+| 5 | Controles auditor: cadenazo saldos bancarios; Owner's Draws → Patrimonio | **Foco activo — Sprint 2026-08-26** |
+| 6 | Reportes SQL (vistas Supabase): Balance cuadre + P&L + Cash flow (`cash_flow_type`) | Parcial (API local + O/I/F) |
 | 7 | Cierre anual: reset P&L → Retained Earnings | Pendiente |
 | 8 | UX cold-start + banner “despertando”; split-screen PDF (después) | Parcial (deploy live) |
 | 9 | Deploy Render free | **Live** (mejorar cola/RAM) |
@@ -231,6 +231,7 @@ Env: `EXTRACTION_MODE=local` por defecto.
 | 2026-08-24 | Juan / producto | Web responsive (no PWA); deploy Render free + GitHub | **Deploy Render** |
 | **2026-08-26** | **Recomendación contable/arquitectura (vía Juan)** | Blindar Render Free (cola 1 archivo); CoA en Supabase (`account_rules`); cadenazo saldos; Owner's Draws; Balance con utilidad en Patrimonio; Cash flow O/I/F; UX cold-start. Split-screen / TanStack / exceljs = backlog. | **Sprint-2026-08-26-render-queue** |
 | 2026-08-26 | Implementación | Cola secuencial + cold-start live; luego `account_rules` + Suspense + aprendizaje | **account-rules** |
+| 2026-08-26 | Implementación | Cadenazo `statement_periods` + Owner's Draws 3030 + Balance A=P+E + CF O/I/F | **cadenazo-equity** |
 
 ---
 
@@ -276,20 +277,20 @@ Split-screen PDF | TanStack Table | Export exceljs multipestaña.
 
 ## 11. Sprint activo (2026-08-26)
 
-**Nombre:** `Sprint-2026-08-26-account-rules` (tras cola Render)  
-**Objetivo medible:** Clasificación CoA determinista vía `account_rules` + Suspense + aprendizaje pasivo al corregir.
+**Nombre:** `Sprint-2026-08-26-cadenazo-equity`  
+**Objetivo medible:** Cadenazo bancario + Owner's Draws fuera del P&L + Balance con utilidad en Patrimonio.
 
 | # | Tarea | DoD |
 |---|--------|-----|
-| 1 | Cola 1-a-1 + cold-start | **Hecho** (`4b13eec`) |
-| **2 (foco)** | `account_rules` + limpia regex + Suspense 9999 + learn on reclassify | Tab “No categorizadas” + reglas en Plan de cuentas |
-| 3 | (Luego) Cadenazo + Owner's Draws + vistas SQL Balance | — |
+| 1 | Cola 1-a-1 + cold-start | **Hecho** |
+| 2 | `account_rules` + Suspense + learn | **Hecho** |
+| **3 (foco)** | Cadenazo (`statement_periods`) + CoA 3030 Draws + Balance/CF O-I-F | Alertas en Reportes + A=P+E |
 
-**Estado Tarea 2:** en curso / entregado en este commit — migración `007_account_rules.sql`.
+**Estado Tarea 3:** migración `008_statement_periods_chain.sql`; API `/api/reports/balance-chain`.
 
-**Fuera de este sprint:** TanStack, exceljs, split-screen, Tesseract, auth.
+**Fuera de este sprint:** TanStack, exceljs, split-screen, Tesseract, auth, cierre anual formal.
 
-**Trade-off:** la recomendación completa es correcta; implementarla toda a la vez rompe el ritmo. Primero **sobrevivir Free**, luego **cerebro CoA**, luego **rigor auditor/reportes**.
+**Trade-off:** rigor auditor ahora; vistas SQL puras en Supabase pueden llegar después del motor local.
 
 ---
 

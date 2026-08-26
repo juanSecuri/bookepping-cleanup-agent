@@ -364,72 +364,143 @@ export default function Reports() {
           <p className="mb-4 text-sm text-muted-foreground">{t('reports.pnlEmpty')}</p>
         )}
 
+        {bundle?.balance_chain_alerts && bundle.balance_chain_alerts.length > 0 && (
+          <div className="mb-6 rounded-xl border border-rose-300 bg-rose-50 p-4 dark:border-rose-800 dark:bg-rose-950/40">
+            <h3 className="mb-2 font-semibold text-rose-900 dark:text-rose-100">
+              Alertas de cadenazo bancario
+            </h3>
+            <ul className="space-y-3 text-sm">
+              {bundle.balance_chain_alerts.map((a) => (
+                <li
+                  key={`${a.statement_month}-${a.bank_account_number}`}
+                  className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between"
+                >
+                  <div>
+                    <p className="font-medium">
+                      {a.statement_month} · {a.bank_name || 'Banco'} · …
+                      {(a.bank_account_number || '').slice(-4)}
+                    </p>
+                    <p className="text-muted-foreground">{a.alert_message || 'Descuadre de saldos'}</p>
+                  </div>
+                  {a.paused && a.statement_month && a.bank_account_number && (
+                    <button
+                      type="button"
+                      className="shrink-0 rounded-md border border-rose-400 px-3 py-1.5 text-xs font-medium hover:bg-rose-100 dark:hover:bg-rose-900"
+                      onClick={() =>
+                        void (async () => {
+                          try {
+                            await api.ackBalanceChain({
+                              workspace_id: workspaceId,
+                              statement_month: a.statement_month!,
+                              bank_account_number: a.bank_account_number!,
+                            })
+                            await loadStatements()
+                          } catch (e) {
+                            setError(e instanceof Error ? e.message : t('common.error'))
+                          }
+                        })()
+                      }
+                    >
+                      Marcar revisado
+                    </button>
+                  )}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         {bundle?.balance_sheet && (
-          <div className="mb-6 grid gap-4 lg:grid-cols-3">
-            <div className="rounded-xl border border-border bg-background p-4">
-              <h3 className="mb-2 font-semibold">Balance — Activos</h3>
-              <p className="mb-2 text-xl font-semibold tabular-nums">
-                {money(Number(bundle.balance_sheet.totalAssets ?? 0))}
-              </p>
-              <ul className="space-y-1 text-sm text-muted-foreground">
-                {(bundle.balance_sheet.assets || []).map((a) => (
-                  <li key={a.code} className="flex justify-between gap-2">
-                    <span>{a.name}</span>
-                    <span className="tabular-nums">{money(Number(a.amount ?? 0))}</span>
-                  </li>
-                ))}
-              </ul>
+          <div className="mb-6">
+            <div className="mb-3 flex flex-wrap items-center gap-3 text-sm">
+              <span
+                className={
+                  bundle.balance_sheet.balanced
+                    ? 'rounded-md bg-emerald-100 px-2 py-1 font-medium text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'
+                    : 'rounded-md bg-amber-100 px-2 py-1 font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-100'
+                }
+              >
+                {bundle.balance_sheet.balanced
+                  ? 'Balance cuadrado (A = P + Patrimonio)'
+                  : `Descuadre Δ ${money(Number(bundle.balance_sheet.imbalance ?? 0))}`}
+              </span>
+              {bundle.balance_sheet.equation && (
+                <span className="text-muted-foreground">{bundle.balance_sheet.equation}</span>
+              )}
             </div>
-            <div className="rounded-xl border border-border bg-background p-4">
-              <h3 className="mb-2 font-semibold">Pasivos</h3>
-              <p className="mb-2 text-xl font-semibold tabular-nums">
-                {money(Number(bundle.balance_sheet.totalLiabilities ?? 0))}
-              </p>
-              <ul className="space-y-1 text-sm text-muted-foreground">
-                {(bundle.balance_sheet.liabilities || []).length === 0 && <li>—</li>}
-                {(bundle.balance_sheet.liabilities || []).map((a) => (
-                  <li key={a.code} className="flex justify-between gap-2">
-                    <span>{a.name}</span>
-                    <span className="tabular-nums">{money(Number(a.amount ?? 0))}</span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div className="rounded-xl border border-border bg-background p-4">
-              <h3 className="mb-2 font-semibold">Patrimonio</h3>
-              <p className="mb-2 text-xl font-semibold tabular-nums">
-                {money(Number(bundle.balance_sheet.totalEquity ?? 0))}
-              </p>
-              <ul className="space-y-1 text-sm text-muted-foreground">
-                {(bundle.balance_sheet.equity || []).map((a) => (
-                  <li key={a.code} className="flex justify-between gap-2">
-                    <span>{a.name}</span>
-                    <span className="tabular-nums">{money(Number(a.amount ?? 0))}</span>
-                  </li>
-                ))}
-              </ul>
+            <div className="grid gap-4 lg:grid-cols-3">
+              <div className="rounded-xl border border-border bg-background p-4">
+                <h3 className="mb-2 font-semibold">Balance — Activos</h3>
+                <p className="mb-2 text-xl font-semibold tabular-nums">
+                  {money(Number(bundle.balance_sheet.totalAssets ?? 0))}
+                </p>
+                <ul className="space-y-1 text-sm text-muted-foreground">
+                  {(bundle.balance_sheet.assets || []).map((a) => (
+                    <li key={a.code} className="flex justify-between gap-2">
+                      <span>{a.name}</span>
+                      <span className="tabular-nums">{money(Number(a.amount ?? 0))}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="rounded-xl border border-border bg-background p-4">
+                <h3 className="mb-2 font-semibold">Pasivos</h3>
+                <p className="mb-2 text-xl font-semibold tabular-nums">
+                  {money(Number(bundle.balance_sheet.totalLiabilities ?? 0))}
+                </p>
+                <ul className="space-y-1 text-sm text-muted-foreground">
+                  {(bundle.balance_sheet.liabilities || []).length === 0 && <li>—</li>}
+                  {(bundle.balance_sheet.liabilities || []).map((a) => (
+                    <li key={a.code} className="flex justify-between gap-2">
+                      <span>{a.name}</span>
+                      <span className="tabular-nums">{money(Number(a.amount ?? 0))}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+              <div className="rounded-xl border border-border bg-background p-4">
+                <h3 className="mb-2 font-semibold">Patrimonio</h3>
+                <p className="mb-2 text-xl font-semibold tabular-nums">
+                  {money(Number(bundle.balance_sheet.totalEquity ?? 0))}
+                </p>
+                <ul className="space-y-1 text-sm text-muted-foreground">
+                  {(bundle.balance_sheet.equity || []).map((a) => (
+                    <li key={a.code || a.name} className="flex justify-between gap-2">
+                      <span>{a.name}</span>
+                      <span className="tabular-nums">{money(Number(a.amount ?? 0))}</span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
             </div>
           </div>
         )}
 
         {bundle?.cash_flow && (
           <div className="mb-6 rounded-xl border border-border bg-background p-4">
-            <h3 className="mb-2 font-semibold">Cash flow (operativo)</h3>
-            <div className="grid gap-3 sm:grid-cols-3">
+            <h3 className="mb-2 font-semibold">Cash flow (O / I / F)</h3>
+            <div className="grid gap-3 sm:grid-cols-4">
               <div>
-                <p className="text-xs text-muted-foreground">Entradas</p>
-                <p className="text-lg font-semibold tabular-nums text-emerald-700">
-                  {money(Number(bundle.cash_flow.operating?.inflows ?? 0))}
+                <p className="text-xs text-muted-foreground">Operativo neto</p>
+                <p className="text-lg font-semibold tabular-nums">
+                  {money(Number(bundle.cash_flow.operating?.net ?? 0))}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Salidas</p>
-                <p className="text-lg font-semibold tabular-nums text-rose-700">
-                  {money(Number(bundle.cash_flow.operating?.outflows ?? 0))}
+                <p className="text-xs text-muted-foreground">Inversión neto</p>
+                <p className="text-lg font-semibold tabular-nums">
+                  {money(Number(bundle.cash_flow.investing?.net ?? 0))}
                 </p>
               </div>
               <div>
-                <p className="text-xs text-muted-foreground">Neto</p>
+                <p className="text-xs text-muted-foreground">Financiación neto</p>
+                <p className="text-lg font-semibold tabular-nums">
+                  {money(Number(bundle.cash_flow.financing?.net ?? 0))}
+                </p>
+                <p className="text-xs text-muted-foreground">Incluye Owner&apos;s Draws</p>
+              </div>
+              <div>
+                <p className="text-xs text-muted-foreground">Cambio neto</p>
                 <p className="text-lg font-semibold tabular-nums">
                   {money(Number(bundle.cash_flow.netChange ?? 0))}
                 </p>

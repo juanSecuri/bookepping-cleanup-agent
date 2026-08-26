@@ -30,6 +30,7 @@ DEFAULT_ACCOUNTS = [
     ("2510", "Long-Term Debt", "liability", "Long-Term Liabilities"),
     ("3010", "Owner's Equity", "equity", "Equity"),
     ("3020", "Retained Earnings", "equity", "Equity"),
+    ("3030", "Owner's Draws / Retiros del Socio", "equity", "Equity"),
     ("4010", "Sales Revenue", "income", "Operating Revenue"),
     ("4020", "Service Revenue", "income", "Operating Revenue"),
     ("4030", "Interest Income", "income", "Other Income"),

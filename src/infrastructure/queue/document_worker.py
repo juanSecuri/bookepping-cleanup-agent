@@ -215,8 +215,23 @@ class DocumentQueueWorker:
             account = payload.get("bank_account_number") or "0000"
             month = payload.get("statement_month") or "2026-01"
             report = await container.process_statement.execute(
-                path, wid, bank_name, account, month
+                path,
+                wid,
+                bank_name,
+                account,
+                month,
+                source_document_id=doc.id,
             )
+            chain_line = ""
+            if report.chain_alert:
+                chain_line = f"CADENAZO: {report.chain_alert}\n"
+            elif report.chain_ok is True:
+                chain_line = "Cadenazo OK (saldo inicial = cierre mes anterior).\n"
+            elif report.opening_balance is not None or report.closing_balance is not None:
+                chain_line = (
+                    f"Saldos extracto: apertura={report.opening_balance} "
+                    f"cierre={report.closing_balance}\n"
+                )
             updated = doc.model_copy(
                 update={
                     "status": DocumentStatus.EXTRACTED,
@@ -232,6 +247,7 @@ class DocumentQueueWorker:
                         f"APIs: {apis}\n"
                         f"Banco: {bank_name}  Cuenta: …{account}\n"
                         f"Mes: {month}\n"
+                        f"{chain_line}"
                         f"Movimientos extraídos: {report.total_movements} | "
                         f"Categorizados: {report.categorised} | "
                         f"Sin match: {report.unmatched}\n"

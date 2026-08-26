@@ -2,21 +2,24 @@
 Build period financial statements from verified transactions (local/$0 path).
 
 Emits:
-  - P&L (Income Statement)
-  - Balance Sheet (simplified from CoA types + retained earnings)
-  - Cash Flow (operating proxy from income/expense by month or range)
+  - P&L (Income Statement) — excludes equity (Owner's Draws / contributions)
+  - Balance Sheet — Assets = Liabilities + Equity (incl. period net income)
+  - Cash Flow — Operating / Investing / Financing (draws → financing)
 """
 from __future__ import annotations
 
 import uuid
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import date
 from decimal import Decimal
 
 from src.domain.models.enums import TransactionStatus, TransactionType
 from src.infrastructure.repositories.supabase_client import get_supabase_client
 from src.infrastructure.repositories.transaction_repository import TransactionRepository
+
+# Equity accounts that must never hit P&L
+EQUITY_CODES = frozenset({"3010", "3020", "3030"})
+OWNER_DRAWS_CODE = "3030"
 
 
 @dataclass
@@ -56,19 +59,12 @@ class EmitPeriodReportsUseCase:
         date_to: str | None = None,
         currency: str = "USD",
     ) -> PeriodFinancialBundle:
-        # period like 2026-05 or 2026
         if period and len(period) == 7:
             date_from = f"{period}-01"
-            # end of month approx
             y, m = int(period[:4]), int(period[5:7])
-            if m == 12:
-                date_to = f"{y}-12-31"
-            else:
-                date_to = f"{y}-{m+1:02d}-01"
-                # exclusive end handled as <= last day: use day 0 of next month via date math
-                from calendar import monthrange
+            from calendar import monthrange
 
-                date_to = f"{y}-{m:02d}-{monthrange(y, m)[1]:02d}"
+            date_to = f"{y}-{m:02d}-{monthrange(y, m)[1]:02d}"
             label = period
         elif period and len(period) == 4:
             date_from = f"{period}-01-01"
@@ -93,11 +89,26 @@ class EmitPeriodReportsUseCase:
         equity_map: dict[str, dict] = {}
 
         monthly: dict[str, dict[str, Decimal]] = defaultdict(
-            lambda: {"inflows": Decimal("0"), "outflows": Decimal("0")}
+            lambda: {
+                "inflows": Decimal("0"),
+                "outflows": Decimal("0"),
+                "financing_in": Decimal("0"),
+                "financing_out": Decimal("0"),
+            }
         )
         annual: dict[str, dict[str, Decimal]] = defaultdict(
-            lambda: {"inflows": Decimal("0"), "outflows": Decimal("0")}
+            lambda: {
+                "inflows": Decimal("0"),
+                "outflows": Decimal("0"),
+                "financing_in": Decimal("0"),
+                "financing_out": Decimal("0"),
+            }
         )
+
+        financing_in = Decimal("0")
+        financing_out = Decimal("0")
+        operating_in = Decimal("0")
+        operating_out = Decimal("0")
 
         for t in verified:
             code = t.chart_of_accounts_code or "9999"
@@ -105,6 +116,63 @@ class EmitPeriodReportsUseCase:
             acct_type = coa_types.get(code) or self._infer_type(t.transaction_type)
             month_key = str(t.transaction_date)[:7]
             year_key = str(t.transaction_date)[:4]
+            is_equity = acct_type == "equity" or code in EQUITY_CODES
+
+            cash = asset_map.setdefault(
+                "1010",
+                {
+                    "code": "1010",
+                    "name": "Cash and Cash Equivalents",
+                    "amount": Decimal("0"),
+                    "txCount": 0,
+                },
+            )
+
+            if is_equity:
+                # Owner contributions / draws → Patrimonio + Financing CF (not P&L)
+                eq = equity_map.setdefault(
+                    code,
+                    {"code": code, "name": name, "amount": Decimal("0"), "txCount": 0},
+                )
+                if t.transaction_type == TransactionType.INCOME:
+                    cash["amount"] += t.amount
+                    cash["txCount"] += 1
+                    eq["amount"] += t.amount  # contribution increases equity
+                    eq["txCount"] += 1
+                    financing_in += t.amount
+                    monthly[month_key]["financing_in"] += t.amount
+                    annual[year_key]["financing_in"] += t.amount
+                else:
+                    cash["amount"] -= t.amount
+                    cash["txCount"] += 1
+                    eq["amount"] -= t.amount  # draws reduce equity
+                    eq["txCount"] += 1
+                    financing_out += t.amount
+                    monthly[month_key]["financing_out"] += t.amount
+                    annual[year_key]["financing_out"] += t.amount
+                continue
+
+            if acct_type == "liability":
+                li = liability_map.setdefault(
+                    code, {"code": code, "name": name, "amount": Decimal("0"), "txCount": 0}
+                )
+                if t.transaction_type == TransactionType.INCOME:
+                    # loan proceeds / liability increase with cash in
+                    li["amount"] += t.amount
+                    cash["amount"] += t.amount
+                    financing_in += t.amount
+                    monthly[month_key]["financing_in"] += t.amount
+                    annual[year_key]["financing_in"] += t.amount
+                else:
+                    # liability payment
+                    li["amount"] -= t.amount
+                    cash["amount"] -= t.amount
+                    financing_out += t.amount
+                    monthly[month_key]["financing_out"] += t.amount
+                    annual[year_key]["financing_out"] += t.amount
+                li["txCount"] += 1
+                cash["txCount"] += 1
+                continue
 
             if t.transaction_type == TransactionType.INCOME:
                 entry = revenue_map.setdefault(
@@ -112,13 +180,9 @@ class EmitPeriodReportsUseCase:
                 )
                 entry["amount"] += t.amount
                 entry["txCount"] += 1
+                operating_in += t.amount
                 monthly[month_key]["inflows"] += t.amount
                 annual[year_key]["inflows"] += t.amount
-                # cash proxy
-                cash = asset_map.setdefault(
-                    "1010",
-                    {"code": "1010", "name": "Cash and Cash Equivalents", "amount": Decimal("0"), "txCount": 0},
-                )
                 cash["amount"] += t.amount
                 cash["txCount"] += 1
             else:
@@ -127,66 +191,81 @@ class EmitPeriodReportsUseCase:
                 )
                 entry["amount"] += t.amount
                 entry["txCount"] += 1
+                operating_out += t.amount
                 monthly[month_key]["outflows"] += t.amount
                 annual[year_key]["outflows"] += t.amount
-                cash = asset_map.setdefault(
-                    "1010",
-                    {"code": "1010", "name": "Cash and Cash Equivalents", "amount": Decimal("0"), "txCount": 0},
-                )
                 cash["amount"] -= t.amount
                 cash["txCount"] += 1
 
-            if acct_type == "liability":
-                li = liability_map.setdefault(
-                    code, {"code": code, "name": name, "amount": Decimal("0"), "txCount": 0}
-                )
-                li["amount"] += t.amount
-                li["txCount"] += 1
-            elif acct_type == "equity":
-                eq = equity_map.setdefault(
-                    code, {"code": code, "name": name, "amount": Decimal("0"), "txCount": 0}
-                )
-                eq["amount"] += t.amount
-                eq["txCount"] += 1
-
-        total_revenue = float(sum(v["amount"] for v in revenue_map.values()))
-        total_expenses = float(sum(v["amount"] for v in expense_map.values()))
+        total_revenue = float(operating_in)
+        total_expenses = float(operating_out)
         net_income = total_revenue - total_expenses
 
         assets = [
-            {"code": v["code"], "name": v["name"], "amount": float(v["amount"]), "txCount": v["txCount"]}
+            {
+                "code": v["code"],
+                "name": v["name"],
+                "amount": float(v["amount"]),
+                "txCount": v["txCount"],
+            }
             for v in asset_map.values()
         ]
         liabilities = [
-            {"code": v["code"], "name": v["name"], "amount": float(v["amount"]), "txCount": v["txCount"]}
+            {
+                "code": v["code"],
+                "name": v["name"],
+                "amount": float(v["amount"]),
+                "txCount": v["txCount"],
+            }
             for v in liability_map.values()
         ]
         equity_lines = [
-            {"code": v["code"], "name": v["name"], "amount": float(v["amount"]), "txCount": v["txCount"]}
-            for v in equity_map.values()
+            {
+                "code": v["code"],
+                "name": v["name"],
+                "amount": float(v["amount"]),
+                "txCount": v["txCount"],
+            }
+            for v in sorted(equity_map.values(), key=lambda x: x["code"])
+            if v["code"] != "3020"
         ]
+        # Utilidad / (pérdida) del ejercicio → Patrimonio (inyectada; no se pierde en P&L)
+        prior_re = equity_map.get("3020")
+        re_amount = float(prior_re["amount"]) if prior_re else 0.0
         equity_lines.append(
             {
                 "code": "3020",
-                "name": "Retained Earnings (period net)",
-                "amount": net_income,
-                "txCount": len(verified),
+                "name": "Utilidad del ejercicio (Retained Earnings)",
+                "amount": net_income + re_amount,
+                "txCount": (prior_re["txCount"] if prior_re else 0) + len(verified),
             }
         )
         total_assets = sum(a["amount"] for a in assets)
         total_liabilities = sum(a["amount"] for a in liabilities)
         total_equity = sum(a["amount"] for a in equity_lines)
+        imbalance = total_assets - (total_liabilities + total_equity)
 
-        operating_in = total_revenue
-        operating_out = total_expenses
-        net_cash = operating_in - operating_out
+        op_in_f = float(operating_in)
+        op_out_f = float(operating_out)
+        fin_in_f = float(financing_in)
+        fin_out_f = float(financing_out)
+        net_operating = op_in_f - op_out_f
+        net_financing = fin_in_f - fin_out_f
+        net_cash = net_operating + net_financing
 
         cf_monthly = [
             {
                 "period": k,
                 "inflows": float(v["inflows"]),
                 "outflows": float(v["outflows"]),
-                "net": float(v["inflows"] - v["outflows"]),
+                "financing_in": float(v["financing_in"]),
+                "financing_out": float(v["financing_out"]),
+                "net": float(
+                    v["inflows"]
+                    - v["outflows"]
+                    + v["financing_in"]
+                    - v["financing_out"]
+                ),
             }
             for k, v in sorted(monthly.items())
         ]
@@ -195,7 +274,14 @@ class EmitPeriodReportsUseCase:
                 "period": k,
                 "inflows": float(v["inflows"]),
                 "outflows": float(v["outflows"]),
-                "net": float(v["inflows"] - v["outflows"]),
+                "financing_in": float(v["financing_in"]),
+                "financing_out": float(v["financing_out"]),
+                "net": float(
+                    v["inflows"]
+                    - v["outflows"]
+                    + v["financing_in"]
+                    - v["financing_out"]
+                ),
             }
             for k, v in sorted(annual.items())
         ]
@@ -225,6 +311,10 @@ class EmitPeriodReportsUseCase:
                 }
                 for v in sorted(expense_map.values(), key=lambda x: -x["amount"])
             ],
+            "note": (
+                "P&L excluye Owner's Draws / aportes a patrimonio "
+                f"({OWNER_DRAWS_CODE} y cuentas equity)."
+            ),
         }
 
         balance = {
@@ -234,24 +324,34 @@ class EmitPeriodReportsUseCase:
             "totalAssets": total_assets,
             "totalLiabilities": total_liabilities,
             "totalEquity": total_equity,
-            "balanced": abs(total_assets - (total_liabilities + total_equity)) < 0.02
-            or abs(total_assets - total_equity) < 0.02,
+            "imbalance": imbalance,
+            "balanced": abs(imbalance) < 0.02,
+            "equation": "Assets = Liabilities + Equity (incl. utilidad del ejercicio)",
             "note": (
-                "Balance simplificado desde transacciones verificadas + CoA "
-                "(cash proxy). Doble partida completa llega con cierre de periodo."
+                "Balance desde txs verificadas: cash proxy; "
+                "Owner's Draws reducen Patrimonio; "
+                "utilidad neta del periodo se inyecta en 3020."
             ),
         }
 
         cash_flow = {
             "operating": {
-                "inflows": operating_in,
-                "outflows": operating_out,
-                "net": net_cash,
+                "inflows": op_in_f,
+                "outflows": op_out_f,
+                "net": net_operating,
             },
             "investing": {"inflows": 0.0, "outflows": 0.0, "net": 0.0},
-            "financing": {"inflows": 0.0, "outflows": 0.0, "net": 0.0},
+            "financing": {
+                "inflows": fin_in_f,
+                "outflows": fin_out_f,
+                "net": net_financing,
+                "note": "Incluye Owner's Draws / aportes (equity) y movimientos de pasivo.",
+            },
             "netChange": net_cash,
-            "note": "Cash flow operativo derivado de ingresos/gastos verificados (local/$0).",
+            "note": (
+                "Cash flow O/I/F local/$0: operativo = P&L; "
+                "financiación = equity draws/aportes + pasivos."
+            ),
         }
 
         return PeriodFinancialBundle(
