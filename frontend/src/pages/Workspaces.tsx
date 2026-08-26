@@ -9,6 +9,7 @@ import {
   CalendarRange,
   Scale,
 } from 'lucide-react'
+import BrandMark from '../components/BrandMark'
 import { api, type Workspace } from '../lib/api'
 import { cn } from '../lib/utils'
 import { useLocale } from '../i18n'
@@ -83,15 +84,13 @@ export default function Workspaces() {
 
   return (
     <div className="workspaces-shell min-h-screen text-foreground">
-      <header className="border-b border-border/60 bg-card/80 backdrop-blur-md">
+      <header className="border-b border-border bg-card/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4 sm:px-6">
-          <Link to="/" className="font-display text-xl tracking-tight text-primary">
-            LedgerAI
-          </Link>
+          <BrandMark size="sm" showWordmark />
           <button
             type="button"
             onClick={toggleLocale}
-            className="rounded-md border border-border px-3 py-1.5 text-sm text-muted-foreground transition hover:text-foreground"
+            className="btn-secondary px-3 py-1.5 text-sm text-muted-foreground"
           >
             {locale === 'es' ? 'EN' : 'ES'}
           </button>
@@ -114,7 +113,7 @@ export default function Workspaces() {
           <button
             type="button"
             onClick={() => setOpen(true)}
-            className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-primary px-5 py-3 text-sm font-semibold text-primary-foreground shadow-[var(--shadow-soft)] transition hover:opacity-95 sm:w-auto"
+            className="btn-primary w-full px-5 py-3 sm:w-auto"
           >
             <Plus className="h-4 w-4" />
             {t('workspaces.create')}
@@ -141,7 +140,7 @@ export default function Workspaces() {
           ].map(({ icon: Icon, title, body }) => (
             <div
               key={title}
-              className="rounded-xl border border-border/70 bg-card/70 px-4 py-4 backdrop-blur-sm"
+              className="rounded-lg border border-border bg-card/80 px-4 py-4 transition hover:border-champagne/30"
             >
               <Icon className="mb-2 h-4 w-4 text-primary" />
               <p className="text-sm font-semibold">{title}</p>
@@ -167,7 +166,7 @@ export default function Workspaces() {
             <button
               type="button"
               onClick={() => setOpen(true)}
-              className="mt-6 inline-flex items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground"
+              className="btn-primary mt-6 px-4 py-2.5"
             >
               <Plus className="h-4 w-4" />
               {t('workspaces.create')}
@@ -180,13 +179,12 @@ export default function Workspaces() {
             <div
               key={ws.id}
               className={cn(
-                'group relative overflow-hidden rounded-2xl border border-border bg-card p-6 shadow-[var(--shadow-soft)] transition hover:-translate-y-0.5 hover:border-primary/35 hover:shadow-[var(--shadow-lift)]',
+                'group relative overflow-hidden rounded-lg border border-border bg-card p-6 soft-shadow transition duration-200 hover:-translate-y-0.5 hover:border-champagne/35',
                 i === 0 ? 'animate-fade-up-delay-1' : 'animate-fade-up-delay-2',
               )}
             >
-              <div className="pointer-events-none absolute -right-8 -top-8 h-28 w-28 rounded-full bg-primary/5" />
               <div className="mb-4 flex items-start justify-between gap-3">
-                <div className="flex h-11 w-11 items-center justify-center rounded-xl bg-secondary text-primary">
+                <div className="flex h-11 w-11 items-center justify-center rounded-md border border-champagne/20 bg-secondary text-primary">
                   <FolderKanban className="h-5 w-5" />
                 </div>
                 <button
@@ -259,7 +257,7 @@ export default function Workspaces() {
               <button
                 type="submit"
                 disabled={saving}
-                className="rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground disabled:opacity-60"
+                className="btn-primary px-4 py-2 disabled:opacity-60"
               >
                 {saving ? t('common.loading') : t('common.create')}
               </button>

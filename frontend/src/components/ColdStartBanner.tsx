@@ -64,7 +64,7 @@ export default function ColdStartBanner() {
     <div
       role="status"
       className={cn(
-        'fixed inset-x-0 top-0 z-[60] border-b border-amber-500/40 bg-amber-50 px-4 py-2.5 text-amber-950 shadow-sm',
+        'fixed inset-x-0 top-0 z-[60] border-b border-champagne/30 bg-forest-deep px-4 py-2.5 text-champagne-bright',
       )}
     >
       <div className="mx-auto flex max-w-5xl items-center justify-between gap-3">
@@ -72,13 +72,13 @@ export default function ColdStartBanner() {
           <span className="font-semibold">{t('coldStart.title')}</span>{' '}
           {t('coldStart.body')}
           {ms > 0 && (
-            <span className="ml-1 text-amber-800/70">({Math.round(ms / 1000)}s)</span>
+            <span className="ml-1 text-champagne-muted">({Math.round(ms / 1000)}s)</span>
           )}
         </p>
         <button
           type="button"
           onClick={() => setDismissed(true)}
-          className="shrink-0 cursor-pointer rounded-md border border-amber-700/20 bg-white/70 px-2 py-1 text-xs font-medium transition hover:bg-white"
+          className="btn-secondary shrink-0 px-2 py-1 text-xs font-medium"
         >
           {t('coldStart.dismiss')}
         </button>

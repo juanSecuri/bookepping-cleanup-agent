@@ -13,6 +13,7 @@ import {
   PanelLeft,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
+import BrandMark from '../../components/BrandMark'
 import { useLocale } from '../../i18n'
 import { cn } from '../../lib/utils'
 
@@ -67,11 +68,11 @@ export default function Layout() {
           onClick={() => setMobileOpen(false)}
           className={({ isActive }) =>
             cn(
-              'flex items-center rounded-lg py-2.5 text-sm transition',
+              'flex items-center rounded-md py-2.5 text-sm transition duration-200',
               compact ? 'justify-center px-2' : 'gap-3 px-3',
               isActive
-                ? 'bg-sidebar-accent text-sidebar-primary'
-                : 'text-sidebar-foreground/80 hover:bg-sidebar-accent/60 hover:text-sidebar-foreground',
+                ? 'border border-champagne/30 bg-sidebar-accent text-sidebar-primary'
+                : 'border border-transparent text-sidebar-foreground/75 hover:border-champagne/20 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground',
             )
           }
         >
@@ -92,16 +93,22 @@ export default function Layout() {
       >
         <div className={cn('border-b border-sidebar-border py-5', collapsed ? 'px-3' : 'px-5')}>
           <div className="flex items-start justify-between gap-2">
-            <Link
-              to="/"
-              className={cn(
-                'font-display tracking-tight text-sidebar-primary transition hover:text-amber-300',
-                collapsed ? 'text-lg' : 'text-2xl',
-              )}
-              title="LedgerAI"
-            >
-              {collapsed ? 'L' : 'LedgerAI'}
-            </Link>
+            {collapsed ? (
+              <Link to="/" title="YASNAY · LedgerAI" className="mx-auto block">
+                <img
+                  src="/yasnay-logo.png"
+                  alt="YASNAY"
+                  className="mx-auto h-8 w-8 rounded-sm object-cover object-center"
+                />
+              </Link>
+            ) : (
+              <div className="min-w-0">
+                <BrandMark size="sm" />
+                <p className="mt-2 font-display text-lg tracking-[0.06em] text-sidebar-primary">
+                  LedgerAI
+                </p>
+              </div>
+            )}
             <button
               type="button"
               onClick={() => setCollapsed((v) => !v)}
@@ -128,7 +135,7 @@ export default function Layout() {
               <ol className="mb-3 space-y-1.5">
                 {pipeline.map((key, i) => (
                   <li key={key} className="flex items-center gap-2.5 text-xs text-sidebar-foreground/70">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-md bg-sidebar-accent text-[10px] font-medium text-sidebar-primary">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-md border border-champagne/20 bg-sidebar-accent text-[10px] font-medium text-sidebar-primary">
                       {i + 1}
                     </span>
                     {t(key)}
@@ -142,7 +149,7 @@ export default function Layout() {
             onClick={toggleLocale}
             title={`${t('common.lang')}: ${locale.toUpperCase()}`}
             className={cn(
-              'flex w-full items-center rounded-lg border border-sidebar-border text-sm text-sidebar-foreground/80 transition hover:border-sidebar-primary/40 hover:bg-sidebar-accent',
+              'flex w-full items-center rounded-md border border-sidebar-border text-sm text-sidebar-foreground/80 transition hover:border-champagne/35 hover:bg-sidebar-accent',
               collapsed ? 'justify-center px-2 py-2' : 'gap-2 px-3 py-2',
             )}
           >
@@ -169,7 +176,7 @@ export default function Layout() {
           <button type="button" onClick={() => setMobileOpen(true)} className="rounded-md p-2">
             <Menu className="h-5 w-5" />
           </button>
-          <span className="font-display text-lg text-primary">LedgerAI</span>
+          <span className="font-display text-lg tracking-[0.04em] text-primary">LedgerAI</span>
           <button type="button" onClick={toggleLocale} className="rounded-md px-2 py-1 text-sm">
             {locale.toUpperCase()}
           </button>
@@ -179,13 +186,13 @@ export default function Layout() {
           <div className="fixed inset-0 z-50 lg:hidden">
             <button
               type="button"
-              className="absolute inset-0 bg-black/40"
+              className="absolute inset-0 bg-black/50"
               onClick={() => setMobileOpen(false)}
               aria-label="Close"
             />
             <div className="relative flex h-full w-72 flex-col bg-sidebar text-sidebar-foreground">
               <div className="flex items-center justify-between border-b border-sidebar-border px-4 py-4">
-                <span className="font-display text-xl text-sidebar-primary">LedgerAI</span>
+                <BrandMark size="sm" to="" />
                 <button type="button" onClick={() => setMobileOpen(false)}>
                   <X className="h-5 w-5" />
                 </button>
@@ -207,8 +214,8 @@ export default function Layout() {
               end={end}
               className={({ isActive }) =>
                 cn(
-                  'flex min-w-0 flex-1 flex-col items-center gap-0.5 px-0.5 py-2 text-[10px] leading-tight',
-                  isActive ? 'text-primary' : 'text-muted-foreground',
+                  'flex min-w-0 flex-1 flex-col items-center gap-0.5 px-0.5 py-2 text-[10px] leading-tight transition',
+                  isActive ? 'text-primary' : 'text-muted-foreground hover:text-foreground/80',
                 )
               }
             >

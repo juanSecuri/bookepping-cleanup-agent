@@ -67,9 +67,9 @@ function PnLDetailTables({
     <div className="space-y-4">
       <div className="grid gap-4 sm:grid-cols-3">
         {[
-          { label: t('reports.revenue'), value: revTotal, tone: 'text-emerald-700' },
-          { label: t('reports.expenses'), value: expTotal, tone: 'text-rose-700' },
-          { label: t('reports.net'), value: net, tone: 'text-amber-700' },
+          { label: t('reports.revenue'), value: revTotal, tone: 'text-success-foreground' },
+          { label: t('reports.expenses'), value: expTotal, tone: 'text-destructive' },
+          { label: t('reports.net'), value: net, tone: 'text-primary' },
         ].map((kpi) => (
           <div key={kpi.label} className="rounded-xl border border-border bg-background p-4">
             <p className="text-sm text-muted-foreground">{kpi.label}</p>
@@ -152,7 +152,7 @@ function PnLDetailTables({
 }
 
 const btnPrimary =
-  'cursor-pointer rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-amber-600 hover:opacity-95 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50'
+  'cursor-pointer rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-champagne-bright focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50'
 const btnSecondary =
   'cursor-pointer rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium transition hover:border-primary/50 hover:bg-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50'
 
@@ -421,8 +421,8 @@ export default function Reports() {
         )}
 
         {bundle?.balance_chain_alerts && bundle.balance_chain_alerts.length > 0 && (
-          <div className="mb-6 rounded-xl border border-rose-300 bg-rose-50 p-4 dark:border-rose-800 dark:bg-rose-950/40">
-            <h3 className="mb-2 font-semibold text-rose-900 dark:text-rose-100">
+          <div className="mb-6 rounded-xl border border-destructive/40 bg-destructive/10 p-4">
+            <h3 className="mb-2 font-semibold text-destructive">
               Alertas de cadenazo bancario
             </h3>
             <ul className="space-y-3 text-sm">
@@ -472,8 +472,8 @@ export default function Reports() {
               <span
                 className={
                   bundle.balance_sheet.balanced
-                    ? 'rounded-md bg-emerald-100 px-2 py-1 font-medium text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200'
-                    : 'rounded-md bg-amber-100 px-2 py-1 font-medium text-amber-900 dark:bg-amber-950 dark:text-amber-100'
+                    ? 'rounded-md bg-success px-2 py-1 font-medium text-success-foreground'
+                    : 'rounded-md bg-warning px-2 py-1 font-medium text-warning-foreground'
                 }
               >
                 {bundle.balance_sheet.balanced
@@ -578,8 +578,8 @@ export default function Reports() {
                 <YAxis tick={{ fontSize: 11 }} />
                 <Tooltip />
                 <Legend />
-                <Bar dataKey="inflows" name="Entradas" fill="#047857" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="outflows" name="Salidas" fill="#be123c" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="inflows" name="Entradas" fill="#6fa98c" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="outflows" name="Salidas" fill="#c45c5c" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </div>
@@ -675,8 +675,8 @@ export default function Reports() {
                       closed
                         ? 'bg-secondary text-muted-foreground'
                         : suggested
-                          ? 'bg-amber-50 text-amber-900'
-                          : 'bg-emerald-50 text-emerald-800',
+                          ? 'bg-warning text-warning-foreground'
+                          : 'bg-success text-success-foreground',
                     )}
                   >
                     {closed

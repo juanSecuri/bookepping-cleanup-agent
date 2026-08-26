@@ -139,7 +139,7 @@ export default function ChartOfAccounts() {
             type="button"
             onClick={() => void seed()}
             disabled={seeding}
-            className="mt-5 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-amber-600 disabled:opacity-60"
+            className="mt-5 inline-flex cursor-pointer items-center gap-2 rounded-lg bg-primary px-4 py-2.5 text-sm font-semibold text-primary-foreground transition hover:bg-champagne-bright disabled:opacity-60"
           >
             <Sprout className="h-4 w-4" />
             {seeding ? t('coa.seeding') : t('coa.seed')}
@@ -247,7 +247,7 @@ export default function ChartOfAccounts() {
               <span className="rounded-md bg-secondary px-2 py-0.5 text-xs text-muted-foreground">
                 {rows.length} {t('coa.count')}
               </span>
-              <span className="rounded-md bg-amber-50 px-2 py-0.5 text-xs text-amber-900">
+              <span className="rounded-md bg-warning px-2 py-0.5 text-xs text-warning-foreground">
                 {t('coa.normalBalance')}:{' '}
                 {normalBalance(category) === 'debit' ? t('coa.debit') : t('coa.credit')}
               </span>
@@ -272,7 +272,7 @@ export default function ChartOfAccounts() {
                           'shrink-0 rounded-md px-2 py-0.5 text-[10px] font-medium',
                           acct.is_active === false
                             ? 'bg-secondary text-muted-foreground'
-                            : 'bg-emerald-50 text-emerald-800',
+                            : 'bg-success text-success-foreground',
                         )}
                       >
                         {acct.is_active === false ? t('coa.inactive') : t('coa.active')}
@@ -340,7 +340,7 @@ export default function ChartOfAccounts() {
                               'rounded-md px-2 py-0.5 text-xs font-medium',
                               acct.is_active === false
                                 ? 'bg-secondary text-muted-foreground'
-                                : 'bg-emerald-50 text-emerald-800',
+                                : 'bg-success text-success-foreground',
                             )}
                           >
                             {acct.is_active === false ? t('coa.inactive') : t('coa.active')}

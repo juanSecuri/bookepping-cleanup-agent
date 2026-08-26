@@ -212,8 +212,8 @@ export default function Reconciliation() {
                       className={cn(
                         'rounded-md px-2 py-0.5 text-xs font-medium',
                         matched
-                          ? 'bg-emerald-50 text-emerald-800'
-                          : 'bg-amber-50 text-amber-800',
+                          ? 'bg-success text-success-foreground'
+                          : 'bg-warning text-warning-foreground',
                       )}
                     >
                       {matched
@@ -314,8 +314,8 @@ export default function Reconciliation() {
                           className={cn(
                             'rounded-md px-2 py-0.5 text-xs font-medium',
                             matched
-                              ? 'bg-emerald-50 text-emerald-800'
-                              : 'bg-amber-50 text-amber-800',
+                              ? 'bg-success text-success-foreground'
+                              : 'bg-warning text-warning-foreground',
                           )}
                         >
                           {matched

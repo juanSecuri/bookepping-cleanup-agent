@@ -48,7 +48,7 @@ const STAGE_ROUTES = [
   'reports',
 ] as const
 
-const PIE_COLORS = ['#b45309', '#0f172a']
+const PIE_COLORS = ['#DCD0B9', '#0D3D33']
 
 export default function Dashboard() {
   const { workspaceId = '' } = useParams()
@@ -147,22 +147,22 @@ export default function Dashboard() {
       label: t('dashboard.income'),
       value: formatMoney(income, locale),
       icon: TrendingUp,
-      tone: 'text-emerald-700',
-      bg: 'bg-emerald-50',
+      tone: 'text-success-foreground',
+      bg: 'bg-success',
     },
     {
       label: t('dashboard.expenses'),
       value: formatMoney(expenses, locale),
       icon: TrendingDown,
-      tone: 'text-rose-700',
-      bg: 'bg-rose-50',
+      tone: 'text-destructive',
+      bg: 'bg-destructive/15',
     },
     {
       label: t('dashboard.net'),
       value: formatMoney(net, locale),
       icon: Wallet,
-      tone: net >= 0 ? 'text-amber-700' : 'text-rose-700',
-      bg: 'bg-amber-50',
+      tone: net >= 0 ? 'text-primary' : 'text-destructive',
+      bg: net >= 0 ? 'bg-primary/10' : 'bg-destructive/15',
     },
   ]
 
@@ -203,17 +203,17 @@ export default function Dashboard() {
     {
       name: t('dashboard.income'),
       valor: income,
-      fill: '#b45309',
+      fill: '#DCD0B9',
     },
     {
       name: t('dashboard.expenses'),
       valor: expenses,
-      fill: '#0f172a',
+      fill: '#3d5c52',
     },
     {
       name: t('dashboard.net'),
       valor: Math.abs(net),
-      fill: net >= 0 ? '#047857' : '#be123c',
+      fill: net >= 0 ? '#6fa98c' : '#c45c5c',
     },
   ]
 
@@ -283,13 +283,13 @@ export default function Dashboard() {
           {docSummary.processing > 0 && (
             <>
               {' '}
-              · <span className="text-amber-800">{docSummary.processing} extrayendo</span>
+              · <span className="text-primary">{docSummary.processing} extrayendo</span>
             </>
           )}
           {docSummary.extracted > 0 && (
             <>
               {' '}
-              · <span className="text-emerald-800">{docSummary.extracted} listos</span>
+              · <span className="text-success-foreground">{docSummary.extracted} listos</span>
             </>
           )}
           {docSummary.statements + docSummary.invoices > 0 && (
@@ -376,20 +376,22 @@ export default function Dashboard() {
                 layout="vertical"
                 margin={{ top: 8, right: 16, left: 8, bottom: 0 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="oklch(0.88 0.01 240)" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 12 }} stroke="oklch(0.52 0.02 250)" />
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(220,208,185,0.12)" horizontal={false} />
+                <XAxis type="number" tick={{ fontSize: 12, fill: '#A89F8C' }} stroke="#A89F8C" />
                 <YAxis
                   type="category"
                   dataKey="name"
                   width={88}
-                  tick={{ fontSize: 12 }}
-                  stroke="oklch(0.52 0.02 250)"
+                  tick={{ fontSize: 12, fill: '#A89F8C' }}
+                  stroke="#A89F8C"
                 />
                 <Tooltip
                   formatter={(value) => formatMoney(Number(value ?? 0), locale)}
                   contentStyle={{
-                    borderRadius: 8,
-                    border: '1px solid oklch(0.88 0.01 240)',
+                    borderRadius: 6,
+                    border: '1px solid rgba(220,208,185,0.22)',
+                    background: '#0A342C',
+                    color: '#E5D9C3',
                     boxShadow: 'var(--shadow-soft)',
                   }}
                 />
@@ -469,13 +471,13 @@ export default function Dashboard() {
                 <p
                   className={cn(
                     'mt-3 text-2xl font-semibold tabular-nums',
-                    clearGood ? 'text-emerald-700' : isActive ? 'text-primary' : 'text-foreground',
+                    clearGood ? 'text-success-foreground' : isActive ? 'text-primary' : 'text-foreground',
                   )}
                 >
                   {stage.count}
                 </p>
                 {clearGood && (
-                  <p className="mt-1 text-[11px] text-emerald-700/80">{t('dashboard.stage.clear')}</p>
+                  <p className="mt-1 text-[11px] text-success-foreground/80">{t('dashboard.stage.clear')}</p>
                 )}
               </Link>
             )

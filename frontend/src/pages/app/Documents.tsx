@@ -143,7 +143,7 @@ function BrowseTree({
         )}
 
         {node.is_folder ? (
-          <Folder className="h-3.5 w-3.5 shrink-0 text-amber-600" />
+          <Folder className="h-3.5 w-3.5 shrink-0 text-primary" />
         ) : (
           <File className="h-3.5 w-3.5 shrink-0 text-muted-foreground" />
         )}
@@ -446,7 +446,7 @@ export default function Documents() {
           <div
             className={cn(
               'inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium',
-              configured ? 'bg-emerald-50 text-emerald-800' : 'bg-amber-50 text-amber-900',
+              configured ? 'bg-success text-success-foreground' : 'bg-warning text-warning-foreground',
             )}
           >
             {configured ? <CheckCircle2 className="h-3.5 w-3.5" /> : <AlertCircle className="h-3.5 w-3.5" />}
@@ -628,15 +628,15 @@ export default function Documents() {
                               className={cn(
                                 'rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wide',
                                 status === 'pending' || status === 'processing'
-                                  ? 'bg-amber-50 text-amber-900'
+                                  ? 'bg-warning text-warning-foreground'
                                   : status === 'failed'
-                                    ? 'bg-rose-50 text-rose-800'
+                                    ? 'bg-destructive/15 text-destructive'
                                     : 'bg-secondary',
                               )}
                             >
                               {statusLabel}
                             </span>
-                            <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] text-amber-900">
+                            <span className="rounded-full bg-warning px-2 py-0.5 text-[10px] text-warning-foreground">
                               {kindLabel}
                             </span>
                           </div>

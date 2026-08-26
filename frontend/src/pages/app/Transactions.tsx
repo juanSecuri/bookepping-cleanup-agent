@@ -37,9 +37,9 @@ function confidencePct(tx: Transaction): number | null {
 }
 
 function confidenceClass(pct: number): string {
-  if (pct >= 80) return 'bg-emerald-50 text-emerald-800'
-  if (pct >= 50) return 'bg-amber-50 text-amber-800'
-  return 'bg-rose-50 text-rose-800'
+  if (pct >= 80) return 'bg-success text-success-foreground'
+  if (pct >= 50) return 'bg-warning text-warning-foreground'
+  return 'bg-destructive/15 text-destructive'
 }
 
 export default function Transactions() {
@@ -196,7 +196,7 @@ export default function Transactions() {
         <h1 className="page-title">{t('transactions.title')}</h1>
         <p className="mt-1.5 text-muted-foreground">{t('transactions.subtitle')}</p>
         {tab === 'suspense' && (
-          <p className="mt-2 text-xs text-amber-900">{t('transactions.suspenseHint')}</p>
+          <p className="mt-2 text-xs text-primary">{t('transactions.suspenseHint')}</p>
         )}
       </div>
 
@@ -241,7 +241,7 @@ export default function Transactions() {
       )}
 
       {info && (
-        <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900">
+        <div className="mb-4 rounded-lg border border-champagne/25 bg-success px-4 py-3 text-sm text-success-foreground">
           {info}
         </div>
       )}
