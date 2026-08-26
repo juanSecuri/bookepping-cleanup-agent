@@ -191,13 +191,23 @@ export const api = {
   uploadDocument: (form: FormData) =>
     request<Document>('/api/documents/upload', { method: 'POST', body: form }),
 
-  listTransactions: (params: { tenant_id: string; status?: string }) => {
+  listTransactions: (params: { tenant_id: string; status?: string; suspense?: boolean }) => {
     const q = new URLSearchParams({ tenant_id: params.tenant_id })
     if (params.status) q.set('status', params.status)
+    if (params.suspense) q.set('suspense', 'true')
     return request<Transaction[]>(`/api/transactions?${q}`)
   },
   transactionCounts: (tenant_id: string) =>
     request<TransactionCounts>(`/api/transactions/counts?tenant_id=${encodeURIComponent(tenant_id)}`),
+  listAccountRules: (workspace_id: string) =>
+    request<Array<Record<string, unknown>>>(
+      `/api/account-rules?workspace_id=${encodeURIComponent(workspace_id)}`,
+    ),
+  seedAccountRules: (workspace_id: string) =>
+    request<{ rules?: number }>('/api/account-rules/seed', {
+      method: 'POST',
+      body: JSON.stringify({ workspace_id }),
+    }),
   approveTransaction: (id: string) =>
     request<Transaction>(`/api/transactions/${id}/approve`, { method: 'POST' }),
   rejectTransaction: (id: string, reason?: string) =>

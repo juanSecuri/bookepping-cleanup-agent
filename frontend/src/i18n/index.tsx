@@ -124,8 +124,15 @@ const es: Dict = {
   'transactions.vendor': 'Proveedor',
   'transactions.account': 'Cuenta',
   'transactions.type': 'Tipo',
-  'transactions.confidence': 'Confianza',
-  'reconciliation.title': 'Conciliación',
+  'transactions.suspense': 'No categorizadas',
+  'transactions.suspenseHint':
+    'Sin regla CoA → cuenta Suspense (9999). Asigna una cuenta y el sistema aprende la keyword.',
+  'transactions.assign': 'Asignar cuenta',
+  'transactions.learned': 'Regla aprendida',
+  'coa.rules': 'Reglas de clasificación',
+  'coa.rulesHint': 'Keywords → código CoA (seed + aprendidas). Motor local $0.',
+  'coa.seedRules': 'Sembrar reglas',
+
   'reconciliation.subtitle': 'Carga estados de cuenta y empareja movimientos.',
   'reconciliation.upload': 'Subir estado de cuenta',
   'reconciliation.uploadNote':
@@ -328,8 +335,15 @@ const en: Dict = {
   'transactions.vendor': 'Vendor',
   'transactions.account': 'Account',
   'transactions.type': 'Type',
-  'transactions.confidence': 'Confidence',
-  'reconciliation.title': 'Reconciliation',
+  'transactions.suspense': 'Uncategorized',
+  'transactions.suspenseHint':
+    'No CoA rule → Suspense (9999). Assign an account and the system learns the keyword.',
+  'transactions.assign': 'Assign account',
+  'transactions.learned': 'Rule learned',
+  'coa.rules': 'Classification rules',
+  'coa.rulesHint': 'Keywords → CoA code (seed + learned). Local $0 engine.',
+  'coa.seedRules': 'Seed rules',
+
   'reconciliation.subtitle': 'Upload statements and match movements.',
   'reconciliation.upload': 'Upload statement',
   'reconciliation.uploadNote':

@@ -307,26 +307,44 @@ async def queue_status() -> dict:
 async def list_transactions(
     tenant_id: str,
     status: str | None = None,
+    suspense: bool = False,
     limit: int = 200,
     offset: int = 0,
 ) -> list[dict]:
+    from src.infrastructure.classification.rule_coa import SUSPENSE_CODE
+
     tid = uuid.UUID(tenant_id)
     c = get_container()
     mapped = _status_map(status)
-    if mapped == TransactionStatus.PENDING_REVIEW.value:
+    if mapped == TransactionStatus.PENDING_REVIEW.value and not suspense:
         items = await c.transactions.list_pending(tid)
     else:
-        items = await c.transactions.list_by_tenant(tid, limit=max(limit + offset, 200), offset=0)
+        items = await c.transactions.list_by_tenant(tid, limit=max(limit + offset, 5000), offset=0)
         if mapped:
             items = [t for t in items if t.status.value == mapped]
+    if suspense:
+        items = [
+            t
+            for t in items
+            if (t.chart_of_accounts_code or t.ai_suggested_account_code or "") == SUSPENSE_CODE
+            or (t.category_confidence is not None and float(t.category_confidence) < 0.4)
+        ]
     page = items[offset : offset + limit]
     return [_tx_json(t) for t in page]
 
 
 @api.get("/transactions/counts")
 async def transaction_counts(tenant_id: str) -> dict:
+    from src.infrastructure.classification.rule_coa import SUSPENSE_CODE
+
     tid = uuid.UUID(tenant_id)
     items = await get_container().transactions.list_by_tenant(tid, limit=5000)
+    suspense_n = sum(
+        1
+        for t in items
+        if (t.chart_of_accounts_code or t.ai_suggested_account_code or "") == SUSPENSE_CODE
+        or (t.category_confidence is not None and float(t.category_confidence) < 0.4)
+    )
     return {
         "all": len(items),
         "pending": sum(1 for t in items if t.status == TransactionStatus.PENDING_REVIEW),
@@ -334,6 +352,7 @@ async def transaction_counts(tenant_id: str) -> dict:
         "verified": sum(1 for t in items if t.status == TransactionStatus.VERIFIED),
         "rejected": sum(1 for t in items if t.status == TransactionStatus.REJECTED),
         "closed": sum(1 for t in items if t.status == TransactionStatus.CLOSED),
+        "suspense": suspense_n,
     }
 
 
@@ -362,15 +381,25 @@ class BulkBody(BaseModel):
 
 @api.post("/transactions/{transaction_id}/approve")
 async def approve_transaction(transaction_id: str, body: ApproveBody = ApproveBody()) -> dict:
+    from src.infrastructure.classification.rule_coa import SUSPENSE_NAME
+
     c = get_container()
     tx = await c.transactions.get_by_id(uuid.UUID(transaction_id))
     if not tx:
         raise HTTPException(404, "Transaction not found")
     code = body.account_code or tx.ai_suggested_account_code or tx.chart_of_accounts_code or "9999"
-    name = body.account_name or tx.ai_suggested_account_name or tx.chart_of_accounts_name or "Uncategorized"
+    name = body.account_name or tx.ai_suggested_account_name or tx.chart_of_accounts_name or SUSPENSE_NAME
     saved = await c.transactions.save(tx.mark_verified(code, name, tx.category_confidence or 1.0))
     if body.notes:
         saved = await c.transactions.save(saved.model_copy(update={"notes": body.notes}))
+    # Passive learning when user (or approval) pins a real account
+    if body.account_code and body.account_code != "9999":
+        c.coa.learn_from_correction(
+            saved.tenant_id,
+            saved.description or "",
+            body.account_code,
+            body.account_name or name,
+        )
     return _tx_json(saved)
 
 
@@ -396,11 +425,21 @@ async def reclassify_transaction(transaction_id: str, body: ReclassifyBody) -> d
         "chart_of_accounts_name": body.account_name,
         "notes": body.notes,
         "status": TransactionStatus.VERIFIED,
+        "category_confidence": 1.0,
     }
     if body.type:
         updates["transaction_type"] = body.type
     saved = await c.transactions.save(tx.model_copy(update=updates))
-    return _tx_json(saved)
+    learned = c.coa.learn_from_correction(
+        saved.tenant_id,
+        saved.description or "",
+        body.account_code,
+        body.account_name,
+    )
+    out = _tx_json(saved)
+    if learned:
+        out["learned_rule"] = learned
+    return out
 
 
 @api.post("/transactions/bulk-approve")
@@ -524,13 +563,65 @@ async def seed_chart_of_accounts(body: SeedCoABody) -> dict:
             errors.append(f"{code}: {exc}")
     if seeded == 0 and errors:
         raise HTTPException(500, f"CoA seed failed: {errors[0]}")
+    from src.infrastructure.classification.rule_coa import RuleCoAClassifier
+
+    rules = RuleCoAClassifier().ensure_seed_rules(uuid.UUID(tid))
     return {
         "workspace_id": body.workspace_id,
         "seeded": seeded,
+        "rules_seeded": len(rules),
         "embeddings": False,
         "engine": "local_rules",
         "errors": errors[:5],
     }
+
+
+class AccountRuleCreate(BaseModel):
+    workspace_id: str
+    keywords: list[str]
+    account_code: str
+    account_name: str
+
+
+@api.get("/account-rules")
+async def list_account_rules(workspace_id: str) -> list[dict]:
+    from src.infrastructure.classification.rule_coa import RuleCoAClassifier
+
+    return RuleCoAClassifier().list_rules(uuid.UUID(workspace_id))
+
+
+@api.post("/account-rules/seed")
+async def seed_account_rules(body: SeedCoABody) -> dict:
+    from src.infrastructure.classification.rule_coa import RuleCoAClassifier
+
+    rows = RuleCoAClassifier().ensure_seed_rules(uuid.UUID(body.workspace_id))
+    return {"workspace_id": body.workspace_id, "rules": len(rows), "engine": "local_rules"}
+
+
+@api.post("/account-rules")
+async def create_account_rule(body: AccountRuleCreate) -> dict:
+    from src.infrastructure.repositories.supabase_client import get_supabase_client
+
+    kws = [k.strip().lower() for k in body.keywords if k and k.strip()]
+    if not kws:
+        raise HTTPException(400, "keywords required")
+    client = get_supabase_client()
+    result = (
+        client.table("account_rules")
+        .insert(
+            {
+                "tenant_id": body.workspace_id,
+                "keywords": kws,
+                "account_code": body.account_code,
+                "account_name": body.account_name,
+                "source": "manual",
+                "is_active": True,
+            }
+        )
+        .execute()
+    )
+    get_container().coa.invalidate(uuid.UUID(body.workspace_id))
+    return (result.data or [{}])[0]
 
 
 # ── Movements / Reconciliation ────────────────────────────────────────────────

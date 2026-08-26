@@ -230,6 +230,7 @@ Env: `EXTRACTION_MODE=local` por defecto.
 | 2026-08-24 | Implementación | Default `EXTRACTION_MODE=local`: pdfplumber + reglas CoA; OpenAI/LlamaParse/Groq opcionales (`cloud`). Seed CoA sin embeddings. | free-pipeline T1 |
 | 2026-08-24 | Juan / producto | Web responsive (no PWA); deploy Render free + GitHub | **Deploy Render** |
 | **2026-08-26** | **Recomendación contable/arquitectura (vía Juan)** | Blindar Render Free (cola 1 archivo); CoA en Supabase (`account_rules`); cadenazo saldos; Owner's Draws; Balance con utilidad en Patrimonio; Cash flow O/I/F; UX cold-start. Split-screen / TanStack / exceljs = backlog. | **Sprint-2026-08-26-render-queue** |
+| 2026-08-26 | Implementación | Cola secuencial + cold-start live; luego `account_rules` + Suspense + aprendizaje | **account-rules** |
 
 ---
 
@@ -275,17 +276,16 @@ Split-screen PDF | TanStack Table | Export exceljs multipestaña.
 
 ## 11. Sprint activo (2026-08-26)
 
-**Nombre:** `Sprint-2026-08-26-render-queue`  
-**Objetivo medible:** Subidas/Drive **no matan** la instancia Free: cola en DB + procesamiento **secuencial de 1 archivo** + UI de cold start visible.
+**Nombre:** `Sprint-2026-08-26-account-rules` (tras cola Render)  
+**Objetivo medible:** Clasificación CoA determinista vía `account_rules` + Suspense + aprendizaje pasivo al corregir.
 
-| # | Tarea | DoD mínimo |
-|---|--------|------------|
-| **1 (foco)** | Tabla/cola `document_queue` (o reusar docs con estados `pending`/`processing`/`extracted`/`failed`) + worker que toma **1** job | 2 PDFs en cola; nunca 2 en paralelo; sin OOM en demo |
-| 2 | Banner cold-start en la web al primer hit lento | Copy claro ES/EN; no parece “roto” |
-| 3 | (Siguiente sprint) `account_rules` + suspense + aprendizaje | — |
-| 4 | (Luego) Cadenazo + Owner's Draws + vistas SQL Balance | — |
+| # | Tarea | DoD |
+|---|--------|-----|
+| 1 | Cola 1-a-1 + cold-start | **Hecho** (`4b13eec`) |
+| **2 (foco)** | `account_rules` + limpia regex + Suspense 9999 + learn on reclassify | Tab “No categorizadas” + reglas en Plan de cuentas |
+| 3 | (Luego) Cadenazo + Owner's Draws + vistas SQL Balance | — |
 
-**Estado Tarea 1:** implementado — `pending` en `documents`, worker secuencial (`DocumentQueueWorker`), poller en lifespan, banner cold-start, poll UI Documentos. Migración `006_document_queue.sql`.
+**Estado Tarea 2:** en curso / entregado en este commit — migración `007_account_rules.sql`.
 
 **Fuera de este sprint:** TanStack, exceljs, split-screen, Tesseract, auth.
 

@@ -30,6 +30,7 @@ export default function ChartOfAccounts() {
   const { workspaceId = '' } = useParams()
   const { t } = useLocale()
   const [accounts, setAccounts] = useState<ChartAccount[]>([])
+  const [rules, setRules] = useState<Array<Record<string, unknown>>>([])
   const [loading, setLoading] = useState(true)
   const [seeding, setSeeding] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -39,11 +40,16 @@ export default function ChartOfAccounts() {
     setLoading(true)
     setError(null)
     try {
-      const data = await api.chartOfAccounts(workspaceId)
+      const [data, r] = await Promise.all([
+        api.chartOfAccounts(workspaceId),
+        api.listAccountRules(workspaceId).catch(() => []),
+      ])
       setAccounts(Array.isArray(data) ? data : [])
+      setRules(Array.isArray(r) ? r : [])
     } catch (e) {
       setError(e instanceof Error ? e.message : t('common.error'))
       setAccounts([])
+      setRules([])
     } finally {
       setLoading(false)
     }
@@ -58,6 +64,7 @@ export default function ChartOfAccounts() {
     setError(null)
     try {
       await api.seedChartOfAccounts(workspaceId)
+      await api.seedAccountRules(workspaceId).catch(() => null)
       await load()
     } catch (e) {
       setError(e instanceof Error ? e.message : t('common.error'))
@@ -142,6 +149,56 @@ export default function ChartOfAccounts() {
 
       {accounts.length > 0 && (
         <>
+          <section className="mb-6">
+            <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+                  {t('coa.rules')}
+                </h2>
+                <p className="text-xs text-muted-foreground">{t('coa.rulesHint')}</p>
+              </div>
+              <button
+                type="button"
+                onClick={() => void api.seedAccountRules(workspaceId).then(() => load())}
+                className="cursor-pointer rounded-lg border border-border px-3 py-1.5 text-xs font-medium hover:border-primary/40"
+              >
+                {t('coa.seedRules')}
+              </button>
+            </div>
+            {rules.length === 0 ? (
+              <p className="text-sm text-muted-foreground">Sin reglas — pulsa sembrar.</p>
+            ) : (
+              <div className="soft-shadow table-scroll rounded-xl border border-border bg-card">
+                <table className="w-full min-w-[560px] text-left text-sm">
+                  <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
+                    <tr>
+                      <th className="px-4 py-2 font-medium">Keywords</th>
+                      <th className="px-4 py-2 font-medium">Código</th>
+                      <th className="px-4 py-2 font-medium">Cuenta</th>
+                      <th className="px-4 py-2 font-medium">Origen</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {rules.slice(0, 40).map((r) => (
+                      <tr key={String(r.id)} className="border-b border-border last:border-0">
+                        <td className="px-4 py-2 text-xs">
+                          {(Array.isArray(r.keywords) ? r.keywords : []).join(', ')}
+                        </td>
+                        <td className="px-4 py-2 font-mono text-xs">{String(r.account_code)}</td>
+                        <td className="px-4 py-2">{String(r.account_name)}</td>
+                        <td className="px-4 py-2">
+                          <span className="rounded-md bg-secondary px-2 py-0.5 text-[10px] uppercase">
+                            {String(r.source ?? '—')}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
           <section className="mb-6">
             <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
               {t('coa.summary')}

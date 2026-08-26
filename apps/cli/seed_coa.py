@@ -51,7 +51,7 @@ DEFAULT_ACCOUNTS = [
     ("6130", "Taxes & Licenses", "expense", "Operating Expenses"),
     ("6140", "Interest Expense", "expense", "Other Expenses"),
     ("6150", "Miscellaneous Expense", "expense", "Other Expenses"),
-    ("9999", "Uncategorized", "expense", "Other Expenses"),
+    ("9999", "Gastos No Categorizados (Suspense)", "expense", "Suspense"),
 ]
 
 
@@ -72,7 +72,11 @@ async def _run(tenant_id: uuid.UUID) -> None:
             on_conflict="tenant_id,code",
         ).execute()
         print(f"  seeded {code} {name}")
-    print(f"Done — {len(DEFAULT_ACCOUNTS)} accounts (no embeddings / $0) for {tenant_id}")
+    # Seed deterministic classification rules ($0)
+    from src.infrastructure.classification.rule_coa import RuleCoAClassifier
+
+    RuleCoAClassifier().ensure_seed_rules(tenant_id)
+    print(f"Done — {len(DEFAULT_ACCOUNTS)} accounts + account_rules (no embeddings / $0) for {tenant_id}")
 
 
 def main() -> None:
