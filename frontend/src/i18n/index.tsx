@@ -205,6 +205,14 @@ const es: Dict = {
   'common.search': 'Buscar',
   'common.actions': 'Acciones',
   'common.selected': 'seleccionadas',
+  'coldStart.title': 'Despertando LedgerAI…',
+  'coldStart.body':
+    'El servidor gratis se dormía por inactividad. En unos segundos responde; no cierres la pestaña.',
+  'coldStart.dismiss': 'Ocultar',
+  'documents.queueHint':
+    'Los archivos entran en cola y se procesan de a uno (protege Render Free / 512MB RAM).',
+  'documents.statusPending': 'En cola',
+  'documents.statusProcessing': 'Procesando',
 }
 
 const en: Dict = {
@@ -401,6 +409,14 @@ const en: Dict = {
   'common.search': 'Search',
   'common.actions': 'Actions',
   'common.selected': 'selected',
+  'coldStart.title': 'Waking LedgerAI…',
+  'coldStart.body':
+    'The free server was asleep. It should respond in a few seconds — keep this tab open.',
+  'coldStart.dismiss': 'Dismiss',
+  'documents.queueHint':
+    'Files are queued and processed one at a time (protects Render Free / 512MB RAM).',
+  'documents.statusPending': 'Queued',
+  'documents.statusProcessing': 'Processing',
 }
 
 const dictionaries: Record<Locale, Dict> = { es, en }

@@ -34,6 +34,7 @@ class AccountType(str, Enum):
 
 
 class DocumentStatus(str, Enum):
+    PENDING = "pending"
     UPLOADING = "uploading"
     PROCESSING = "processing"
     EXTRACTED = "extracted"

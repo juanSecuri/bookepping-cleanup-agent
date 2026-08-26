@@ -45,7 +45,12 @@ async def lifespan(_app: FastAPI):
         raise RuntimeError(
             "SUPABASE_SERVICE_ROLE_KEY missing. Set the service_role/secret key in .env"
         )
+    from src.infrastructure.queue.document_worker import get_document_worker
+
+    worker = get_document_worker()
+    await worker.start_polling(interval_sec=8.0)
     yield
+    await worker.stop_polling()
 
 
 app = FastAPI(
@@ -103,7 +108,20 @@ def _tx_json(tx: FinancialTransaction) -> dict:
 
 @app.get("/health")
 async def health() -> dict:
-    return {"status": "ok", "version": "0.5.0", "product": "LedgerAI", "llm": "openai"}
+    from src.infrastructure.queue.document_worker import get_document_worker
+
+    try:
+        queue = await get_document_worker().queue_stats()
+    except Exception:
+        queue = {}
+    return {
+        "status": "ok",
+        "version": "0.5.0",
+        "product": "LedgerAI",
+        "llm": "local_rules",
+        "queue": queue,
+        "extraction_mode": get_settings().extraction_mode,
+    }
 
 
 # ── Workspaces ────────────────────────────────────────────────────────────────
@@ -235,87 +253,52 @@ async def list_documents(workspace_id: str | None = None, tenant_id: str | None 
 
 @api.post("/documents/upload")
 async def upload_document(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     workspace_id: str = Form(...),
     tenant_id: str | None = Form(default=None),
 ) -> dict:
+    """Enqueue upload for sequential processing (Render Free — 1 file at a time)."""
+    from src.infrastructure.queue.document_worker import get_document_worker
+
     wid = uuid.UUID(workspace_id or tenant_id or "")
     filename = file.filename or "upload.bin"
     content = await file.read()
     ftype = _file_type(filename)
+    worker = get_document_worker()
 
-    doc = DocumentRecord(
+    kind = "spreadsheet" if ftype == DocumentFileType.CSV else "invoice"
+
+    doc = await worker.enqueue_file(
         workspace_id=wid,
-        file_name=filename,
+        filename=filename,
+        content=content,
         file_type=ftype,
-        file_size_bytes=len(content),
-        status=DocumentStatus.PROCESSING,
+        source="upload",
+        pipeline_kind=kind,
+        apis_used="pdfplumber (local $0), reglas CoA"
+        if ftype == DocumentFileType.PDF
+        else ("csv-upload" if ftype == DocumentFileType.CSV else "local"),
+        queue_payload={"plan_kind": kind},
+        raw_note="En cola — procesamiento secuencial (1 archivo).",
     )
-    docs = DocumentRepository()
-    doc = await docs.save(doc)
+    background_tasks.add_task(worker.drain)
 
-    suffix = Path(filename).suffix or ".bin"
-    with NamedTemporaryFile(delete=False, suffix=suffix, dir=_UPLOAD_DIR) as tmp:
-        tmp.write(content)
-        tmp_path = Path(tmp.name)
+    return {
+        **doc.model_dump(mode="json"),
+        "filename": doc.file_name,
+        "name": doc.file_name,
+        "queued": True,
+        "message": "Archivo en cola. Se procesa de a uno para no saturar Render Free.",
+    }
 
-    c = get_container()
-    try:
-        if ftype == DocumentFileType.CSV:
-            # Treat CSV bank upload via statement path if months provided later; for now structure as text
-            text = content.decode("utf-8", errors="ignore")
-            meta = ExtractionMetadata(
-                source=DocumentSource.MANUAL,
-                raw_file_path=str(tmp_path),
-                extraction_model="csv-upload",
-                confidence_score=0.7,
-                raw_text=text[:4000],
-            )
-            # Store raw only; reconciliation has dedicated endpoint
-            doc = doc.model_copy(
-                update={
-                    "status": DocumentStatus.EXTRACTED,
-                    "raw_extracted_text": text[:8000],
-                    "extraction_confidence": 0.7,
-                }
-            )
-        else:
-            result = await c.ingest.execute(tmp_path, wid)
-            conf = 0.8
-            vendor = None
-            doc_date = None
-            if not isinstance(result, list):
-                conf = result.metadata.confidence_score
-                vendor = result.vendor_name
-                doc_date = str(result.transaction_date)
-                # Persist AI suggestion fields from RAG if present
-                if result.chart_of_accounts_code:
-                    suggested = result.model_copy(
-                        update={
-                            "ai_suggested_account_code": result.chart_of_accounts_code,
-                            "ai_suggested_account_name": result.chart_of_accounts_name,
-                        }
-                    )
-                    await c.transactions.save(suggested)
-            doc = doc.model_copy(
-                update={
-                    "status": DocumentStatus.EXTRACTED,
-                    "extraction_confidence": conf,
-                    "vendor": vendor,
-                    "document_date": doc_date,
-                }
-            )
-        doc = await docs.save(doc)
-    except Exception as exc:
-        doc = doc.model_copy(
-            update={"status": DocumentStatus.FAILED, "error_message": str(exc)}
-        )
-        await docs.save(doc)
-        raise HTTPException(422, str(exc)) from exc
-    finally:
-        tmp_path.unlink(missing_ok=True)
 
-    return {**doc.model_dump(mode="json"), "filename": doc.file_name, "name": doc.file_name}
+@api.get("/queue/status")
+async def queue_status() -> dict:
+    from src.infrastructure.queue.document_worker import get_document_worker
+
+    stats = await get_document_worker().queue_stats()
+    return {"status": "ok", "queue": stats, "mode": "sequential_one_at_a_time"}
 
 
 # ── Transactions ──────────────────────────────────────────────────────────────
@@ -993,9 +976,10 @@ async def drive_import_folder(body: DriveImportFolderBody, background_tasks: Bac
 
 @api.post("/drive/import-files")
 async def drive_import_files(body: DriveImportFilesBody, background_tasks: BackgroundTasks) -> dict:
-    """Download selected Drive files, classify statement vs invoice, ingest in background."""
+    """Download selected Drive files, enqueue as pending, process 1-at-a-time."""
     from src.infrastructure.drive.classify import classify_drive_file
     from src.infrastructure.drive.google_drive_client import GoogleDriveClient, credentials_available
+    from src.infrastructure.queue.document_worker import get_document_worker
     from src.use_cases.sync_drive import _file_type
 
     if not credentials_available():
@@ -1008,6 +992,7 @@ async def drive_import_files(body: DriveImportFilesBody, background_tasks: Backg
     existing = await docs.list_by_workspace(wid, limit=5000)
     known = {d.drive_file_id for d in existing if d.drive_file_id}
     drive = GoogleDriveClient()
+    worker = get_document_worker()
 
     imported = 0
     skipped = 0
@@ -1033,10 +1018,6 @@ async def drive_import_files(body: DriveImportFilesBody, background_tasks: Backg
         try:
             content = drive.download_bytes(fid)
             ftype = _file_type(name, mime)
-            suffix = Path(name).suffix or ".bin"
-            tmp_path = _UPLOAD_DIR / f"{fid}{suffix}"
-            tmp_path.write_bytes(content)
-
             folder = _folder_group_from_path(path, name)
             if plan.kind == "statement":
                 apis = "pdfplumber (local $0), reglas CoA"
@@ -1044,15 +1025,15 @@ async def drive_import_files(body: DriveImportFilesBody, background_tasks: Backg
                 apis = "Google Drive"
             else:
                 apis = "pdfplumber (local $0), reglas CoA"
-            doc = DocumentRecord(
+
+            doc = await worker.enqueue_file(
                 workspace_id=wid,
-                file_name=name,
+                filename=name,
+                content=content,
                 file_type=ftype,
-                file_size_bytes=len(content),
-                status=DocumentStatus.PROCESSING,
+                source="google_drive",
                 drive_file_id=fid,
                 drive_path=path,
-                source="google_drive",
                 pipeline_kind=plan.kind,
                 apis_used=apis,
                 folder_group=folder,
@@ -1064,9 +1045,14 @@ async def drive_import_files(body: DriveImportFilesBody, background_tasks: Backg
                     and len(plan.statement_month) == 7
                     else None
                 ),
-                raw_extracted_text=plan.note,
+                queue_payload={
+                    "plan_kind": plan.kind,
+                    "bank_name": plan.bank_name,
+                    "bank_account_number": plan.bank_account_number,
+                    "statement_month": plan.statement_month,
+                },
+                raw_note=plan.note or "En cola — 1 archivo a la vez.",
             )
-            doc = await docs.save(doc)
             imported += 1
             known.add(fid)
             queued.append(
@@ -1075,21 +1061,14 @@ async def drive_import_files(body: DriveImportFilesBody, background_tasks: Backg
                     "file_name": name,
                     "drive_path": path,
                     "status": doc.status.value,
-                    "tmp_path": str(tmp_path),
-                    "file_type": ftype.value,
                     "plan_kind": plan.kind,
-                    "bank_name": plan.bank_name,
-                    "bank_account_number": plan.bank_account_number,
-                    "statement_month": plan.statement_month,
-                    "apis_used": apis,
-                    "folder_group": folder,
                 }
             )
         except Exception as exc:
             failed.append({"file": path, "error": str(exc)[:300]})
 
     if body.ingest and queued:
-        background_tasks.add_task(_ingest_queued_drive_docs, str(wid), queued)
+        background_tasks.add_task(worker.drain)
 
     statements = sum(1 for p in plans if p["kind"] == "statement")
     invoices = sum(1 for p in plans if p["kind"] == "invoice")
@@ -1107,131 +1086,12 @@ async def drive_import_files(body: DriveImportFilesBody, background_tasks: Backg
             for q in queued
         ],
         "message": (
-            f"Descargados {imported} "
+            f"En cola {imported} "
             f"(estados {statements}, facturas {invoices}, excel {sheets}). "
-            f"Extracción en segundo plano — abre Conciliación para ver movimientos de bancos."
+            f"Procesamiento secuencial (1 a la vez) — no satura Render Free."
         ),
     }
 
-
-def doc_apis_for_kind(kind: str) -> str:
-    if kind == "statement":
-        return "pdfplumber (local $0), reglas CoA"
-    if kind == "spreadsheet":
-        return "Google Drive"
-    return "pdfplumber (local $0), reglas CoA"
-
-
-async def _ingest_queued_drive_docs(workspace_id: str, queued: list[dict]) -> None:
-    from src.container import get_container
-
-    wid = uuid.UUID(workspace_id)
-    docs = DocumentRepository()
-    container = get_container()
-    for item in queued:
-        doc_id = uuid.UUID(item["id"])
-        tmp_path = Path(item["tmp_path"])
-        ftype = item.get("file_type")
-        kind = item.get("plan_kind") or "invoice"
-        apis = item.get("apis_used") or doc_apis_for_kind(kind)
-        folder = item.get("folder_group")
-        doc = await docs.get_by_id(doc_id)
-        if not doc:
-            continue
-        try:
-            if kind == "spreadsheet" or ftype == DocumentFileType.CSV.value:
-                preview = (
-                    tmp_path.read_text(encoding="utf-8", errors="ignore")[:4000]
-                    if ftype == DocumentFileType.CSV.value
-                    else (
-                        f"Excel registrado ({item.get('file_name')}). "
-                        "Parse tabular completo pendiente."
-                    )
-                )
-                doc = doc.model_copy(
-                    update={
-                        "status": DocumentStatus.EXTRACTED,
-                        "pipeline_kind": "spreadsheet",
-                        "apis_used": apis,
-                        "folder_group": folder or doc.folder_group,
-                        "raw_extracted_text": preview,
-                    }
-                )
-            elif kind == "statement":
-                report = await container.process_statement.execute(
-                    tmp_path,
-                    wid,
-                    item.get("bank_name") or "Bank",
-                    item.get("bank_account_number") or "0000",
-                    item.get("statement_month") or "2026-01",
-                )
-                doc = doc.model_copy(
-                    update={
-                        "status": DocumentStatus.EXTRACTED,
-                        "pipeline_kind": "statement",
-                        "apis_used": apis,
-                        "folder_group": folder or doc.folder_group,
-                        "extraction_confidence": 0.9,
-                        "vendor": item.get("bank_name"),
-                        "document_date": (
-                            f"{item.get('statement_month')}-01"
-                            if item.get("statement_month")
-                            and len(str(item.get("statement_month"))) == 7
-                            else item.get("statement_month")
-                        ),
-                        "raw_extracted_text": (
-                            f"APIs: {apis}\n"
-                            f"Banco: {item.get('bank_name')}  Cuenta: …{item.get('bank_account_number')}\n"
-                            f"Mes: {item.get('statement_month')}\n"
-                            f"Movimientos extraídos: {report.total_movements} | "
-                            f"Categorizados: {report.categorised} | "
-                            f"Sin match: {report.unmatched}\n"
-                            f"Destino: Conciliación + Transacciones (espejo)"
-                        ),
-                    }
-                )
-            else:
-                result = await container.ingest.execute(tmp_path, wid)
-                conf = 0.8
-                vendor = None
-                doc_date = None
-                raw = None
-                if not isinstance(result, list):
-                    conf = result.metadata.confidence_score
-                    vendor = result.vendor_name
-                    doc_date = str(result.transaction_date)
-                    raw = (result.metadata.raw_text or "")[:6000] or None
-                doc = doc.model_copy(
-                    update={
-                        "status": DocumentStatus.EXTRACTED,
-                        "pipeline_kind": "invoice",
-                        "apis_used": apis,
-                        "folder_group": folder or doc.folder_group,
-                        "extraction_confidence": conf,
-                        "vendor": vendor,
-                        "document_date": doc_date,
-                        "raw_extracted_text": (
-                            f"APIs: {apis}\n"
-                            f"Proveedor detectado: {vendor or '—'}\n"
-                            f"Fecha: {doc_date or '—'}\n"
-                            f"Destino: Transacciones (pendiente de revisión)\n"
-                            f"--- Texto OCR ---\n{raw or '(sin texto)'}"
-                        ),
-                    }
-                )
-            await docs.save(doc)
-        except Exception as exc:
-            doc = doc.model_copy(
-                update={
-                    "status": DocumentStatus.FAILED,
-                    "error_message": str(exc)[:500],
-                    "pipeline_kind": kind,
-                    "apis_used": apis,
-                }
-            )
-            await docs.save(doc)
-        finally:
-            tmp_path.unlink(missing_ok=True)
 
 
 @api.post("/drive/push-file")

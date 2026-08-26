@@ -16,7 +16,8 @@ Antes de implementar features, deploys o “mejoras”, alinear con:
 3. **Multi-canal:** no solo Google Drive. Es una **web responsive** (PC + celular en el navegador; no PWA obligatoria) + Drive + Excel/CSV.
 4. **Costos (empresa 2026-08-24):** el agente debe poder funcionar **sin APIs de IA de pago**. Preferir parsers/código open source (pdfplumber, openpyxl, Tesseract, faster-whisper, reglas CoA). LLM de pago solo como fallback opcional y aprobado.
 5. **Pipeline objetivo:** leer → transcribir → clasificar plan de cuentas → conciliar → emitir Balance + P&L + Cash flow (mensual/anual) por periodo.
-6. **Deploy:** Render free es viable (con sleep/cold start); no improvisar sin checklist del doc.
+6. **Deploy:** Render free es viable (con sleep/cold start/512MB); **procesar 1 archivo a la vez** vía cola en DB; no improvisar sin checklist del doc.
 7. No volverse loco: priorizar y cerrar una tarea bien antes de la siguiente.
+8. Feedback 2026-08-26 (arquitectura/contable): cola async → `account_rules`/suspense → cadenazo/Owner's Draws → vistas SQL Balance/Cash flow. Split-screen/TanStack/exceljs = backlog.
 
 Si el usuario pide algo fuera de orden, avisar el trade-off y ofrecer meterlo al backlog del `PROJECT_PARAMETERS.md`.

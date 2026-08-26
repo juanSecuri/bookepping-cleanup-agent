@@ -230,8 +230,8 @@ export default function Documents() {
     return [...map.entries()].sort(([a], [b]) => a.localeCompare(b))
   }, [docs])
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  const load = useCallback(async (opts?: { quiet?: boolean }) => {
+    if (!opts?.quiet) setLoading(true)
     setError(null)
     try {
       const data = await api.listDocuments({
@@ -243,7 +243,7 @@ export default function Documents() {
       setError(e instanceof Error ? e.message : t('common.error'))
       setDocs([])
     } finally {
-      setLoading(false)
+      if (!opts?.quiet) setLoading(false)
     }
   }, [workspaceId, t])
 
@@ -262,6 +262,19 @@ export default function Documents() {
     void load()
     void loadDrive()
   }, [load, loadDrive])
+
+  // Poll while docs are pending/processing (sequential queue)
+  useEffect(() => {
+    const busy = docs.some((d) => {
+      const s = String(d.status || '')
+      return s === 'pending' || s === 'processing' || s === 'uploading'
+    })
+    if (!busy) return
+    const id = window.setInterval(() => {
+      void load({ quiet: true })
+    }, 4000)
+    return () => window.clearInterval(id)
+  }, [docs, load])
 
   async function uploadFiles(files: FileList | File[]) {
     const list = Array.from(files)
@@ -414,6 +427,7 @@ export default function Documents() {
       <div className="mb-8 animate-fade-up">
         <h1 className="page-title">{t('documents.title')}</h1>
         <p className="mt-1.5 text-muted-foreground">{t('documents.subtitle')}</p>
+        <p className="mt-2 text-xs text-muted-foreground">{t('documents.queueHint')}</p>
       </div>
 
       <section className="animate-fade-up-delay-1 soft-shadow mb-6 rounded-xl border border-border bg-card p-5 sm:p-6">
@@ -581,6 +595,13 @@ export default function Documents() {
                 {items.map((doc) => {
                   const open = expandedDoc === doc.id
                   const kind = String(doc.pipeline_kind || 'pending')
+                  const status = String(doc.status ?? '—')
+                  const statusLabel =
+                    status === 'pending'
+                      ? t('documents.statusPending')
+                      : status === 'processing'
+                        ? t('documents.statusProcessing')
+                        : status
                   const kindLabel =
                     kind === 'statement'
                       ? 'Estado de cuenta'
@@ -602,8 +623,17 @@ export default function Documents() {
                             <span className="font-medium">
                               {doc.filename || doc.name || doc.id}
                             </span>
-                            <span className="rounded-full bg-secondary px-2 py-0.5 text-[10px] uppercase tracking-wide">
-                              {String(doc.status ?? '—')}
+                            <span
+                              className={cn(
+                                'rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wide',
+                                status === 'pending' || status === 'processing'
+                                  ? 'bg-amber-50 text-amber-900'
+                                  : status === 'failed'
+                                    ? 'bg-rose-50 text-rose-800'
+                                    : 'bg-secondary',
+                              )}
+                            >
+                              {statusLabel}
                             </span>
                             <span className="rounded-full bg-amber-50 px-2 py-0.5 text-[10px] text-amber-900">
                               {kindLabel}

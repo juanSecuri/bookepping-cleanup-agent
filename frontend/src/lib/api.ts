@@ -168,6 +168,8 @@ export type PnLReport = {
 
 export const api = {
   listWorkspaces: () => request<Workspace[]>('/api/workspaces'),
+  queueStatus: () => request<{ status: string; queue: Record<string, number> }>('/api/queue/status'),
+  health: () => request<{ status: string; queue?: Record<string, number> }>('/health'),
   createWorkspace: (body: { name: string; description?: string }) =>
     request<Workspace>('/api/workspaces', { method: 'POST', body: JSON.stringify(body) }),
   deleteWorkspace: (id: string) =>

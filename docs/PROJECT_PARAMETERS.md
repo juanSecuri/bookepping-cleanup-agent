@@ -31,20 +31,23 @@ El agente debe entonces:
 4. **Salida:** demo corta + checklist + notas de costo si aplica.  
 5. **No** abrir frentes nuevos hasta cerrar la tarea activa.
 
-### Orden de sprints (ajustado 2026-08-24 — empresa)
+### Orden de sprints (ajustado 2026-08-26 — recomendación contable/arquitectura)
 
 | Orden | Tema | Estado |
 |------:|------|--------|
-| 0 | **Constraint costos:** agente “gratis” = parsers/código + free tiers; minimizar APIs de pago | **Activo — decisión de arquitectura** |
-| 1 | Pipeline end-to-end: leer → transcribir → clasificar CoA → conciliar → reportes | Objetivo producto (multi-sprint) |
-| 2 | Extracción PDF/Excel **sin LlamaParse de pago** (pdfplumber / openpyxl / reglas) | Siguiente implementación |
-| 3 | Clasificación CoA por reglas + keywords (+ embeddings locales opcionales) | Pendiente |
-| 4 | Conciliación de cuentas (movimientos ↔ txs) full verificado | Parcial |
-| 5 | Reportes: **Balance**, **P&L**, **Cash flow** mensual y anual + emitir por periodo | Parcial (solo P&L básico) |
-| 6 | Imagen OCR gratis (Tesseract) / Audio local (faster-whisper) | Pendiente |
-| 7 | Upload web responsive (PC + celular en navegador; no PWA) | **En curso / deploy** |
-| 8 | Auth (si aplica) | Futuro |
-| 9 | **Deploy Render free** (API + UI en un Web Service) | **Activo — este sprint** |
+| 0 | Constraint costos: $0 APIs IA; parsers + reglas | **Cerrado (decisión)** |
+| 1 | Pipeline E2E: ingerir → leer → clasificar CoA → conciliar → emitir | Objetivo producto |
+| 2 | Extracción local PDF/Excel (pdfplumber / openpyxl) | Parcial (PDF base) |
+| 3 | **Cola async + 1 archivo a la vez** (sobrevivir Render Free 512MB / OOM) | **Foco activo — Sprint 2026-08-26** |
+| 4 | CoA determinista: `account_rules` + limpieza regex + suspense + aprendizaje pasivo | Siguiente |
+| 5 | Controles auditor: cadenazo saldos bancarios; Owner's Draws → Patrimonio | Pendiente |
+| 6 | Reportes SQL (vistas Supabase): Balance cuadre + P&L + Cash flow (`cash_flow_type`) | Parcial (API local) |
+| 7 | Cierre anual: reset P&L → Retained Earnings | Pendiente |
+| 8 | UX cold-start + banner “despertando”; split-screen PDF (después) | Parcial (deploy live) |
+| 9 | Deploy Render free | **Live** (mejorar cola/RAM) |
+| 10 | Export Excel profesional (exceljs); tablas TanStack (después) | Backlog |
+| 11 | Imagen OCR / Audio local | Pendiente |
+| 12 | Auth | Futuro |
 
 ---
 
@@ -99,11 +102,12 @@ Una capacidad no está hecha hasta:
 
 ### Checklist formatos
 
-**PDF / Drive** — base OK; falta camino gratis + regresión.  
+**PDF / Drive** — base OK; falta camino gratis + regresión + **cola 1-a-1**.  
 **Excel / CSV** — pendiente parser real.  
 **Imagen** — pendiente (Tesseract recomendado).  
 **Audio** — pendiente (faster-whisper / Groq free tier).  
-**Reportes** — P&L parcial; Balance + Cash flow pendientes.
+**Reportes** — P&L parcial; Balance + Cash flow mínimos (API); falta cuadre SQL + export.  
+**Cold start / RAM** — deploy live; **falta cola 1-a-1 y UX despertar**.
 
 ---
 
@@ -127,8 +131,8 @@ Una capacidad no está hecha hasta:
 | OpenAI embeddings CoA | Matching por **keywords / aliases** en plan de cuentas; opcional **sentence-transformers** local | Sin API |
 | OpenAI Vision (foto) | **Tesseract OCR** (+ preprocess OpenCV si hace falta) | $0, corre en servidor |
 | Groq Whisper | **faster-whisper** local, o Groq **free tier** con límite | Preferir local si el host aguanta CPU |
-| Hosting | Vercel Free (UI) + Render Free / self-host | Cold start OK para interno |
-| DB | Supabase Free | Vigilar límites |
+| Hosting | **Render Free** (API+UI un servicio) + Supabase Free | Cold start + 512MB RAM — ver §7 y §11 |
+| DB | Supabase Free | Vigilar límites; **agregaciones en SQL/vistas** |
 
 **Honestidad:** OCR bancario “perfecto” con solo pdfplumber es más frágil que LlamaParse; se compensa con **fixtures por banco** (Chase, Wells, etc.) y reglas. Eso es lo que la empresa pide: **automatizar con código**, no alquilar un cerebro.
 
@@ -164,10 +168,11 @@ Ingesta → Transcripción/extracción → Clasificación CoA
 
 | Reporte | Estado actual | Objetivo |
 |---------|---------------|----------|
-| P&L | Parcial (totales) | Por periodo, emitible |
-| Balance general | No / mínimo | Activo = Pasivo + Patrimonio |
-| Cash flow | No | Operativo / inversión / financiamiento; mes y año |
-| Emisión por periodo | Cierre básico | PDF/Excel export profesional |
+| P&L | Parcial (totales + líneas por cuenta en UI) | Por periodo; no mezclar Owner's Draws |
+| Balance general | Mínimo / simplificado | Activo = Pasivo + Patrimonio; **inyectar utilidad neta del periodo en Patrimonio** |
+| Cash flow | Proxy operativo | Directo desde banco + columna `cash_flow_type` (O/I/F) |
+| Emisión por periodo | API + UI básica | Vista SQL + export Excel profesional (después) |
+| Cierre anual | No | Reset ingresos/gastos → Retained Earnings |
 
 ---
 
@@ -176,7 +181,9 @@ Ingesta → Transcripción/extracción → Clasificación CoA
 - Es una **web** en el navegador, no una web-app/PWA obligatoria.  
 - **Responsive** en móvil (Documentos, Transacciones, Conciliación, Reportes).  
 - Subida desde PC/celular vía navegador; Drive sigue siendo un canal más.  
-- No priorizar “instalar en el teléfono” hasta que la empresa lo pida.
+- Cold start: banner claro “el sistema se está despertando” (Render Free).  
+- No priorizar “instalar en el teléfono” hasta que la empresa lo pida.  
+- UX avanzada (split-screen PDF, TanStack Table, exceljs): **después** de cola + reglas CoA.
 
 ---
 
@@ -186,18 +193,15 @@ Ingesta → Transcripción/extracción → Clasificación CoA
 
 | Tema | Realidad Free |
 |------|----------------|
-| Un Web Service con `python run.py` (API + `frontend/dist`) | Sí |
+| Un Web Service con `python run.py` (API + `frontend/dist`) | Sí — **live** |
 | Bind `0.0.0.0:$PORT` | Obligatorio (ya soportado) |
-| Disco | **Efímero** — uploads temporales se pierden al reiniciar |
-| Inactividad | ~15 min sin tráfico → **sleep**; 1.er request lento (cold start) |
-| PDFs largos | Mejor en background (ya hay patrón) |
-| DB | Seguimos con **Supabase** (no hace falta Postgres de Render) |
+| RAM | **~512MB** — riesgo OOM si se procesan muchos PDFs en paralelo |
+| Disco | **Efímero** — preferir Supabase Storage / DB como fuente de verdad |
+| Inactividad | ~15 min → **sleep**; 1.er request lento (cold start) |
+| PDFs | **Uno a la vez** vía cola (`document_queue`) — obligatorio para Free |
+| DB | **Supabase** (no Postgres de Render) |
 
-**Conclusión:** demos internas OK en Free. Si no aceptan el “despertar”, hace falta plan de pago mínimo.
-
-Cuando toque el sprint: build frontend en el build command + `EXTRACTION_MODE=local` + secrets en Dashboard.
-
-Env: no exigir `OPENAI` / `LLAMAPARSE` con camino local activo.
+**Conclusión:** demos internas OK en Free **solo si** el procesamiento es secuencial + estados en DB. Si no aceptan el “despertar” o necesitan lotes pesados, plan de pago mínimo.
 
 ### 7.1 Config Render (repo)
 
@@ -207,12 +211,13 @@ Env: no exigir `OPENAI` / `LLAMAPARSE` con camino local activo.
 | `bin/render-build.sh` | `pip install -e .` + Node 20 + `frontend` build |
 | `runtime.txt` | Python 3.11.9 |
 
-**Start:** `python run.py` (respeta `$PORT`, bind `0.0.0.0`).  
-**Health:** `GET /health`  
-**Repo:** `https://github.com/juanSecuri/bookepping-cleanup-agent` (branch `main`).
+**URL live:** `https://ledgerai-6ate.onrender.com`  
+**Start:** `python run.py` · **Health:** `GET /health`  
+**Repo:** `https://github.com/juanSecuri/bookepping-cleanup-agent` (`main`).
 
-Secrets obligatorios en Dashboard / MCP: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`.  
-Drive opcional: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_OAUTH_REFRESH_TOKEN`.
+Secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`; Drive OAuth opcional.
+
+Env: `EXTRACTION_MODE=local` por defecto.
 
 ---
 
@@ -224,6 +229,7 @@ Drive opcional: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_
 | **2026-08-24** | **Empresa (vía Juan)** | **No pagar agente IA: herramientas gratis / automatizar con código.** Pipeline: leer→clasificar CoA→conciliar→Balance/P&L/Cashflow. | **Sprint free-pipeline** |
 | 2026-08-24 | Implementación | Default `EXTRACTION_MODE=local`: pdfplumber + reglas CoA; OpenAI/LlamaParse/Groq opcionales (`cloud`). Seed CoA sin embeddings. | free-pipeline T1 |
 | 2026-08-24 | Juan / producto | Web responsive (no PWA); deploy Render free + GitHub | **Deploy Render** |
+| **2026-08-26** | **Recomendación contable/arquitectura (vía Juan)** | Blindar Render Free (cola 1 archivo); CoA en Supabase (`account_rules`); cadenazo saldos; Owner's Draws; Balance con utilidad en Patrimonio; Cash flow O/I/F; UX cold-start. Split-screen / TanStack / exceljs = backlog. | **Sprint-2026-08-26-render-queue** |
 
 ---
 
@@ -234,19 +240,56 @@ Drive opcional: `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `GOOGLE_
 - Full verificado > feature a medias  
 - Un foco por sprint  
 - Observabilidad: origen + método de extracción  
+- **RAM plana en Free:** nunca procesar lotes pesados en el request HTTP  
+- **Agregaciones pesadas en SQL (Supabase)**, no en el proceso Python/JS cuando se pueda  
 
 ---
 
-## 10. Sprint activo sugerido (post 2026-08-24 empresa)
+## 10. Arquitectura aceptada (2026-08-26) — resumen ejecutivo
 
-**Nombre:** `Sprint-2026-08-24-free-pipeline`  
-**Objetivo medible:** Definir e iniciar el camino de extracción **$0** (sin LlamaParse/OpenAI obligatorios) y mapear gaps de Balance + Cash flow.
+### 10.1 Infra (Render Free)
 
-**Tarea 1 (foco ahora):** Documento de arquitectura “local extraction” + spike pdfplumber en 1 PDF Chase/Wells real (¿sale tabla usable?).  
-**Tarea 2:** Clasificador CoA por reglas (sin embeddings de pago).  
-**Tarea 3:** Modelo de reportes Balance + Cash flow (dominio + API stub).  
-**Tarea 4:** P&L emitible por periodo (mejorar lo existente).  
-**Luego:** Excel parser, Tesseract, whisper local, móvil, deploy.
+1. Upload/Drive → fila en cola (`pending`) en Supabase (no OCR síncrono en HTTP).  
+2. Worker/loop: **1 documento** → extraer → persistir → liberar memoria → `processed` / `failed`.  
+3. UI: estado de carga elegante en cold start (“despertando”).
+
+### 10.2 Clasificación determinista
+
+`texto limpio` → `ILIKE` / keywords en `account_rules` → código CoA.  
+Sin match → **Suspense / Gastos no categorizados**; al corregir el usuario → guardar keyword (aprendizaje pasivo).  
+Limpieza regex previa (quitar refs de factura, auth codes, fechas ruidosas).
+
+### 10.3 Controles contables
+
+- **Cadenazo:** saldo final mes N = saldo inicial mes N+1 (alerta + pausa si no).  
+- **Owner's Draws** → Patrimonio (no P&L).  
+- **Cierre anual:** ingresos/gastos → 0; neto a Retained Earnings.  
+- **Balance:** Activo = Pasivo + Patrimonio **incluyendo utilidad neta del ejercicio** como línea virtual.  
+- **Cash flow:** método directo + `cash_flow_type` (Operating / Investing / Financing).
+
+### 10.4 Backlog UX (no foco ahora)
+
+Split-screen PDF | TanStack Table | Export exceljs multipestaña.
+
+---
+
+## 11. Sprint activo (2026-08-26)
+
+**Nombre:** `Sprint-2026-08-26-render-queue`  
+**Objetivo medible:** Subidas/Drive **no matan** la instancia Free: cola en DB + procesamiento **secuencial de 1 archivo** + UI de cold start visible.
+
+| # | Tarea | DoD mínimo |
+|---|--------|------------|
+| **1 (foco)** | Tabla/cola `document_queue` (o reusar docs con estados `pending`/`processing`/`extracted`/`failed`) + worker que toma **1** job | 2 PDFs en cola; nunca 2 en paralelo; sin OOM en demo |
+| 2 | Banner cold-start en la web al primer hit lento | Copy claro ES/EN; no parece “roto” |
+| 3 | (Siguiente sprint) `account_rules` + suspense + aprendizaje | — |
+| 4 | (Luego) Cadenazo + Owner's Draws + vistas SQL Balance | — |
+
+**Estado Tarea 1:** implementado — `pending` en `documents`, worker secuencial (`DocumentQueueWorker`), poller en lifespan, banner cold-start, poll UI Documentos. Migración `006_document_queue.sql`.
+
+**Fuera de este sprint:** TanStack, exceljs, split-screen, Tesseract, auth.
+
+**Trade-off:** la recomendación completa es correcta; implementarla toda a la vez rompe el ritmo. Primero **sobrevivir Free**, luego **cerebro CoA**, luego **rigor auditor/reportes**.
 
 ---
 

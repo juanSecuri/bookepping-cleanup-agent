@@ -1,5 +1,6 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { LocaleProvider } from './i18n'
+import ColdStartBanner from './components/ColdStartBanner'
 import Landing from './pages/Landing'
 import Workspaces from './pages/Workspaces'
 import Layout from './pages/app/Layout'
@@ -13,6 +14,7 @@ import ChartOfAccounts from './pages/app/ChartOfAccounts'
 export default function App() {
   return (
     <LocaleProvider>
+      <ColdStartBanner />
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Landing />} />
