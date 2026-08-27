@@ -11,7 +11,6 @@ from src.infrastructure.repositories.monthly_ledger_repository import MonthlyLed
 from src.infrastructure.repositories.transaction_repository import TransactionRepository
 from src.use_cases.close_fiscal_year import CloseFiscalYearUseCase
 from src.use_cases.close_period import ClosePeriodUseCase
-from src.use_cases.generate_financial_statements import GenerateFinancialStatementsUseCase
 from src.use_cases.ingest_document import IngestDocumentUseCase
 from src.use_cases.process_statement import ProcessStatementUseCase
 from src.use_cases.reconcile_ledger import ReconcileLedgerUseCase
@@ -54,7 +53,6 @@ class AppContainer:
         self.close_fiscal_year = CloseFiscalYearUseCase(
             transaction_repo=self.transactions,
         )
-        self.statements = GenerateFinancialStatementsUseCase()
 
 
 @lru_cache(maxsize=1)

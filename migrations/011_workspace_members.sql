@@ -1,5 +1,4 @@
--- Mirror of supabase/migrations/20260827120000_workspace_members.sql
--- Prefer applying the supabase/ path; this copy keeps the legacy migrations/ folder in sync.
+-- Workspace membership for Supabase Auth (apply via Supabase SQL editor).
 
 CREATE TABLE IF NOT EXISTS workspace_members (
     user_id      UUID NOT NULL REFERENCES auth.users (id) ON DELETE CASCADE,
