@@ -1,6 +1,7 @@
 import { Link } from 'react-router-dom'
 import { ArrowRight } from 'lucide-react'
 import BrandMark from '../components/BrandMark'
+import HeroLogo from '../components/HeroLogo'
 import HeroParticles from '../components/HeroParticles'
 import { useTheme } from '../components/ThemeProvider'
 import { useLocale } from '../i18n'
@@ -57,26 +58,31 @@ export default function Landing() {
       </header>
 
       <main className="relative z-10 mx-auto flex min-h-[calc(100dvh-5.5rem)] max-w-6xl flex-col justify-center px-4 pb-12 pt-6 sm:px-6 sm:pb-16 sm:pt-8">
-        <section className="max-w-3xl animate-fade-up">
-          <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.28em] text-[var(--accent-cream-soft)] opacity-90">
-            THE PROFIT CATALYST
-          </p>
-          <h1
-            className="font-display text-[clamp(3rem,12vw,6rem)] font-semibold leading-[0.92] tracking-[0.02em] text-[var(--accent-cream-soft)]"
-            style={{ textShadow: '0 4px 40px rgba(0,0,0,0.35)' }}
-          >
-            LedgerAI
-          </h1>
-          <h2 className="mt-3 font-display text-2xl text-[var(--text-primary)] sm:text-3xl">
-            {t('brand.subtitle')}
-          </h2>
-          <p className="mt-5 max-w-xl text-base leading-relaxed text-[var(--text-muted)] sm:mt-6 sm:text-lg">
-            {t('landing.heroBody')}
-          </p>
-          <Link to="/workspaces" className="btn-primary mt-8 w-full px-6 py-3.5 sm:mt-10 sm:w-auto">
-            {t('landing.cta')}
-            <ArrowRight className="h-4 w-4" />
-          </Link>
+        <section className="grid items-center gap-10 lg:grid-cols-2 lg:gap-12">
+          <div className="animate-fade-up">
+            <p className="mb-3 text-[11px] font-medium uppercase tracking-[0.28em] text-[var(--accent-cream-soft)] opacity-90">
+              THE PROFIT CATALYST
+            </p>
+            <h1
+              className="font-display text-[clamp(3rem,12vw,6rem)] font-semibold leading-[0.92] tracking-[0.02em] text-[var(--accent-cream-soft)]"
+              style={{ textShadow: '0 4px 40px rgba(0,0,0,0.35)' }}
+            >
+              LedgerAI
+            </h1>
+            <h2 className="mt-3 font-display text-2xl text-[var(--text-primary)] sm:text-3xl">
+              {t('brand.subtitle')}
+            </h2>
+            <p className="mt-5 max-w-xl text-base leading-relaxed text-[var(--text-muted)] sm:mt-6 sm:text-lg">
+              {t('landing.heroBody')}
+            </p>
+            <Link to="/workspaces" className="btn-primary mt-8 w-full px-6 py-3.5 sm:mt-10 sm:w-auto">
+              {t('landing.cta')}
+              <ArrowRight className="h-4 w-4" />
+            </Link>
+          </div>
+          <div className="animate-fade-up-delay-2 flex justify-center lg:justify-end">
+            <HeroLogo />
+          </div>
         </section>
 
         <section className="mt-16 animate-fade-up-delay-2 border-t border-[var(--border)] pt-10 sm:mt-24 sm:pt-12">

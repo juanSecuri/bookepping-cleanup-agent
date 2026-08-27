@@ -57,6 +57,8 @@ export default function Dashboard() {
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(true)
+  const [years, setYears] = useState<string[]>([])
+  const [fiscalYear, setFiscalYear] = useState('')
   const [docSummary, setDocSummary] = useState({
     total: 0,
     processing: 0,
@@ -69,11 +71,40 @@ export default function Dashboard() {
   useEffect(() => {
     let cancelled = false
     ;(async () => {
+      try {
+        const avail = await api.availableYears(workspaceId)
+        if (cancelled) return
+        const ys = avail.years?.length
+          ? avail.years
+          : avail.verified_years?.length
+            ? avail.verified_years
+            : []
+        setYears(ys)
+        const def =
+          avail.default_year && ys.includes(String(avail.default_year))
+            ? String(avail.default_year)
+            : ys[0] || ''
+        setFiscalYear((prev) => prev || def)
+      } catch {
+        if (!cancelled) setYears([])
+      }
+    })()
+    return () => {
+      cancelled = true
+    }
+  }, [workspaceId])
+
+  useEffect(() => {
+    let cancelled = false
+    ;(async () => {
       setLoading(true)
       setError(null)
       try {
         const [data, ws, docs] = await Promise.all([
-          api.getWorkspaceStats(workspaceId),
+          api.getWorkspaceStats(
+            workspaceId,
+            fiscalYear ? { fiscal_year: fiscalYear } : undefined,
+          ),
           api.getWorkspace(workspaceId).catch(() => null),
           api.listDocuments({ workspace_id: workspaceId }).catch(() => []),
         ])
@@ -81,13 +112,21 @@ export default function Dashboard() {
         setStats(data)
         setWorkspace(ws)
         const list = Array.isArray(docs) ? docs : []
+        const yearDocs = fiscalYear
+          ? list.filter((d) => {
+              const hay = [d.folder_group, d.drive_path, d.filename, d.name]
+                .filter(Boolean)
+                .join('/')
+              return hay.includes(fiscalYear)
+            })
+          : list
         setDocSummary({
-          total: list.length,
-          processing: list.filter((d) => d.status === 'processing').length,
-          extracted: list.filter((d) => d.status === 'extracted').length,
-          failed: list.filter((d) => d.status === 'failed').length,
-          statements: list.filter((d) => d.pipeline_kind === 'statement').length,
-          invoices: list.filter((d) => d.pipeline_kind === 'invoice').length,
+          total: yearDocs.length,
+          processing: yearDocs.filter((d) => d.status === 'processing').length,
+          extracted: yearDocs.filter((d) => d.status === 'extracted').length,
+          failed: yearDocs.filter((d) => d.status === 'failed').length,
+          statements: yearDocs.filter((d) => d.pipeline_kind === 'statement').length,
+          invoices: yearDocs.filter((d) => d.pipeline_kind === 'invoice').length,
         })
       } catch (e) {
         if (!cancelled) {
@@ -101,13 +140,21 @@ export default function Dashboard() {
     return () => {
       cancelled = true
     }
-  }, [workspaceId, t])
+  }, [workspaceId, fiscalYear, t])
 
   const income = Number(stats?.totalIncome ?? 0)
   const expenses = Number(stats?.totalExpenses ?? 0)
   const net = Number(stats?.netIncome ?? income - expenses)
   const pending = Number(stats?.pending_transactions ?? 0)
   const verified = Number(stats?.verified_transactions ?? 0)
+  const pendingIncome = Number(stats?.pendingIncome ?? 0)
+  const pendingExpenses = Number(stats?.pendingExpenses ?? 0)
+  const extractedDocs = Number(stats?.extractedDocs ?? docSummary.extracted ?? 0)
+  const showEmptyYearHint =
+    Boolean(fiscalYear) &&
+    income === 0 &&
+    expenses === 0 &&
+    (pending > 0 || extractedDocs > 0)
 
   const kpis = [
     {
@@ -259,13 +306,30 @@ export default function Dashboard() {
 
   return (
     <div>
-      <div className="mb-8 animate-fade-up">
-        <h1 className="page-title">{t('dashboard.title')}</h1>
-        <p className="mt-1.5 text-muted-foreground">
-          {workspace?.name
-            ? `${workspace.name} · ${t('dashboard.subtitle')}`
-            : t('dashboard.subtitle')}
-        </p>
+      <div className="mb-8 animate-fade-up flex flex-wrap items-end justify-between gap-4">
+        <div>
+          <h1 className="page-title">{t('dashboard.title')}</h1>
+          <p className="mt-1.5 text-muted-foreground">
+            {workspace?.name
+              ? `${workspace.name} · ${t('dashboard.subtitle')}`
+              : t('dashboard.subtitle')}
+          </p>
+        </div>
+        <label className="flex flex-col gap-1 text-xs font-medium text-muted-foreground">
+          {t('dashboard.year')}
+          <select
+            className="min-w-[7rem] rounded-md border border-border bg-card px-3 py-2 text-sm font-semibold text-foreground"
+            value={fiscalYear}
+            onChange={(e) => setFiscalYear(e.target.value)}
+          >
+            <option value="">{t('dashboard.yearAll')}</option>
+            {years.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
 
       {loading && <p className="text-muted-foreground">{t('common.loading')}</p>}
@@ -273,6 +337,30 @@ export default function Dashboard() {
         <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
           {error}
         </div>
+      )}
+
+      {showEmptyYearHint && (
+        <div className="mb-4 rounded-lg border border-amber-500/30 bg-amber-500/10 px-4 py-3 text-sm text-foreground">
+          {t('dashboard.emptyYearHint')
+            .replace('{year}', fiscalYear)
+            .replace('{extracted}', String(extractedDocs))
+            .replace('{pending}', String(pending))}{' '}
+          <Link className="font-semibold underline-offset-2 hover:underline" to="transactions">
+            {t('nav.transactions')}
+          </Link>
+          {' · '}
+          <Link className="font-semibold underline-offset-2 hover:underline" to="reports">
+            {t('nav.reports')}
+          </Link>
+        </div>
+      )}
+
+      {(pendingIncome > 0 || pendingExpenses > 0) && (
+        <p className="mb-4 text-xs text-muted-foreground">
+          {t('dashboard.pendingMoneyHint')
+            .replace('{income}', formatMoney(pendingIncome, locale))
+            .replace('{expenses}', formatMoney(pendingExpenses, locale))}
+        </p>
       )}
 
       <section className="animate-fade-up-delay-1 soft-shadow mb-6 rounded-xl border border-border bg-card p-5 sm:p-6">
@@ -317,10 +405,7 @@ export default function Dashboard() {
             )
           })}
         </div>
-        <p className="mt-4 text-xs text-muted-foreground">
-          Estado de cuenta → Conciliación. Factura → Transacciones (revisar / aprobar). Luego emitir
-          estados en Reportes.
-        </p>
+        <p className="mt-4 text-xs text-muted-foreground">{t('dashboard.pipelineHint')}</p>
       </section>
 
       <div className="mb-6 grid gap-4 sm:grid-cols-3">
@@ -337,71 +422,65 @@ export default function Dashboard() {
               <div className={cn('mb-3 flex h-9 w-9 items-center justify-center rounded-lg', kpi.bg, kpi.tone)}>
                 <Icon className="h-4 w-4" />
               </div>
-              <p className="text-2xl font-semibold tracking-tight tabular-nums">{kpi.value}</p>
-              <p className="mt-1 text-sm text-muted-foreground">{kpi.label}</p>
+              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                {kpi.label}
+                {fiscalYear ? ` · ${fiscalYear}` : ''}
+              </p>
+              <p className="mt-1 font-display text-2xl font-semibold tracking-tight">{kpi.value}</p>
             </div>
           )
         })}
       </div>
 
-      <div className="mb-8 grid gap-4 sm:grid-cols-2 xl:grid-cols-5">
-        {kpis.map(({ label, value, icon: Icon, to }, i) => (
-          <Link
-            key={label}
-            to={`/app/${workspaceId}/${to}`}
-            className={cn(
-              'soft-shadow group rounded-xl border border-border bg-card p-4 transition hover:-translate-y-0.5 hover:border-primary/40 hover:shadow-[var(--shadow-lift)]',
-              delayClass[Math.min(i, 3)],
-            )}
-          >
-            <div className="mb-3 flex h-9 w-9 items-center justify-center rounded-lg bg-secondary text-primary transition group-hover:bg-primary/10">
-              <Icon className="h-4 w-4" />
-            </div>
-            <p className="text-2xl font-semibold tabular-nums">{value}</p>
-            <p className="text-sm text-muted-foreground">{label}</p>
-          </Link>
-        ))}
+      <div className="mb-6 grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
+        {kpis.map((kpi, i) => {
+          const Icon = kpi.icon
+          return (
+            <Link
+              key={kpi.label}
+              to={kpi.to}
+              className={cn(
+                'soft-shadow rounded-xl border border-border bg-card p-4 transition hover:border-primary/40',
+                delayClass[i % 4] ?? 'animate-fade-up',
+              )}
+            >
+              <div className="mb-2 flex items-center gap-2 text-muted-foreground">
+                <Icon className="h-4 w-4" />
+                <span className="text-xs font-medium uppercase tracking-wide">{kpi.label}</span>
+              </div>
+              <p className="font-display text-2xl font-semibold">{kpi.value}</p>
+            </Link>
+          )
+        })}
       </div>
 
-      <div className="mb-8 grid gap-4 lg:grid-cols-5">
-        <section className="animate-fade-up-delay-2 soft-shadow rounded-xl border border-border bg-card p-5 sm:p-6 lg:col-span-3">
-          <h2 className="mb-1 text-lg font-semibold tracking-tight">{t('dashboard.chartTitle')}</h2>
-          <p className="mb-4 text-sm text-foreground/75">
-            {t('dashboard.chartSubtitle')}
-          </p>
-          <div className="h-64 w-full">
+      {showClearHint && (
+        <p className="mb-4 text-sm text-success-foreground">{t('dashboard.clearHint')}</p>
+      )}
+
+      {activeStage >= 0 && (
+        <p className="mb-6 text-sm text-muted-foreground">
+          {t('dashboard.focusHint')}{' '}
+          <Link className="font-medium text-primary underline-offset-2 hover:underline" to={STAGE_ROUTES[activeStage]}>
+            {t(stages[activeStage].key)}
+          </Link>
+        </p>
+      )}
+
+      <div className="grid gap-6 lg:grid-cols-2">
+        <div className="soft-shadow animate-fade-up-delay-2 rounded-xl border border-border bg-card p-5">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            {t('dashboard.chartIncomeExpense')}
+          </h2>
+          <div className="h-56">
             <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={barData}
-                layout="vertical"
-                margin={{ top: 8, right: 16, left: 8, bottom: 0 }}
-              >
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
-                <XAxis
-                  type="number"
-                  tick={{ fontSize: 12, fill: 'var(--chart-tick)' }}
-                  stroke="var(--chart-tick)"
-                />
-                <YAxis
-                  type="category"
-                  dataKey="name"
-                  width={96}
-                  tick={{ fontSize: 12, fill: 'var(--chart-tick)', fontWeight: 600 }}
-                  stroke="var(--chart-tick)"
-                />
-                <Tooltip
-                  formatter={(value) => formatMoney(Number(value ?? 0), locale)}
-                  labelStyle={{ color: 'var(--chart-tooltip-fg)', fontWeight: 600 }}
-                  itemStyle={{ color: 'var(--chart-tooltip-fg)' }}
-                  contentStyle={{
-                    borderRadius: 8,
-                    border: '1px solid var(--chart-tooltip-border)',
-                    background: 'var(--chart-tooltip-bg)',
-                    color: 'var(--chart-tooltip-fg)',
-                    boxShadow: 'var(--shadow-lift)',
-                  }}
-                />
-                <Bar dataKey="valor" radius={[0, 6, 6, 0]} maxBarSize={28}>
+              <BarChart data={barData}>
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                <XAxis dataKey="name" tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} />
+                <YAxis tick={{ fill: 'var(--muted-foreground)', fontSize: 12 }} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="valor" name={t('dashboard.amount')} radius={[4, 4, 0, 0]}>
                   {barData.map((entry) => (
                     <Cell key={entry.name} fill={entry.fill} />
                   ))}
@@ -409,87 +488,32 @@ export default function Dashboard() {
               </BarChart>
             </ResponsiveContainer>
           </div>
-        </section>
-
-        <section className="animate-fade-up-delay-3 soft-shadow rounded-xl border border-border bg-card p-5 sm:p-6 lg:col-span-2">
-          <h2 className="mb-1 text-lg font-semibold tracking-tight">Composición</h2>
-          <p className="mb-4 text-sm text-muted-foreground">Peso ingresos vs gastos.</p>
-          <div className="h-64 w-full">
+        </div>
+        <div className="soft-shadow animate-fade-up-delay-3 rounded-xl border border-border bg-card p-5">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            {t('dashboard.chartMix')}
+          </h2>
+          <div className="h-56">
             {pieData.length === 0 ? (
               <p className="flex h-full items-center justify-center text-sm text-muted-foreground">
-                Sin montos verificados aún
+                {t('dashboard.noVerifiedMoney')}
               </p>
             ) : (
               <ResponsiveContainer width="100%" height="100%">
                 <PieChart>
-                  <Pie
-                    data={pieData}
-                    dataKey="value"
-                    nameKey="name"
-                    innerRadius={58}
-                    outerRadius={88}
-                    paddingAngle={3}
-                  >
+                  <Pie data={pieData} dataKey="value" nameKey="name" innerRadius={50} outerRadius={80}>
                     {pieData.map((_, i) => (
                       <Cell key={i} fill={PIE_COLORS[i % PIE_COLORS.length]} />
                     ))}
                   </Pie>
-                  <Tooltip formatter={(value) => formatMoney(Number(value ?? 0), locale)} />
+                  <Tooltip />
                   <Legend />
                 </PieChart>
               </ResponsiveContainer>
             )}
           </div>
-        </section>
+        </div>
       </div>
-
-      <section className="animate-fade-up-delay-3">
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-2">
-          <h2 className="text-lg font-semibold tracking-tight">{t('dashboard.pipeline')}</h2>
-          {showClearHint && (
-            <p className="text-xs text-muted-foreground">{t('dashboard.stage.clearHint')}</p>
-          )}
-        </div>
-        <div className="grid gap-3 md:grid-cols-5">
-          {stages.map((stage, i) => {
-            const isActive = i === (activeStage >= 0 ? activeStage : 0)
-            const clearGood = Boolean(stage.clearIsGood) && stage.count === 0 && verified > 0
-            const to = `/app/${workspaceId}/${STAGE_ROUTES[i]}`
-            return (
-              <Link
-                key={stage.key}
-                to={to}
-                title={t('dashboard.stage.open')}
-                className={cn(
-                  'soft-shadow relative block rounded-xl border bg-card p-4 transition hover:-translate-y-0.5 hover:border-primary/40',
-                  isActive
-                    ? 'border-primary/50 pipeline-pulse'
-                    : 'border-border hover:border-primary/25',
-                )}
-              >
-                <div className="mb-2 flex items-center justify-between">
-                  <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                    {String(i + 1).padStart(2, '0')}
-                  </p>
-                  {isActive && <span className="h-1.5 w-1.5 rounded-full bg-primary" />}
-                </div>
-                <p className="font-medium">{t(stage.key)}</p>
-                <p
-                  className={cn(
-                    'mt-3 text-2xl font-semibold tabular-nums',
-                    clearGood ? 'text-success-foreground' : isActive ? 'text-primary' : 'text-foreground',
-                  )}
-                >
-                  {stage.count}
-                </p>
-                {clearGood && (
-                  <p className="mt-1 text-[11px] text-success-foreground/80">{t('dashboard.stage.clear')}</p>
-                )}
-              </Link>
-            )
-          })}
-        </div>
-      </section>
     </div>
   )
 }

@@ -120,6 +120,9 @@ export default function ChartOfAccounts() {
       <div className="mb-6 animate-fade-up">
         <h1 className="page-title">{t('coa.title')}</h1>
         <p className="mt-1.5 text-muted-foreground">{t('coa.subtitle')}</p>
+        <p className="mt-3 rounded-lg border border-border bg-secondary/40 px-3 py-2 text-xs text-foreground/80">
+          {t('coa.liveBanner')}
+        </p>
       </div>
 
       {error && (

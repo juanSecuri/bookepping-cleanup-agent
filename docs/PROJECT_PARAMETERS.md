@@ -47,7 +47,7 @@ El agente debe entonces:
 | 9 | Deploy Render free | **DONE** (Docker + Tesseract live) |
 | 10 | Export Excel + tablas TanStack | **DONE** |
 | 11 | Imagen OCR / Audio local | **DONE** |
-| 12 | Auth | **Futuro** (fuera de alcance $0 MVP — no implementar) |
+| 12 | Auth | **IN PROGRESS** (Supabase JWT + workspace_members + login gate — ver `docs/AUTH.md`) |
 | — | Harden MVP (`harden-mvp-2026-08-26`) | **DONE** (cerrado 2026-08-26 EOD) |
 | **13a** | **Reportes detallados: fix P&L, año/mes, tablas columnar, CF, Excel 4 tabs** | **ACTIVO** |
 | **13b** | **Marca TPC/LedgerAI + paleta crema/verde + dark/light + landing** | Siguiente |
@@ -113,7 +113,7 @@ Una capacidad no está hecha hasta:
 **Reportes** — OK (P&L + Balance + CF O/I/F + vistas SQL + export xlsx).  
 **Cold start / RAM** — OK (banner + cola 1-a-1).  
 **Docker / Render** — OK (live `ledgerai-0wyy`; health path `/health` — ver `RENDER_DOCKER.md`).  
-**Auth** — **futuro** (no bloquea MVP $0).  
+**Auth** — **IN PROGRESS** (JWT + membership scaffold; ver `docs/AUTH.md`).  
 **Email** — **futuro** (canal §2 baja prioridad).
 
 ---
@@ -138,7 +138,7 @@ Una capacidad no está hecha hasta:
 | OpenAI embeddings CoA | Matching por **keywords / aliases** en plan de cuentas; opcional **sentence-transformers** local | Sin API |
 | OpenAI Vision (foto) | **Tesseract OCR** (+ preprocess OpenCV si hace falta) | $0, corre en servidor |
 | Groq Whisper | **faster-whisper** local, o Groq **free tier** con límite | Preferir local si el host aguanta CPU |
-| Hosting | **Render Free** (API+UI un servicio) + Supabase Free | Cold start + 512MB RAM — ver §7 y §11 |
+| Hosting | **Render Starter** (API+UI un servicio + disco uploads) + Supabase Free | Ver §7; Free ephemeral reemplazado |
 | DB | Supabase Free | Vigilar límites; **agregaciones en SQL/vistas** |
 
 **Honestidad:** OCR bancario “perfecto” con solo pdfplumber es más frágil que LlamaParse; se compensa con **fixtures por banco** (Chase, Wells, etc.) y reglas. Eso es lo que la empresa pide: **automatizar con código**, no alquilar un cerebro.
@@ -158,6 +158,7 @@ Una capacidad no está hecha hasta:
 | Fecha | Vendor | Plan | USD | Motivo | Aprobado |
 |-------|--------|------|-----|--------|----------|
 | 2026-08-24 | — | Política $0 IA | 0 | Empresa no quiere pagar agente IA | Empresa |
+| 2026-08-27 | Render | Starter | (plan Juan) | Sin sleep + disco uploads | Juan |
 
 ### 4.4 Planes del producto hacia clientes (TBD empresa)
 
@@ -194,38 +195,41 @@ Ingesta → Transcripción/extracción → Clasificación CoA
 
 ---
 
-## 7. Despliegue en Render (gratis)
+## 7. Despliegue en Render (Starter)
 
-**Sí se puede desplegar en Render free**, con matices:
+**Producción actual: Render Starter** (ya no Free). El filesystem Free era **efímero**; Starter usa **disco persistente** para uploads.
 
-| Tema | Realidad Free |
-|------|----------------|
-| Un Web Service con `python run.py` (API + `frontend/dist`) | Sí — **live** |
-| Bind `0.0.0.0:$PORT` | Obligatorio (ya soportado) |
-| RAM | **~512MB** — riesgo OOM si se procesan muchos PDFs en paralelo |
-| Disco | **Efímero** — preferir Supabase Storage / DB como fuente de verdad |
-| Inactividad | ~15 min → **sleep**; 1.er request lento (cold start) |
-| PDFs | **Uno a la vez** vía cola (`document_queue`) — obligatorio para Free |
-| DB | **Supabase** (no Postgres de Render) |
+| Tema | Free (histórico) | Starter (actual) |
+|------|------------------|------------------|
+| Un Web Service Docker (API + `frontend/dist`) | Sí | Sí — **live** |
+| Bind `0.0.0.0:$PORT` | Obligatorio | Obligatorio |
+| RAM | ~512MB | Mayor (plan Starter) |
+| Disco | Efímero | Persistente `/var/data` → `LEDGERAI_UPLOAD_DIR` |
+| Inactividad | Sleep ~15 min | Sin sleep Free |
+| PDFs | 1 a la vez (cola en mismo proceso) | Igual — cola en web lifespan |
+| DB | Supabase | Supabase |
 
-**Conclusión:** demos internas OK en Free **solo si** el procesamiento es secuencial + estados en DB. Si no aceptan el “despertar” o necesitan lotes pesados, plan de pago mínimo.
+Cola = mismo proceso web (no Background Worker: el disco no se comparte entre servicios). Supabase Storage = backlog multi-instancia.
+
+Detalle operativo: `docs/RENDER_DOCKER.md`.
 
 ### 7.1 Config Render (repo)
 
 | Archivo | Uso |
 |---------|-----|
-| `render.yaml` | Blueprint free Web Service `ledgerai` |
-| `bin/render-build.sh` | `pip install -e .` + Node 20 + `frontend` build |
-| `runtime.txt` | Python 3.11.9 |
+| `render.yaml` | Blueprint **starter** + disk `/var/data` + `LEDGERAI_UPLOAD_DIR` + health `/health` |
+| `Dockerfile` | Tesseract + ffmpeg + `python run.py` |
+| `docs/RENDER_DOCKER.md` | Checklist Dashboard (disk, env, health) |
 
 **URL live:** `https://ledgerai-0wyy.onrender.com`  
 **Start:** `python run.py` (Docker) · **Health:** `GET /health`  
 **Repo:** `https://github.com/juanSecuri/bookepping-cleanup-agent` (`main`).  
-**Service:** `srv-da7j2pdg1s2s738243cg` — si Health Check Path está vacío en Dashboard, Juan debe setear **Settings → Health Checks → `/health`** (Blueprint ya lo declara; MCP no puede editarlo en servicio existente).
+**Service:** `srv-da7j2pdg1s2s738243cg` — adjuntar disco y health en Dashboard si aún no están (MCP no adjunta disk a servicio existente).
 
-Secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`; Drive OAuth opcional.
+Secrets: `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`; Drive OAuth opcional.  
+Auth (cuando se active): `AUTH_ENABLED=true`, `SUPABASE_JWT_SECRET`, opcional `ALLOWED_ORIGINS`. Frontend build: `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY`. Ver `docs/AUTH.md`.
 
-Env: `EXTRACTION_MODE=local` por defecto.
+Env: `EXTRACTION_MODE=local`, `LEDGERAI_UPLOAD_DIR=/var/data/ledgerai_uploads`.
 
 ---
 
@@ -246,6 +250,7 @@ Env: `EXTRACTION_MODE=local` por defecto.
 | **2026-08-26** | **Harden MVP** | Auto `statement_month` desde PDF; preview archivo en Docs; params/checklist; Auth sigue futuro | **harden-mvp-2026-08-26** |
 | **2026-08-26** | **Cierre de día (Juan)** | Parar desarrollo; MVP $0 cerrado para hoy. Próximo: Auth u otro backlog solo con “Tarea de la fecha…” | **EOD** |
 | **2026-08-27** | **Empresa (vía Juan)** | Reportes detallados (P&L columnar, Balance expandible, CF O/I/F); selector año/mes; Excel 4 tabs; rebrand TPC/LedgerAI (cero YASNAY); Drive anidado banco→cuenta→año. P&L no cargaba (periodo default = mes actual sin datos). Skip: counters/KPI animados, weekly columns. | **13a → 13b → 13c** |
+| **2026-08-27** | **Empresa (vía Juan)** | Render Starter comprado; **Auth NOW** — aceptar e implementar scaffold Supabase JWT + membership | **Auth IN PROGRESS** |
 
 ---
 
@@ -263,11 +268,12 @@ Env: `EXTRACTION_MODE=local` por defecto.
 
 ## 10. Arquitectura aceptada (2026-08-26) — resumen ejecutivo
 
-### 10.1 Infra (Render Free)
+### 10.1 Infra (Render Starter + disco)
 
 1. Upload/Drive → fila en cola (`pending`) en Supabase (no OCR síncrono en HTTP).  
-2. Worker/loop: **1 documento** → extraer → persistir → liberar memoria → `processed` / `failed`.  
-3. UI: estado de carga elegante en cold start (“despertando”).
+2. Worker/loop **en el mismo web process**: **1 documento** → extraer → persistir → liberar memoria → `processed` / `failed`.  
+3. Bytes en disco bajo `LEDGERAI_UPLOAD_DIR` (persistente en Starter); Supabase Storage = futuro.  
+4. UI: estado de carga elegante si el host está frío (menos relevante sin Free sleep).
 
 ### 10.2 Clasificación determinista
 

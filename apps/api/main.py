@@ -3,8 +3,8 @@ LedgerAI FastAPI — REST API under /api + SPA static serve.
 """
 from __future__ import annotations
 
+import base64
 import mimetypes
-import tempfile
 import uuid
 from contextlib import asynccontextmanager
 from datetime import date
@@ -12,12 +12,13 @@ from decimal import Decimal
 from pathlib import Path
 from tempfile import NamedTemporaryFile
 
-from fastapi import APIRouter, BackgroundTasks, FastAPI, File, Form, HTTPException, UploadFile
+from fastapi import APIRouter, BackgroundTasks, Depends, FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from src.api.auth import AuthUser, assert_workspace_access, get_current_user
 from src.config import get_settings
 from src.container import get_container
 from src.domain.exceptions import BookkeepingError
@@ -30,6 +31,7 @@ from src.domain.models.enums import (
 )
 from src.domain.models.transaction import ExtractionMetadata, FinancialTransaction
 from src.infrastructure.classification.cash_flow import infer_cash_flow_type
+from src.infrastructure.queue.document_worker import get_document_worker, upload_dir
 from src.infrastructure.reconciliation.statement_chain import (
     StatementPeriodRepository,
     acknowledge_chain,
@@ -43,8 +45,6 @@ from src.use_cases.close_period import PeriodAlreadyClosedError
 from src.use_cases.emit_period_reports import EmitPeriodReportsUseCase
 
 _FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
-_UPLOAD_DIR = Path(tempfile.gettempdir()) / "ledgerai_uploads"
-_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 
 @asynccontextmanager
@@ -55,8 +55,8 @@ async def lifespan(_app: FastAPI):
         raise RuntimeError(
             "SUPABASE_SERVICE_ROLE_KEY missing. Set the service_role/secret key in .env"
         )
-    from src.infrastructure.queue.document_worker import get_document_worker
-
+    # Ensure upload dir exists early (persistent disk on Render Starter).
+    upload_dir()
     worker = get_document_worker()
     await worker.start_polling(interval_sec=8.0)
     yield
@@ -69,11 +69,13 @@ app = FastAPI(
     description="Bookkeeping Clean-up Agent — professional API",
     lifespan=lifespan,
 )
+_cors_origins = get_settings().cors_origins
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_methods=["*"],
     allow_headers=["*"],
+    # allow_credentials incompatible with origins=["*"]; keep open CORS for now via ALLOWED_ORIGINS.
 )
 
 api = APIRouter(prefix="/api")
@@ -140,8 +142,6 @@ def _tx_json(tx: FinancialTransaction) -> dict:
 
 @app.get("/health")
 async def health() -> dict:
-    from src.infrastructure.queue.document_worker import get_document_worker
-
     try:
         queue = await get_document_worker().queue_stats()
     except Exception:
@@ -210,26 +210,108 @@ async def delete_workspace(workspace_id: str) -> dict:
 
 
 @api.get("/workspaces/{workspace_id}/stats")
-async def workspace_stats(workspace_id: str) -> dict:
+async def workspace_stats(
+    workspace_id: str,
+    fiscal_year: str | None = None,
+) -> dict:
+    """Operational KPIs. Optional fiscal_year filters money/tx counts (YYYY).
+
+    Income/expenses always use VERIFIED(+CLOSED) only — EXTRACTED docs do not
+    move the P&L until txs are approved in Transacciones.
+    """
     tid = uuid.UUID(workspace_id)
+    fy = (fiscal_year or "").strip()
+    if fy and not (fy.isdigit() and len(fy) == 4):
+        raise HTTPException(400, "fiscal_year must be YYYY")
+
     c = get_container()
     docs = DocumentRepository()
-    txns = await c.transactions.list_by_tenant(tid, limit=5000)
-    movements = await c.movements.list_by_tenant(tid, limit=5000)
+    txns = await c.transactions.list_by_tenant(tid, limit=50000)
+    movements = await c.movements.list_by_tenant(tid, limit=50000)
     ledgers = await c.ledgers.list_by_tenant(tid, limit=120)
-    all_docs = await docs.list_by_workspace(tid, limit=500)
+    all_docs = await docs.list_by_workspace(tid, limit=2000)
 
-    pending = sum(1 for t in txns if t.status == TransactionStatus.PENDING_REVIEW)
-    verified = sum(1 for t in txns if t.status == TransactionStatus.VERIFIED)
-    rejected = sum(1 for t in txns if t.status == TransactionStatus.REJECTED)
-    unmatched = sum(1 for m in movements if m.status == TransactionStatus.PENDING_REVIEW)
-    open_periods = sum(1 for l in ledgers if l.status == "open")
-    income = sum((t.amount for t in txns if t.status == TransactionStatus.VERIFIED and t.transaction_type.value == "income"), Decimal("0"))
-    expenses = sum((t.amount for t in txns if t.status == TransactionStatus.VERIFIED and t.transaction_type.value == "expense"), Decimal("0"))
-    processing = sum(1 for d in all_docs if d.status == DocumentStatus.PROCESSING)
+    def _in_year(d) -> bool:
+        if not fy:
+            return True
+        return bool(d) and str(d)[:4] == fy
+
+    def _doc_year(d) -> bool:
+        if not fy:
+            return True
+        if d.document_date and str(d.document_date)[:4] == fy:
+            return True
+        for text in (d.folder_group, d.drive_path, d.file_name):
+            if not text:
+                continue
+            for part in str(text).replace("\\", "/").split("/"):
+                if part == fy:
+                    return True
+        return False
+
+    year_txns = [t for t in txns if _in_year(t.transaction_date)]
+    year_movs = [
+        m
+        for m in movements
+        if _in_year(getattr(m, "movement_date", None) or getattr(m, "date", None))
+    ]
+    year_docs = [d for d in all_docs if _doc_year(d)]
+
+    pending = sum(1 for t in year_txns if t.status == TransactionStatus.PENDING_REVIEW)
+    verified = sum(
+        1
+        for t in year_txns
+        if t.status in (TransactionStatus.VERIFIED, TransactionStatus.CLOSED)
+    )
+    rejected = sum(1 for t in year_txns if t.status == TransactionStatus.REJECTED)
+    unmatched = sum(1 for m in year_movs if m.status == TransactionStatus.PENDING_REVIEW)
+    open_periods = sum(
+        1
+        for l in ledgers
+        if l.status == "open" and (not fy or str(l.fiscal_period)[:4] == fy)
+    )
+    income = sum(
+        (
+            t.amount
+            for t in year_txns
+            if t.status in (TransactionStatus.VERIFIED, TransactionStatus.CLOSED)
+            and t.transaction_type.value == "income"
+        ),
+        Decimal("0"),
+    )
+    expenses = sum(
+        (
+            t.amount
+            for t in year_txns
+            if t.status in (TransactionStatus.VERIFIED, TransactionStatus.CLOSED)
+            and t.transaction_type.value == "expense"
+        ),
+        Decimal("0"),
+    )
+    pending_income = sum(
+        (
+            t.amount
+            for t in year_txns
+            if t.status == TransactionStatus.PENDING_REVIEW
+            and t.transaction_type.value == "income"
+        ),
+        Decimal("0"),
+    )
+    pending_expenses = sum(
+        (
+            t.amount
+            for t in year_txns
+            if t.status == TransactionStatus.PENDING_REVIEW
+            and t.transaction_type.value == "expense"
+        ),
+        Decimal("0"),
+    )
+    processing = sum(1 for d in year_docs if d.status == DocumentStatus.PROCESSING)
+    extracted = sum(1 for d in year_docs if d.status == DocumentStatus.EXTRACTED)
 
     return {
-        "documents": len(all_docs),
+        "documents": len(year_docs),
+        "extractedDocs": extracted,
         "processingDocs": processing,
         "pending_transactions": pending,
         "pendingReview": pending,
@@ -237,11 +319,19 @@ async def workspace_stats(workspace_id: str) -> dict:
         "verifiedTransactions": verified,
         "rejected_transactions": rejected,
         "unmatched_movements": unmatched,
+        "movements": len(year_movs),
         "periods_open": open_periods,
         "openPeriods": open_periods,
         "totalIncome": float(income),
         "totalExpenses": float(expenses),
         "netIncome": float(income - expenses),
+        "pendingIncome": float(pending_income),
+        "pendingExpenses": float(pending_expenses),
+        "fiscal_year": fy or None,
+        "note": (
+            "Montos del panel = txs verificadas. Docs EXTRACTED / pendientes "
+            "no cuentan hasta aprobar en Transacciones."
+        ),
     }
 
 
@@ -289,18 +379,23 @@ async def list_documents(workspace_id: str | None = None, tenant_id: str | None 
 
 
 @api.get("/documents/{document_id}/file")
-async def download_document_file(document_id: str, workspace_id: str | None = None):
-    """Serve local ephemeral file if still on disk (Render Free — may 404 after restart)."""
+async def download_document_file(
+    document_id: str,
+    workspace_id: str,
+    user: AuthUser = Depends(get_current_user),
+):
+    """Serve local upload file if still on disk (persistent when LEDGERAI_UPLOAD_DIR is set)."""
+    assert_workspace_access(user, workspace_id)
     doc = await DocumentRepository().get_by_id(uuid.UUID(document_id))
     if not doc:
         raise HTTPException(404, "Document not found")
-    if workspace_id and str(doc.workspace_id) != workspace_id:
+    if str(doc.workspace_id) != workspace_id:
         raise HTTPException(404, "Document not found")
     path = Path(doc.local_path) if doc.local_path else None
     if not path or not path.exists():
         raise HTTPException(
             410,
-            "Archivo local ya no está en disco (filesystem efímero). "
+            "Archivo no disponible en disco. "
             "Reimporta desde Drive o vuelve a subir.",
         )
     media, _ = mimetypes.guess_type(doc.file_name or path.name)
@@ -319,9 +414,7 @@ async def upload_document(
     workspace_id: str = Form(...),
     tenant_id: str | None = Form(default=None),
 ) -> dict:
-    """Enqueue upload for sequential processing (Render Free — 1 file at a time)."""
-    from src.infrastructure.queue.document_worker import get_document_worker
-
+    """Enqueue upload for sequential processing (1 file at a time)."""
     wid = uuid.UUID(workspace_id or tenant_id or "")
     filename = file.filename or "upload.bin"
     content = await file.read()
@@ -348,14 +441,12 @@ async def upload_document(
         "filename": doc.file_name,
         "name": doc.file_name,
         "queued": True,
-        "message": "Archivo en cola. Se procesa de a uno para no saturar Render Free.",
+        "message": "Archivo en cola. Se procesa de a uno para no saturar el host.",
     }
 
 
 @api.get("/queue/status")
 async def queue_status() -> dict:
-    from src.infrastructure.queue.document_worker import get_document_worker
-
     stats = await get_document_worker().queue_stats()
     return {"status": "ok", "queue": stats, "mode": "sequential_one_at_a_time"}
 
@@ -439,13 +530,18 @@ class BulkBody(BaseModel):
 
 
 @api.post("/transactions/{transaction_id}/approve")
-async def approve_transaction(transaction_id: str, body: ApproveBody = ApproveBody()) -> dict:
+async def approve_transaction(
+    transaction_id: str,
+    body: ApproveBody = ApproveBody(),
+    user: AuthUser = Depends(get_current_user),
+) -> dict:
     from src.infrastructure.classification.rule_coa import SUSPENSE_NAME
 
     c = get_container()
     tx = await c.transactions.get_by_id(uuid.UUID(transaction_id))
     if not tx:
         raise HTTPException(404, "Transaction not found")
+    assert_workspace_access(user, tx.tenant_id)
     code = body.account_code or tx.ai_suggested_account_code or tx.chart_of_accounts_code or "9999"
     name = body.account_name or tx.ai_suggested_account_name or tx.chart_of_accounts_name or SUSPENSE_NAME
     saved = await c.transactions.save(tx.mark_verified(code, name, tx.category_confidence or 1.0))
@@ -463,22 +559,32 @@ async def approve_transaction(transaction_id: str, body: ApproveBody = ApproveBo
 
 
 @api.post("/transactions/{transaction_id}/reject")
-async def reject_transaction(transaction_id: str, body: RejectBody = RejectBody()) -> dict:
+async def reject_transaction(
+    transaction_id: str,
+    body: RejectBody = RejectBody(),
+    user: AuthUser = Depends(get_current_user),
+) -> dict:
     c = get_container()
     tx = await c.transactions.get_by_id(uuid.UUID(transaction_id))
     if not tx:
         raise HTTPException(404, "Transaction not found")
+    assert_workspace_access(user, tx.tenant_id)
     notes = body.notes or body.reason
     saved = await c.transactions.save(tx.mark_rejected(notes))
     return _tx_json(saved)
 
 
 @api.post("/transactions/{transaction_id}/reclassify")
-async def reclassify_transaction(transaction_id: str, body: ReclassifyBody) -> dict:
+async def reclassify_transaction(
+    transaction_id: str,
+    body: ReclassifyBody,
+    user: AuthUser = Depends(get_current_user),
+) -> dict:
     c = get_container()
     tx = await c.transactions.get_by_id(uuid.UUID(transaction_id))
     if not tx:
         raise HTTPException(404, "Transaction not found")
+    assert_workspace_access(user, tx.tenant_id)
     updates: dict = {
         "chart_of_accounts_code": body.account_code,
         "chart_of_accounts_name": body.account_name,
@@ -518,13 +624,17 @@ async def reclassify_transaction(transaction_id: str, body: ReclassifyBody) -> d
 
 
 @api.post("/transactions/bulk-approve")
-async def bulk_approve(body: BulkBody) -> dict:
+async def bulk_approve(
+    body: BulkBody,
+    user: AuthUser = Depends(get_current_user),
+) -> dict:
     c = get_container()
     updated = 0
     for tid in body.ids:
         tx = await c.transactions.get_by_id(uuid.UUID(tid))
         if not tx or tx.status != TransactionStatus.PENDING_REVIEW:
             continue
+        assert_workspace_access(user, tx.tenant_id)
         code = tx.ai_suggested_account_code or tx.chart_of_accounts_code
         name = tx.ai_suggested_account_name or tx.chart_of_accounts_name
         if not code or not name:
@@ -535,13 +645,17 @@ async def bulk_approve(body: BulkBody) -> dict:
 
 
 @api.post("/transactions/bulk-reject")
-async def bulk_reject(body: BulkBody) -> dict:
+async def bulk_reject(
+    body: BulkBody,
+    user: AuthUser = Depends(get_current_user),
+) -> dict:
     c = get_container()
     updated = 0
     for tid in body.ids:
         tx = await c.transactions.get_by_id(uuid.UUID(tid))
         if not tx:
             continue
+        assert_workspace_access(user, tx.tenant_id)
         await c.transactions.save(tx.mark_rejected(body.reason))
         updated += 1
     return {"updated": updated, "rejected": updated}
@@ -737,14 +851,21 @@ class MatchBody(BaseModel):
 
 
 @api.post("/movements/{movement_id}/match")
-async def match_movement(movement_id: str, body: MatchBody) -> dict:
+async def match_movement(
+    movement_id: str,
+    body: MatchBody,
+    user: AuthUser = Depends(get_current_user),
+) -> dict:
     c = get_container()
     mov = await c.movements.get_by_id(uuid.UUID(movement_id))
     if not mov:
         raise HTTPException(404, "Movement not found")
+    assert_workspace_access(user, mov.tenant_id)
     tx = await c.transactions.get_by_id(uuid.UUID(body.transaction_id))
     if not tx:
         raise HTTPException(404, "Transaction not found")
+    if tx.tenant_id != mov.tenant_id:
+        raise HTTPException(400, "Transaction/movement workspace mismatch")
     saved_mov = await c.movements.save(mov.mark_reconciled(transaction_id=tx.id))
     await c.transactions.save(
         tx.model_copy(update={"reconciled": True, "bank_movement_id": mov.id})
@@ -757,11 +878,15 @@ async def match_movement(movement_id: str, body: MatchBody) -> dict:
 
 
 @api.post("/movements/{movement_id}/unmatch")
-async def unmatch_movement(movement_id: str) -> dict:
+async def unmatch_movement(
+    movement_id: str,
+    user: AuthUser = Depends(get_current_user),
+) -> dict:
     c = get_container()
     mov = await c.movements.get_by_id(uuid.UUID(movement_id))
     if not mov:
         raise HTTPException(404, "Movement not found")
+    assert_workspace_access(user, mov.tenant_id)
     if mov.matched_transaction_id:
         tx = await c.transactions.get_by_id(mov.matched_transaction_id)
         if tx:
@@ -793,7 +918,7 @@ async def process_statement(
         raise HTTPException(400, "workspace_id required")
     tid = uuid.UUID(wid)
     month = statement_month or date.today().strftime("%Y-%m")
-    with NamedTemporaryFile(delete=False, suffix=".pdf", dir=_UPLOAD_DIR) as tmp:
+    with NamedTemporaryFile(delete=False, suffix=".pdf", dir=upload_dir()) as tmp:
         tmp.write(await file.read())
         tmp_path = Path(tmp.name)
     try:
@@ -973,7 +1098,7 @@ async def available_years(workspace_id: str) -> dict:
     years: set[str] = set()
     verified_years: set[str] = set()
 
-    txns = await TransactionRepository().list_by_tenant(tid, limit=20000)
+    txns = await TransactionRepository().list_by_tenant(tid, limit=50000)
     for t in txns:
         if not t.transaction_date:
             continue
@@ -1006,7 +1131,7 @@ async def available_years(workspace_id: str) -> dict:
 
     # Bank movements
     try:
-        movements = await get_container().movements.list_by_tenant(tid, limit=5000)
+        movements = await get_container().movements.list_by_tenant(tid, limit=50000)
         for m in movements:
             md = getattr(m, "movement_date", None) or getattr(m, "date", None)
             if md and str(md)[:4].isdigit():
@@ -1250,23 +1375,31 @@ class DriveImportFilesBody(BaseModel):
 
 
 @api.get("/drive/status")
-async def drive_status() -> dict:
+async def drive_status(_user: AuthUser = Depends(get_current_user)) -> dict:
     from src.use_cases.sync_drive import SyncDriveUseCase
 
     return SyncDriveUseCase().status()
 
 
 @api.post("/drive/link")
-async def drive_link(body: DriveLinkBody) -> dict:
+async def drive_link(
+    body: DriveLinkBody,
+    user: AuthUser = Depends(get_current_user),
+) -> dict:
     from src.use_cases.sync_drive import SyncDriveUseCase
 
+    assert_workspace_access(user, body.workspace_id)
     return await SyncDriveUseCase().link_workspace(
         uuid.UUID(body.workspace_id), body.folder_id, body.folder_name
     )
 
 
 @api.get("/drive/browse")
-async def drive_browse(folder_id: str | None = None, depth: int = 1) -> dict:
+async def drive_browse(
+    folder_id: str | None = None,
+    depth: int = 1,
+    _user: AuthUser = Depends(get_current_user),
+) -> dict:
     from src.infrastructure.drive.google_drive_client import DriveNotConfiguredError
     from src.use_cases.sync_drive import SyncDriveUseCase
 
@@ -1278,7 +1411,11 @@ async def drive_browse(folder_id: str | None = None, depth: int = 1) -> dict:
 
 
 @api.get("/drive/children")
-async def drive_children(folder_id: str, parent_path: str | None = None) -> list[dict]:
+async def drive_children(
+    folder_id: str,
+    parent_path: str | None = None,
+    _user: AuthUser = Depends(get_current_user),
+) -> list[dict]:
     """One-level listing so the UI can enter nested folders (Wells → 8398 → 2026)."""
     from src.infrastructure.drive.google_drive_client import (
         DriveNotConfiguredError,
@@ -1309,10 +1446,14 @@ async def drive_children(folder_id: str, parent_path: str | None = None) -> list
 
 
 @api.post("/drive/sync")
-async def drive_sync(body: DriveSyncBody) -> dict:
+async def drive_sync(
+    body: DriveSyncBody,
+    user: AuthUser = Depends(get_current_user),
+) -> dict:
     from src.infrastructure.drive.google_drive_client import DriveNotConfiguredError
     from src.use_cases.sync_drive import SyncDriveUseCase
 
+    assert_workspace_access(user, body.workspace_id)
     try:
         return await SyncDriveUseCase().sync(
             uuid.UUID(body.workspace_id),
@@ -1334,10 +1475,15 @@ class DriveImportFolderBody(BaseModel):
 
 
 @api.post("/drive/import-folder")
-async def drive_import_folder(body: DriveImportFolderBody, background_tasks: BackgroundTasks) -> dict:
+async def drive_import_folder(
+    body: DriveImportFolderBody,
+    background_tasks: BackgroundTasks,
+    user: AuthUser = Depends(get_current_user),
+) -> dict:
     """Recursively collect PDFs/Excel under a Drive folder and queue import."""
     from src.infrastructure.drive.google_drive_client import GoogleDriveClient, credentials_available
 
+    assert_workspace_access(user, body.workspace_id)
     if not credentials_available():
         raise HTTPException(503, "Drive OAuth not configured")
     drive = GoogleDriveClient()
@@ -1355,17 +1501,22 @@ async def drive_import_folder(body: DriveImportFolderBody, background_tasks: Bac
     return await drive_import_files(
         DriveImportFilesBody(workspace_id=body.workspace_id, files=files, ingest=body.ingest),
         background_tasks,
+        user,
     )
 
 
 @api.post("/drive/import-files")
-async def drive_import_files(body: DriveImportFilesBody, background_tasks: BackgroundTasks) -> dict:
+async def drive_import_files(
+    body: DriveImportFilesBody,
+    background_tasks: BackgroundTasks,
+    user: AuthUser = Depends(get_current_user),
+) -> dict:
     """Download selected Drive files, enqueue as pending, process 1-at-a-time."""
     from src.infrastructure.drive.classify import classify_drive_file
     from src.infrastructure.drive.google_drive_client import GoogleDriveClient, credentials_available
-    from src.infrastructure.queue.document_worker import get_document_worker
     from src.use_cases.sync_drive import _file_type
 
+    assert_workspace_access(user, body.workspace_id)
     if not credentials_available():
         raise HTTPException(503, "Drive OAuth not configured")
     if not body.files:
@@ -1479,12 +1630,12 @@ async def drive_import_files(body: DriveImportFilesBody, background_tasks: Backg
 
 
 @api.post("/drive/push-file")
-async def drive_push_file(body: DrivePushBody) -> dict:
+async def drive_push_file(
+    body: DrivePushBody,
+    user: AuthUser = Depends(get_current_user),
+) -> dict:
     """Ingest a Drive file payload (used when OAuth token is unavailable but files are pushed)."""
-    import base64
-
-    from src.container import get_container
-
+    assert_workspace_access(user, body.workspace_id)
     wid = uuid.UUID(body.workspace_id)
     docs = DocumentRepository()
     existing = await docs.list_by_workspace(wid, limit=2000)
@@ -1506,7 +1657,7 @@ async def drive_push_file(body: DrivePushBody) -> dict:
     doc = await docs.save(doc)
 
     suffix = Path(body.file_name).suffix or ".bin"
-    with NamedTemporaryFile(delete=False, suffix=suffix, dir=_UPLOAD_DIR) as tmp:
+    with NamedTemporaryFile(delete=False, suffix=suffix, dir=upload_dir()) as tmp:
         tmp.write(content)
         tmp_path = Path(tmp.name)
 

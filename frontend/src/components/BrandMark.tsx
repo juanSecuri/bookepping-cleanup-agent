@@ -9,6 +9,8 @@ type BrandMarkProps = {
   className?: string
   /** Optional subtitle under product (localized by parent). */
   subtitle?: string
+  /** Force cream text for dark sidebar (ignores light-theme CSS vars). */
+  forceSidebarCream?: boolean
 }
 
 /**
@@ -21,7 +23,11 @@ export default function BrandMark({
   showProduct = true,
   className,
   subtitle,
+  forceSidebarCream = false,
 }: BrandMarkProps) {
+  const cream = forceSidebarCream ? 'text-[#faf6ee]' : 'text-[var(--accent-cream-soft)]'
+  const muted = forceSidebarCream ? 'text-[#f3ead8]/85' : 'text-[var(--accent-cream-soft)]/85'
+
   const tag =
     size === 'hero'
       ? 'text-[11px] sm:text-xs tracking-[0.28em]'
@@ -40,27 +46,19 @@ export default function BrandMark({
 
   const inner = (
     <span className={cn('inline-flex flex-col', className)}>
-      <span
-        className={cn(
-          'font-medium uppercase tracking-[0.2em] text-[var(--accent-cream-soft)] opacity-90',
-          tag,
-        )}
-      >
+      <span className={cn('font-medium uppercase tracking-[0.2em]', cream, tag)}>
         The Profit Catalyst
       </span>
       {showProduct && (
         <span
-          className={cn(
-            'font-display font-semibold leading-none text-[var(--accent-cream-soft)]',
-            product,
-          )}
+          className={cn('font-display font-semibold leading-none', cream, product)}
           style={{ textShadow: '0 1px 12px rgba(0,0,0,0.35)' }}
         >
           LedgerAI
         </span>
       )}
       {(subtitle || size === 'hero') && (
-        <span className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--accent-cream-soft)]/85 sm:text-xs">
+        <span className={cn('mt-1.5 text-[11px] font-medium uppercase tracking-[0.16em] sm:text-xs', muted)}>
           {subtitle || 'Bookkeeping Cleanup'}
         </span>
       )}

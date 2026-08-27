@@ -1,15 +1,19 @@
 """
-Sequential document queue worker — Render Free safe (1 file at a time).
+Sequential document queue worker — 1 file at a time (Render-safe).
 
 Upload/Drive only enqueue (status=pending). This worker claims one pending
 document, processes it, frees memory, then takes the next. A process-wide
 asyncio.Lock guarantees no parallel extractions even if multiple kicks fire.
+
+On Render Starter, set LEDGERAI_UPLOAD_DIR to a path under the persistent
+disk mount (e.g. /var/data/ledgerai_uploads). Local/dev falls back to tempfile.
 """
 from __future__ import annotations
 
 import asyncio
 import gc
 import logging
+import os
 import tempfile
 import uuid
 from datetime import datetime, timezone
@@ -22,12 +26,20 @@ from src.use_cases.ingest_spreadsheet import SpreadsheetIngestUseCase
 
 logger = logging.getLogger("ledgerai.queue")
 
-_UPLOAD_DIR = Path(tempfile.gettempdir()) / "ledgerai_uploads"
-_UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
+_UPLOAD_DIR: Path | None = None
 
 
 def upload_dir() -> Path:
-    return _UPLOAD_DIR
+    """Resolve upload directory (persistent disk when LEDGERAI_UPLOAD_DIR is set)."""
+    global _UPLOAD_DIR
+    if _UPLOAD_DIR is not None:
+        return _UPLOAD_DIR
+    raw = (os.environ.get("LEDGERAI_UPLOAD_DIR") or "").strip()
+    path = Path(raw) if raw else Path(tempfile.gettempdir()) / "ledgerai_uploads"
+    path.mkdir(parents=True, exist_ok=True)
+    _UPLOAD_DIR = path
+    logger.info("document upload dir: %s", path)
+    return path
 
 
 class DocumentQueueWorker:
@@ -58,7 +70,7 @@ class DocumentQueueWorker:
         docs = DocumentRepository()
         doc_id = uuid.uuid4()
         suffix = Path(filename).suffix or ".bin"
-        local = _UPLOAD_DIR / f"{doc_id}{suffix}"
+        local = upload_dir() / f"{doc_id}{suffix}"
         local.write_bytes(content)
 
         doc = DocumentRecord(
@@ -150,8 +162,8 @@ class DocumentQueueWorker:
                 }
             )
             await docs.save(failed)
-        # Keep local_path on disk for split-screen preview while the instance
-        # is warm (Render Free disk is ephemeral — gone on restart/sleep).
+        # Keep local_path for split-screen preview (persistent when LEDGERAI_UPLOAD_DIR
+        # points at the Render Starter disk under /var/data).
         return True
 
     async def _resolve_file(self, doc: DocumentRecord) -> Path:
@@ -163,15 +175,16 @@ class DocumentQueueWorker:
 
             content = GoogleDriveClient().download_bytes(doc.drive_file_id)
             suffix = Path(doc.file_name).suffix or ".bin"
-            path = _UPLOAD_DIR / f"{doc.id}{suffix}"
+            path = upload_dir() / f"{doc.id}{suffix}"
             path.write_bytes(content)
             docs = DocumentRepository()
             await docs.save(doc.model_copy(update={"local_path": str(path)}))
             return path
 
         raise FileNotFoundError(
-            "Archivo no disponible (disco efímero tras reinicio). "
-            "Vuelve a subir el documento o reimporta desde Drive."
+            "Archivo no disponible en disco. "
+            "Vuelve a subir el documento o reimporta desde Drive "
+            "(si el deploy no tiene disco persistente, los archivos se pierden al reiniciar)."
         )
 
     async def _run_pipeline(self, doc: DocumentRecord, path: Path) -> None:
@@ -201,7 +214,7 @@ class DocumentQueueWorker:
                     f"APIs: openpyxl/csv + reglas CoA ($0)\n"
                     f"Archivo: {doc.file_name}\n"
                     f"Filas → transacciones: {len(txs)}\n"
-                    f"Cola: 1 archivo a la vez (Render Free)\n"
+                    f"Cola: 1 archivo a la vez\n"
                     f"Destino: Transacciones (pendiente de revisión)"
                 )
                 updated = doc.model_copy(
@@ -277,7 +290,7 @@ class DocumentQueueWorker:
                         f"Movimientos extraídos: {report.total_movements} | "
                         f"Categorizados: {report.categorised} | "
                         f"Sin match: {report.unmatched}\n"
-                        f"Cola: 1 archivo a la vez (Render Free)\n"
+                        f"Cola: 1 archivo a la vez\n"
                         f"Destino: Conciliación + Transacciones (espejo)"
                     ),
                     "processed_at": now,
@@ -307,7 +320,7 @@ class DocumentQueueWorker:
                         f"APIs: {apis}\n"
                         f"Proveedor detectado: {vendor or '—'}\n"
                         f"Fecha: {doc_date or '—'}\n"
-                        f"Cola: 1 archivo a la vez (Render Free)\n"
+                        f"Cola: 1 archivo a la vez\n"
                         f"Destino: Transacciones (pendiente de revisión)\n"
                         f"--- Texto OCR ---\n{raw or '(sin texto)'}"
                     ),

@@ -1,15 +1,23 @@
 # LedgerAI — Docker Web Service (Tesseract + ffmpeg for OCR/audio)
 # Blueprint: https://dashboard.render.com/blueprint/new?repo=https://github.com/juanSecuri/bookepping-cleanup-agent
+#
+# Starter + persistent disk: uploads survive restarts (fixes "Archivo no disponible en disco").
+# Queue runs in the same web process (lifespan poller) — a separate worker cannot share this disk.
+# Supabase Storage remains the longer-term multi-instance option.
 services:
   - type: web
     name: ledgerai
     runtime: docker
-    plan: free
+    plan: starter
     region: oregon
     branch: main
     dockerfilePath: ./Dockerfile
     dockerContext: .
     healthCheckPath: /health
+    disk:
+      name: ledgerai-uploads
+      mountPath: /var/data
+      sizeGB: 1
     envVars:
       - key: APP_ENV
         value: production
@@ -23,6 +31,18 @@ services:
         value: USD
       - key: FISCAL_YEAR_START_MONTH
         value: "1"
+      - key: LEDGERAI_UPLOAD_DIR
+        value: /var/data/ledgerai_uploads
+      - key: AUTH_ENABLED
+        value: "false"
+      - key: AUTH_BOOTSTRAP_FIRST_OWNER
+        value: "true"
+      - key: VITE_SUPABASE_URL
+        sync: false
+      - key: VITE_SUPABASE_ANON_KEY
+        sync: false
+      - key: SUPABASE_JWT_SECRET
+        sync: false
       - key: SUPABASE_URL
         sync: false
       - key: SUPABASE_SERVICE_ROLE_KEY

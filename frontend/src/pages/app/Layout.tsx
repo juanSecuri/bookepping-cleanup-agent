@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useParams, Link } from 'react-router-dom'
+import { NavLink, Outlet, useParams, Link, useNavigate } from 'react-router-dom'
 import {
   LayoutDashboard,
   FileText,
@@ -13,10 +13,12 @@ import {
   PanelLeft,
   Sun,
   Moon,
+  LogOut,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import BrandMark from '../../components/BrandMark'
 import { useTheme } from '../../components/ThemeProvider'
+import { useAuth } from '../../auth/AuthProvider'
 import { useLocale } from '../../i18n'
 import { api, type Workspace } from '../../lib/api'
 import { cn } from '../../lib/utils'
@@ -42,8 +44,10 @@ const SIDEBAR_KEY = 'ledgerai.sidebarCollapsed'
 
 export default function Layout() {
   const { workspaceId } = useParams()
+  const navigate = useNavigate()
   const { t, locale, toggleLocale } = useLocale()
   const { theme, toggleTheme } = useTheme()
+  const { configured: authOn, signOut } = useAuth()
   const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(() => {
@@ -111,6 +115,22 @@ export default function Layout() {
         {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
         {!compact && <span>{theme === 'dark' ? 'Light' : 'Dark'}</span>}
       </button>
+      {authOn ? (
+        <button
+          type="button"
+          title="Sign out"
+          onClick={() => {
+            void signOut().then(() => navigate('/login', { replace: true }))
+          }}
+          className={cn(
+            'flex items-center rounded-md border border-sidebar-border bg-sidebar-accent/50 text-sm text-sidebar-foreground transition duration-200 hover:border-[var(--accent-cream)]/40 hover:bg-sidebar-accent',
+            compact ? 'justify-center px-2 py-2' : 'gap-1.5 px-2.5 py-1.5',
+          )}
+        >
+          <LogOut className="h-3.5 w-3.5" />
+          {!compact && <span>Sign out</span>}
+        </button>
+      ) : null}
     </div>
   )
 
@@ -129,8 +149,8 @@ export default function Layout() {
               'animate-fade-up flex items-center rounded-md py-2.5 text-sm transition duration-200',
               compact ? 'justify-center px-2' : 'gap-3 px-3',
               isActive
-                ? 'nav-item-active border border-[var(--accent-cream)]/45 bg-[var(--accent-green)] text-[var(--accent-cream-soft)]'
-                : 'border border-transparent text-[var(--accent-cream-soft)]/90 hover:border-[var(--accent-cream)]/35 hover:bg-[var(--accent-green)] hover:text-[var(--accent-cream-soft)]',
+                ? 'nav-item-active border border-[#faf6ee]/50 bg-[#1a4032] text-[#faf6ee]'
+                : 'border border-transparent text-[#f3ead8] hover:border-[#faf6ee]/40 hover:bg-[#1a4032] hover:text-[#ffffff]',
             )
           }
         >
@@ -159,17 +179,17 @@ export default function Layout() {
           <div className="flex items-start justify-between gap-2">
             {collapsed ? (
               <Link to="/" title="The Profit Catalyst · LedgerAI" className="mx-auto block">
-                <span className="font-display text-xl font-semibold text-[var(--accent-cream-soft)]">
+                <span className="font-display text-xl font-semibold text-[#faf6ee]">
                   L
                 </span>
               </Link>
             ) : (
-              <BrandMark size="sm" subtitle={t('brand.subtitle')} />
+              <BrandMark size="sm" subtitle={t('brand.subtitle')} forceSidebarCream />
             )}
             <button
               type="button"
               onClick={() => setCollapsed((v) => !v)}
-              className="rounded-md p-1.5 text-sidebar-foreground/70 transition duration-200 hover:bg-sidebar-accent hover:text-[var(--accent-cream-soft)]"
+              className="rounded-md p-1.5 text-[#f3ead8]/80 transition duration-200 hover:bg-[#1a4032] hover:text-[#faf6ee]"
               title={collapsed ? t('nav.expand') : t('nav.collapse')}
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
@@ -177,7 +197,7 @@ export default function Layout() {
             </button>
           </div>
           {!collapsed && workspace?.name && (
-            <p className="mt-2 truncate text-sm font-semibold text-[var(--accent-cream-soft)]">
+            <p className="mt-2 truncate text-sm font-semibold text-[#faf6ee]">
               {workspace.name}
             </p>
           )}
@@ -188,16 +208,16 @@ export default function Layout() {
           {nav(collapsed)}
           {!collapsed && (
             <div className="mt-6 animate-fade-up-delay-2">
-              <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--accent-cream-soft)]/75">
+              <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#f3ead8]/80">
                 {t('nav.pipeline')}
               </p>
               <ol className="space-y-1.5">
                 {pipeline.map((key, i) => (
                   <li
                     key={key}
-                    className="flex items-center gap-2.5 text-xs font-medium text-[var(--accent-cream-soft)] transition duration-200 hover:text-white"
+                    className="flex items-center gap-2.5 text-xs font-medium text-[#f3ead8] transition duration-200 hover:text-white"
                   >
-                    <span className="flex h-5 w-5 items-center justify-center rounded-md border border-[var(--accent-cream)]/40 bg-[var(--accent-green)] text-[10px] font-semibold text-[var(--accent-cream-soft)]">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-md border border-[#faf6ee]/40 bg-[#1a4032] text-[10px] font-semibold text-[#faf6ee]">
                       {i + 1}
                     </span>
                     {t(key)}
@@ -212,7 +232,7 @@ export default function Layout() {
           <Link
             to="/workspaces"
             className={cn(
-              'block text-center text-xs text-[var(--text-muted)] transition duration-200 hover:text-[var(--accent-cream-soft)]',
+              'block text-center text-xs text-[#f3ead8]/75 transition duration-200 hover:text-[#faf6ee]',
               collapsed && 'truncate',
             )}
           >

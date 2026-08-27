@@ -50,16 +50,27 @@ class BankMovementRepository(AbstractRepository[BankMovement]):
         limit: int = 200,
         offset: int = 0,
     ) -> list[BankMovement]:
+        """Paginate past PostgREST max-rows so older statement years stay visible."""
         client = get_supabase_client()
-        result = (
-            client.table(TABLE)
-            .select("*")
-            .eq("tenant_id", str(tenant_id))
-            .order("movement_date", desc=True)
-            .range(offset, offset + limit - 1)
-            .execute()
-        )
-        return [self._from_row(r) for r in result.data]
+        page_size = min(1000, max(1, limit))
+        out: list[BankMovement] = []
+        cursor = offset
+        while len(out) < limit:
+            take = min(page_size, limit - len(out))
+            result = (
+                client.table(TABLE)
+                .select("*")
+                .eq("tenant_id", str(tenant_id))
+                .order("movement_date", desc=True)
+                .range(cursor, cursor + take - 1)
+                .execute()
+            )
+            rows = result.data or []
+            out.extend(self._from_row(r) for r in rows)
+            if len(rows) < take:
+                break
+            cursor += len(rows)
+        return out
 
     async def delete(self, entity_id: uuid.UUID) -> None:
         client = get_supabase_client()

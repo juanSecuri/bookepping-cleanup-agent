@@ -1,4 +1,4 @@
-# LedgerAI — Docker image with Tesseract OCR (Render Free)
+# LedgerAI — Docker image with Tesseract OCR (Render Starter + persistent disk)
 FROM python:3.11-slim-bookworm AS base
 
 ENV PYTHONDONTWRITEBYTECODE=1 \
@@ -24,6 +24,13 @@ WORKDIR /app/frontend
 COPY frontend/package.json frontend/package-lock.json ./
 RUN npm ci
 COPY frontend/ ./
+# Vite embeds these at build time (set on Render service env).
+ARG VITE_SUPABASE_URL=
+ARG VITE_SUPABASE_ANON_KEY=
+ARG VITE_API_URL=
+ENV VITE_SUPABASE_URL=$VITE_SUPABASE_URL \
+    VITE_SUPABASE_ANON_KEY=$VITE_SUPABASE_ANON_KEY \
+    VITE_API_URL=$VITE_API_URL
 RUN npm run build
 
 FROM base AS app

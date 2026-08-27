@@ -1,10 +1,21 @@
 const API_BASE = import.meta.env.VITE_API_URL || ''
 
+function authHeaders(): HeadersInit {
+  try {
+    const token = localStorage.getItem('ledgerai.access_token')
+    if (token) return { Authorization: `Bearer ${token}` }
+  } catch {
+    /* ignore */
+  }
+  return {}
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const res = await fetch(`${API_BASE}${path}`, {
     ...init,
     headers: {
       ...(init?.body instanceof FormData ? {} : { 'Content-Type': 'application/json' }),
+      ...authHeaders(),
       ...init?.headers,
     },
   })
@@ -251,7 +262,12 @@ export const api = {
       method: 'DELETE',
     }),
   getWorkspace: (id: string) => request<Workspace>(`/api/workspaces/${id}`),
-  getWorkspaceStats: (id: string) => request<WorkspaceStats>(`/api/workspaces/${id}/stats`),
+  getWorkspaceStats: (id: string, params?: { fiscal_year?: string }) => {
+    const q = new URLSearchParams()
+    if (params?.fiscal_year) q.set('fiscal_year', params.fiscal_year)
+    const qs = q.toString()
+    return request<WorkspaceStats>(`/api/workspaces/${id}/stats${qs ? `?${qs}` : ''}`)
+  },
 
   listDocuments: (params?: { workspace_id?: string; tenant_id?: string }) => {
     const q = new URLSearchParams()
@@ -266,6 +282,17 @@ export const api = {
     request<Document>('/api/documents/upload', { method: 'POST', body: form }),
   documentFileUrl: (document_id: string, workspace_id: string) =>
     `${API_BASE}/api/documents/${encodeURIComponent(document_id)}/file?workspace_id=${encodeURIComponent(workspace_id)}`,
+  /** Authenticated fetch for document bytes (Bearer). Prefer over bare URL when AUTH_ENABLED. */
+  fetchDocumentFile: async (document_id: string, workspace_id: string, init?: RequestInit) => {
+    const url = `${API_BASE}/api/documents/${encodeURIComponent(document_id)}/file?workspace_id=${encodeURIComponent(workspace_id)}`
+    return fetch(url, {
+      ...init,
+      headers: {
+        ...authHeaders(),
+        ...init?.headers,
+      },
+    })
+  },
 
   listTransactions: (params: { tenant_id: string; status?: string; suspense?: boolean }) => {
     const q = new URLSearchParams({ tenant_id: params.tenant_id })

@@ -74,25 +74,32 @@ function DocumentFilePreview({
 }) {
   const [failed, setFailed] = useState(false)
   const [ready, setReady] = useState(false)
+  const [blobUrl, setBlobUrl] = useState<string | null>(null)
   const kind = docPreviewKind(doc)
   const url = api.documentFileUrl(String(doc.id), workspaceId)
 
   useEffect(() => {
     let cancelled = false
+    let objectUrl: string | null = null
     setFailed(false)
     setReady(false)
+    setBlobUrl(null)
     if (kind === 'other') return
     ;(async () => {
       try {
-        let res = await fetch(url, { method: 'HEAD', cache: 'no-store' })
-        if (res.status === 405 || res.status === 501) {
-          res = await fetch(url, { method: 'GET', cache: 'no-store', headers: { Range: 'bytes=0-0' } })
-        }
+        const res = await api.fetchDocumentFile(String(doc.id), workspaceId, {
+          method: 'GET',
+          cache: 'no-store',
+        })
         if (cancelled) return
         if (!res.ok) {
           setFailed(true)
           return
         }
+        const blob = await res.blob()
+        if (cancelled) return
+        objectUrl = URL.createObjectURL(blob)
+        setBlobUrl(objectUrl)
         setReady(true)
       } catch {
         if (!cancelled) setFailed(true)
@@ -100,8 +107,9 @@ function DocumentFilePreview({
     })()
     return () => {
       cancelled = true
+      if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [url, kind, doc.id])
+  }, [url, kind, doc.id, workspaceId])
 
   if (kind === 'other') {
     return (
@@ -109,7 +117,7 @@ function DocumentFilePreview({
         <p>Vista previa en pantalla para PDF e imágenes. El texto extraído está a la izquierda.</p>
         <a
           className="rounded-md border border-border px-3 py-1.5 font-medium text-foreground hover:bg-muted"
-          href={url}
+          href={blobUrl || url}
           target="_blank"
           rel="noreferrer"
         >
@@ -123,14 +131,14 @@ function DocumentFilePreview({
     return (
       <div className="flex max-h-72 min-h-[12rem] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-card p-4 text-center text-xs text-muted-foreground">
         <p>
-          Archivo no disponible en disco (Render Free es efímero tras reinicio). El texto OCR a la
-          izquierda sigue disponible.
+          Archivo no disponible en disco (montá disco Starter en /var/data o reimportá).
+          El texto OCR a la izquierda sigue disponible.
         </p>
       </div>
     )
   }
 
-  if (!ready) {
+  if (!ready || !blobUrl) {
     return (
       <div className="flex max-h-72 min-h-[12rem] items-center justify-center rounded-lg border border-dashed border-border bg-card p-4 text-xs text-muted-foreground">
         Cargando vista previa…
@@ -143,12 +151,12 @@ function DocumentFilePreview({
       {kind === 'pdf' ? (
         <iframe
           title={String(doc.filename || doc.name || 'PDF')}
-          src={url}
+          src={blobUrl}
           className="h-72 w-full bg-background"
         />
       ) : (
         <img
-          src={url}
+          src={blobUrl}
           alt={String(doc.filename || doc.name || 'Imagen')}
           className="max-h-72 w-full object-contain"
           onError={() => setFailed(true)}
@@ -157,7 +165,7 @@ function DocumentFilePreview({
       <div className="border-t border-border px-3 py-2 text-center">
         <a
           className="text-xs font-medium text-primary hover:underline"
-          href={url}
+          href={blobUrl}
           target="_blank"
           rel="noreferrer"
         >

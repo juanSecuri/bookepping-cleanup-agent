@@ -260,10 +260,27 @@ const es: Dict = {
   'reports.statusOpen': 'Abierto',
   'reports.statusClosed': 'Cerrado',
   'reports.statusSuggested': 'Sugerido',
-  'coa.title': 'Plan de cuentas',
-  'coa.subtitle': 'Cuentas del espacio: código, tipo, subcategoría y uso en clasificación.',
+  'coa.subtitle':
+    'Plantilla de cuentas + reglas (no son montos de extractos). Lo vivo está en Transacciones → Reportes.',
   'coa.empty': 'Sin cuentas en este espacio.',
   'coa.emptyHint': 'Siembra el plan de cuentas estándar para empezar a clasificar transacciones.',
+  'coa.liveBanner':
+    'Esto es el catálogo (plantilla). Los saldos reales salen solo de txs verificadas en Reportes / Panel.',
+  'dashboard.year': 'Año',
+  'dashboard.yearAll': 'Todos',
+  'dashboard.emptyYearHint':
+    '{year}: {extracted} docs extractados y {pending} txs pendientes — el Panel solo suma verificadas.',
+  'dashboard.pendingMoneyHint':
+    'Pendiente de aprobar: ingresos {income} · gastos {expenses}.',
+  'dashboard.pipelineHint':
+    'Estado de cuenta → Conciliación. Factura → Transacciones (revisar / aprobar). Luego emitir en Reportes.',
+  'dashboard.chartIncomeExpense': 'Ingresos vs gastos',
+  'dashboard.chartMix': 'Mix',
+  'dashboard.amount': 'Monto',
+  'dashboard.noVerifiedMoney': 'Sin montos verificados en este filtro.',
+  'dashboard.clearHint': 'Cola limpia: podés emitir / cerrar periodos en Reportes.',
+  'dashboard.focusHint': 'Foco ahora:',
+  'coa.title': 'Plan de cuentas',
   'coa.seed': 'Sembrar plan de cuentas',
   'coa.seeding': 'Sembrando…',
   'coa.code': 'Código',
@@ -553,10 +570,27 @@ const en: Dict = {
   'reports.statusOpen': 'Open',
   'reports.statusClosed': 'Closed',
   'reports.statusSuggested': 'Suggested',
-  'coa.title': 'Chart of accounts',
-  'coa.subtitle': 'Workspace accounts: code, type, subcategory, and classification use.',
+  'coa.subtitle':
+    'Account template + rules (not statement amounts). Live money is in Transactions → Reports.',
   'coa.empty': 'No accounts in this workspace.',
   'coa.emptyHint': 'Seed the standard chart of accounts to start classifying transactions.',
+  'coa.liveBanner':
+    'This is the catalog (template). Real balances come only from verified txs in Reports / Dashboard.',
+  'dashboard.year': 'Year',
+  'dashboard.yearAll': 'All',
+  'dashboard.emptyYearHint':
+    '{year}: {extracted} extracted docs and {pending} pending txs — Dashboard only sums verified.',
+  'dashboard.pendingMoneyHint':
+    'Awaiting approval: income {income} · expenses {expenses}.',
+  'dashboard.pipelineHint':
+    'Statement → Reconciliation. Invoice → Transactions (review / approve). Then emit in Reports.',
+  'dashboard.chartIncomeExpense': 'Income vs expenses',
+  'dashboard.chartMix': 'Mix',
+  'dashboard.amount': 'Amount',
+  'dashboard.noVerifiedMoney': 'No verified amounts for this filter.',
+  'dashboard.clearHint': 'Queue clear: you can emit / close periods in Reports.',
+  'dashboard.focusHint': 'Focus now:',
+  'coa.title': 'Chart of accounts',
   'coa.seed': 'Seed chart of accounts',
   'coa.seeding': 'Seeding…',
   'coa.code': 'Code',

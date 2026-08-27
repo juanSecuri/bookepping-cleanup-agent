@@ -24,12 +24,28 @@ class Settings(BaseSettings):
 
     supabase_url: str = Field(...)
     supabase_service_role_key: SecretStr = Field(...)
+    # Legacy HS256 signing secret (Dashboard → API → JWT Secret). Optional if JWKS works.
+    supabase_jwt_secret: str | None = Field(default=None)
     database_url: str | None = Field(default=None)
+
+    # When false (default): JWT/membership bypass for local demos. Set true on Render.
+    auth_enabled: bool = Field(default=False)
+    # First authenticated user on an empty workspace becomes owner.
+    auth_bootstrap_first_owner: bool = Field(default=True)
+    # Comma-separated origins; empty / "*" → allow all (CORS open for now).
+    allowed_origins: str = Field(default="*")
 
     app_env: str = Field(default="development")
     log_level: str = Field(default="INFO")
     default_currency: str = Field(default="USD")
     fiscal_year_start_month: int = Field(default=1, ge=1, le=12)
+
+    @property
+    def cors_origins(self) -> list[str]:
+        raw = (self.allowed_origins or "*").strip()
+        if not raw or raw == "*":
+            return ["*"]
+        return [o.strip() for o in raw.split(",") if o.strip()]
 
     google_oauth_client_id: str | None = Field(default=None)
     google_oauth_client_secret: SecretStr = Field(default=SecretStr(""))

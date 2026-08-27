@@ -153,19 +153,42 @@ class EmitPeriodReportsUseCase:
             if date_from and len(date_from) >= 4:
                 resolved_year = date_from[:4]
 
-        txns = await self._transactions.list_by_tenant(workspace_id, limit=20000)
-        pending_count = sum(
-            1 for t in txns if t.status == TransactionStatus.PENDING_REVIEW
-        )
-        verified = [
+        # Prefer SQL date window so years like 2024 are not dropped by
+        # PostgREST's ~1000-row page cap when ordering newest-first.
+        if date_from or date_to:
+            period_txns = await self._transactions.list_by_tenant_date_range(
+                workspace_id,
+                date_from=date_from,
+                date_to=date_to,
+                limit=50000,
+            )
+            all_for_pending = period_txns
+            verified = [
+                t
+                for t in period_txns
+                if t.status in (TransactionStatus.VERIFIED, TransactionStatus.CLOSED)
+            ]
+        else:
+            all_for_pending = await self._transactions.list_by_tenant(
+                workspace_id, limit=50000
+            )
+            verified = [
+                t
+                for t in all_for_pending
+                if t.status in (TransactionStatus.VERIFIED, TransactionStatus.CLOSED)
+            ]
+
+        def _tx_day(t) -> str:
+            return str(t.transaction_date)[:10]
+
+        pending_in_period = [
             t
-            for t in txns
-            if t.status in (TransactionStatus.VERIFIED, TransactionStatus.CLOSED)
+            for t in all_for_pending
+            if t.status == TransactionStatus.PENDING_REVIEW
+            and (not date_from or _tx_day(t) >= date_from[:10])
+            and (not date_to or _tx_day(t) <= date_to[:10])
         ]
-        if date_from:
-            verified = [t for t in verified if str(t.transaction_date) >= date_from]
-        if date_to:
-            verified = [t for t in verified if str(t.transaction_date) <= date_to]
+        pending_count = len(pending_in_period)
 
         coa_types = self._coa_types(str(workspace_id))
         as_of_year = self._as_of_year(period, date_to, date_from)
