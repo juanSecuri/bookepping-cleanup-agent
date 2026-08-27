@@ -5,6 +5,7 @@ from functools import lru_cache
 
 from src.infrastructure.classification.rule_coa import RuleCoAClassifier
 from src.infrastructure.ocr.local_pdf_client import LocalPdfClient
+from src.infrastructure.ocr.tesseract_client import TesseractOcrClient
 from src.infrastructure.repositories.bank_movement_repository import BankMovementRepository
 from src.infrastructure.repositories.monthly_ledger_repository import MonthlyLedgerRepository
 from src.infrastructure.repositories.transaction_repository import TransactionRepository
@@ -20,7 +21,8 @@ class AppContainer:
     """Lazy DI container. Prefer this over constructing use-cases in route handlers."""
 
     def __init__(self) -> None:
-        self.local_pdf = LocalPdfClient()
+        self.ocr = TesseractOcrClient()
+        self.local_pdf = LocalPdfClient(ocr=self.ocr)
         self.coa = RuleCoAClassifier()
 
         self.transactions = TransactionRepository()
@@ -36,6 +38,7 @@ class AppContainer:
             movement_repo=self.movements,
             local_pdf=self.local_pdf,
             coa=self.coa,
+            ocr=self.ocr,
         )
         self.process_statement = ProcessStatementUseCase(
             local_pdf=self.local_pdf,

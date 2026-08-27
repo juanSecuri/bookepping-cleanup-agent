@@ -1,11 +1,12 @@
 """
 Free / local PDF extraction — no LlamaParse, no paid OCR APIs.
 
-Uses pdfplumber (+ line heuristics) so bank statements and invoices
-can be transcribed with open-source code only.
+Uses pdfplumber first; scanned/image-only PDFs automatically fall back to
+Tesseract OCR (pypdfium2 render → pytesseract).
 """
 from __future__ import annotations
 
+import logging
 import re
 import uuid
 from datetime import date, datetime
@@ -16,6 +17,10 @@ import pdfplumber
 
 from src.domain.exceptions import ExtractionError
 from src.domain.models.bank_movement import BankMovement
+from src.infrastructure.ocr.extraction_result import PdfExtractionResult
+from src.infrastructure.ocr.tesseract_client import PDF_TEXT_MIN_CHARS, TesseractOcrClient
+
+logger = logging.getLogger(__name__)
 
 _AMOUNT_RE = re.compile(
     r"(?:\(?\$?\s*)(-?\d{1,3}(?:,\d{3})*(?:\.\d{2})?|-?\d+\.\d{2})(?:\s*\))?\s*$"
@@ -77,14 +82,20 @@ def _normalise_date(raw: str, statement_month: str | None = None) -> date:
 
 
 class LocalPdfClient:
-    """$0 PDF text + bank-line extraction (company free-stack requirement)."""
+    """$0 PDF text + bank-line extraction (pdfplumber → Tesseract fallback)."""
 
-    def extract_text(self, file_path: Path) -> str:
+    def __init__(self, ocr: TesseractOcrClient | None = None) -> None:
+        self._ocr = ocr or TesseractOcrClient()
+        self.last_extraction_engine: str = "pdfplumber"
+
+    def _extract_pdfplumber_text(self, file_path: Path) -> tuple[str, int]:
         if not file_path.exists():
             raise ExtractionError(f"PDF not found: {file_path}")
         chunks: list[str] = []
+        page_count = 0
         try:
             with pdfplumber.open(str(file_path)) as pdf:
+                page_count = len(pdf.pages)
                 for page in pdf.pages:
                     text = page.extract_text() or ""
                     if text.strip():
@@ -96,10 +107,49 @@ class LocalPdfClient:
                                 chunks.append(" | ".join(cells))
         except Exception as exc:
             raise ExtractionError(f"Local PDF extract failed: {exc}") from exc
-        text = "\n".join(chunks).strip()
-        if not text:
-            raise ExtractionError(f"No text extracted from {file_path.name} (local)")
-        return text
+        return "\n".join(chunks).strip(), page_count
+
+    @staticmethod
+    def _needs_tesseract_fallback(text: str, page_count: int) -> bool:
+        stripped = text.strip()
+        if not stripped:
+            return True
+        if len(stripped) < PDF_TEXT_MIN_CHARS:
+            return True
+        if page_count > 0 and len(stripped) / page_count < 25:
+            return True
+        alnum = sum(c.isalnum() for c in stripped)
+        return alnum / len(stripped) < 0.25
+
+    def extract_text_with_engine(self, file_path: Path) -> PdfExtractionResult:
+        """pdfplumber first; Tesseract OCR on scanned/image-only PDFs."""
+        plumber_text, page_count = self._extract_pdfplumber_text(file_path)
+        if not self._needs_tesseract_fallback(plumber_text, page_count):
+            self.last_extraction_engine = "pdfplumber"
+            return PdfExtractionResult(text=plumber_text, engine="pdfplumber")
+
+        logger.info(
+            "pdfplumber returned %s chars on %s (%s pages) — escalating to Tesseract OCR",
+            len(plumber_text.strip()),
+            file_path.name,
+            page_count,
+        )
+        try:
+            ocr_text = self._ocr.extract_text_from_pdf(file_path)
+            self.last_extraction_engine = "tesseract"
+            if plumber_text.strip() and len(ocr_text) < len(plumber_text.strip()):
+                return PdfExtractionResult(text=plumber_text, engine="pdfplumber")
+            return PdfExtractionResult(text=ocr_text, engine="tesseract")
+        except ExtractionError:
+            if plumber_text.strip():
+                self.last_extraction_engine = "pdfplumber"
+                return PdfExtractionResult(text=plumber_text, engine="pdfplumber")
+            raise ExtractionError(
+                f"No text extracted from {file_path.name} (pdfplumber + Tesseract)."
+            ) from None
+
+    def extract_text(self, file_path: Path) -> str:
+        return self.extract_text_with_engine(file_path).text
 
     def parse_bank_statement(
         self,
@@ -109,19 +159,34 @@ class LocalPdfClient:
         bank_account_number: str,
         statement_month: str,
     ) -> list[BankMovement]:
-        text = self.extract_text(file_path)
+        extracted = self.extract_text_with_engine(file_path)
         movements = self._movements_from_text(
-            text=text,
+            text=extracted.text,
             tenant_id=tenant_id,
             bank_name=bank_name,
             bank_account_number=bank_account_number,
             statement_month=statement_month,
             source_file_path=str(file_path),
         )
+        if not movements and extracted.engine == "pdfplumber":
+            logger.info(
+                "No movements from pdfplumber text on %s — retrying with Tesseract OCR",
+                file_path.name,
+            )
+            ocr_text = self._ocr.extract_text_from_pdf(file_path)
+            self.last_extraction_engine = "tesseract"
+            movements = self._movements_from_text(
+                text=ocr_text,
+                tenant_id=tenant_id,
+                bank_name=bank_name,
+                bank_account_number=bank_account_number,
+                statement_month=statement_month,
+                source_file_path=str(file_path),
+            )
         if not movements:
             raise ExtractionError(
                 f"No movements extracted locally from {file_path.name}. "
-                "PDF may be image-only (needs Tesseract sprint) or unfamiliar layout."
+                "PDF may be image-only or have an unfamiliar layout."
             )
         return movements
 
@@ -148,6 +213,11 @@ class LocalPdfClient:
         import asyncio
 
         return await asyncio.to_thread(self.extract_text, file_path)
+
+    async def extract_text_with_engine_async(self, file_path: Path) -> PdfExtractionResult:
+        import asyncio
+
+        return await asyncio.to_thread(self.extract_text_with_engine, file_path)
 
     def _movements_from_text(
         self,

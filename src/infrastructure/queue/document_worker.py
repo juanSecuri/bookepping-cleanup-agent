@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any
 
 from src.domain.models.enums import DocumentFileType, DocumentStatus
+from src.infrastructure.ocr.extraction_result import apis_used_for_engine
 from src.infrastructure.repositories.document_repository import DocumentRecord, DocumentRepository
 from src.use_cases.ingest_spreadsheet import SpreadsheetIngestUseCase
 
@@ -202,7 +203,7 @@ class DocumentQueueWorker:
         payload = doc.queue_payload or {}
         kind = doc.pipeline_kind or payload.get("plan_kind") or "invoice"
         apis = doc.apis_used or (
-            "pdfplumber (local $0), reglas CoA"
+            "pdfplumber + Tesseract OCR (local $0), reglas CoA"
             if kind != "spreadsheet"
             else "Google Drive"
         )
@@ -278,6 +279,7 @@ class DocumentQueueWorker:
                     f"Saldos extracto: apertura={report.opening_balance} "
                     f"cierre={report.closing_balance}\n"
                 )
+            apis = apis_used_for_engine(report.extraction_engine)
             updated = doc.model_copy(
                 update={
                     "status": DocumentStatus.EXTRACTED,
@@ -314,6 +316,11 @@ class DocumentQueueWorker:
                 vendor = result.vendor_name
                 doc_date = str(result.transaction_date)
                 raw = (result.metadata.raw_text or "")[:6000] or None
+                model = result.metadata.extraction_model or ""
+                if "tesseract" in model:
+                    apis = apis_used_for_engine("tesseract")
+                elif "pdfplumber" in model:
+                    apis = apis_used_for_engine("pdfplumber")
             updated = doc.model_copy(
                 update={
                     "status": DocumentStatus.EXTRACTED,

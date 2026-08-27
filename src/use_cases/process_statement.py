@@ -1,7 +1,7 @@
 """
 ProcessStatement — PDF → extract → rule CoA → persist + mirror txs → reconcile.
 
-Default path is LOCAL ($0): pdfplumber + keyword CoA. No OpenAI / LlamaParse.
+Default path is LOCAL ($0): pdfplumber → Tesseract OCR fallback + keyword CoA. No OpenAI / LlamaParse.
 Also extracts opening/closing balances and validates the bank balance chain (cadenazo).
 """
 from __future__ import annotations
@@ -77,10 +77,12 @@ class ProcessStatementUseCase:
         source_document_id: uuid.UUID | None = None,
     ) -> ProcessingReport:
         settings = get_settings()
-        engine = "local"
+        engine = "pdfplumber"
         raw_text = ""
         if settings.use_local_extraction:
-            raw_text = await self._local_pdf.extract_text_async(file_path)
+            extracted = await self._local_pdf.extract_text_with_engine_async(file_path)
+            engine = extracted.engine
+            raw_text = extracted.text
             statement_month = resolve_statement_month(statement_month, raw_text)
             movements = self._local_pdf._movements_from_text(
                 text=raw_text,
@@ -90,12 +92,31 @@ class ProcessStatementUseCase:
                 statement_month=statement_month,
                 source_file_path=str(file_path),
             )
+            if not movements and engine == "pdfplumber":
+                from src.domain.exceptions import ExtractionError
+
+                try:
+                    ocr_text = await self._local_pdf._ocr.extract_text_from_pdf_async(file_path)
+                    self._local_pdf.last_extraction_engine = "tesseract"
+                    engine = "tesseract"
+                    raw_text = ocr_text
+                    statement_month = resolve_statement_month(statement_month, raw_text)
+                    movements = self._local_pdf._movements_from_text(
+                        text=raw_text,
+                        tenant_id=tenant_id,
+                        bank_name=bank_name,
+                        bank_account_number=bank_account_number,
+                        statement_month=statement_month,
+                        source_file_path=str(file_path),
+                    )
+                except ExtractionError:
+                    pass
             if not movements:
                 from src.domain.exceptions import ExtractionError
 
                 raise ExtractionError(
-                    f"No movements extracted locally from {file_path.name}. "
-                    "PDF may be image-only (needs Tesseract sprint) or unfamiliar layout."
+                    f"No movements extracted from {file_path.name} "
+                    "(pdfplumber + Tesseract). Layout may be unfamiliar."
                 )
         else:
             from src.infrastructure.ocr.llama_parse_client import LlamaParseClient

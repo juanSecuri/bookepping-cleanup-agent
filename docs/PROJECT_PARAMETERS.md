@@ -44,7 +44,8 @@ El agente debe entonces:
 | 6 | Reportes SQL (vistas Supabase): Balance cuadre + P&L + Cash flow (`cash_flow_type`) | **DONE** |
 | 7 | Cierre anual: reset P&L → Retained Earnings | **DONE** |
 | 8 | UX cold-start + banner; split-screen extracto/OCR | **DONE** |
-| 9 | Deploy Render free | **DONE** (Docker + Tesseract live) |
+| 9 | Deploy Render Starter + disco persistente | **DONE** (Docker + Tesseract eng+spa live) |
+| 9b | **Tesseract OCR en PDFs escaneados** (fallback automático tras pdfplumber) | **DONE** (2026-08-27) |
 | 10 | Export Excel + tablas TanStack | **DONE** |
 | 11 | Imagen OCR / Audio local | **DONE** |
 | 12 | Auth | **IN PROGRESS** (Supabase JWT + workspace_members + login gate — ver `docs/AUTH.md`) |
@@ -106,7 +107,7 @@ Una capacidad no está hecha hasta:
 
 ### Checklist formatos
 
-**PDF / Drive** — OK (cola 1-a-1 + pdfplumber; `statement_month` auto desde texto).  
+**PDF / Drive** — OK (cola 1-a-1 + pdfplumber → **Tesseract OCR** en escaneos; `statement_month` auto desde texto).  
 **Excel / CSV** — OK (openpyxl/csv → txs).  
 **Imagen** — OK (Tesseract eng+spa; Docker).  
 **Audio** — OK (faster-whisper opcional / Groq free tier + reglas CoA; sin OpenAI).  
@@ -251,8 +252,21 @@ Env: `EXTRACTION_MODE=local`, `LEDGERAI_UPLOAD_DIR=/var/data/ledgerai_uploads`.
 | **2026-08-26** | **Cierre de día (Juan)** | Parar desarrollo; MVP $0 cerrado para hoy. Próximo: Auth u otro backlog solo con “Tarea de la fecha…” | **EOD** |
 | **2026-08-27** | **Empresa (vía Juan)** | Reportes detallados (P&L columnar, Balance expandible, CF O/I/F); selector año/mes; Excel 4 tabs; rebrand TPC/LedgerAI (cero YASNAY); Drive anidado banco→cuenta→año. P&L no cargaba (periodo default = mes actual sin datos). Skip: counters/KPI animados, weekly columns. | **13a → 13b → 13c** |
 | **2026-08-27** | **Empresa (vía Juan)** | Render Starter comprado; **Auth NOW** — aceptar e implementar scaffold Supabase JWT + membership | **Auth IN PROGRESS** |
+| **2026-08-27** | **Sprint técnico (Juan)** | **Tesseract prioridad máxima** en PDFs escaneados; limpieza assets legado; tests fallback; UI fixes (KPI, visor, Starter copy); fix P&L 2024 paginación | **v2.0 demo-ready** |
 
 ---
+
+## 12. Demo cliente v2.0 (checklist)
+
+- [x] Landing TPC/LedgerAI + auth login  
+- [x] Import Drive masivo → cola secuencial  
+- [x] Extracción PDF: pdfplumber + Tesseract automático  
+- [x] Reportes P&L / Balance / CF por año  
+- [x] Export Excel 4 tabs  
+- [x] Render Starter + disco `/var/data`  
+- [ ] Auth multi-usuario completo (invites, roles) — v2.1  
+- [ ] Supabase Storage para bytes (menos 410 en preview tras redeploy) — backlog  
+
 
 ## 9. Principios técnicos (siempre)
 
@@ -297,13 +311,14 @@ Split-screen extracto/OCR en Documentos | TanStack Table en Transacciones | Expo
 
 ## 11. Sprint activo
 
-**Estado 2026-08-27:** **13a+13b+13c en curso** — `reports-ui-2026-08-27`.
+**Estado 2026-08-27 PM:** **v2.0 demo-ready** — Tesseract PDF live; redeploy para producción.
 
 | Sprint | Objetivo | Estado |
 |--------|----------|--------|
-| **13a** | P&L carga con año real; tablas mes×cuenta; Balance A=P+E; CF+Excel 4 tabs; `GET /api/available-years` | **Hecho en repo** (probar en live) |
-| **13b** | Cero logo/nombre legado; TPC + LedgerAI; CSS vars; toggle dark/light; landing | **Hecho en repo** |
-| **13c** | Drive: jerarquía banco → #cuenta → año para todas las carpetas del cliente | **Hecho en repo** (classify + folder_group) |
+| **13a** | P&L carga con año real; tablas mes×cuenta; Balance A=P+E; CF+Excel 4 tabs; `GET /api/available-years` | **DONE** |
+| **13b** | Cero logo/nombre legado; TPC + LedgerAI; CSS vars; toggle dark/light; landing | **DONE** |
+| **13c** | Drive: jerarquía banco → #cuenta → año para todas las carpetas del cliente | **DONE** |
+| **13d** | Tesseract OCR fallback en PDFs escaneados + tests | **DONE** |
 
 **Omitido a propósito:** counter animado KPI, columnas por semana.
 

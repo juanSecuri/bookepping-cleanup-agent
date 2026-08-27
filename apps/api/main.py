@@ -114,7 +114,7 @@ def _pipeline_kind_for_upload(ftype: DocumentFileType) -> str:
 
 def _apis_used_for_upload(ftype: DocumentFileType) -> str:
     if ftype == DocumentFileType.PDF:
-        return "pdfplumber (local $0), reglas CoA"
+        return "pdfplumber → tesseract OCR (local $0), reglas CoA"
     if ftype == DocumentFileType.CSV:
         return "openpyxl/csv + reglas CoA"
     if ftype == DocumentFileType.IMAGE:
@@ -441,7 +441,7 @@ async def upload_document(
         "filename": doc.file_name,
         "name": doc.file_name,
         "queued": True,
-        "message": "Archivo en cola. Se procesa en segundo plano (1 PDF a la vez, pdfplumber local).",
+        "message": "Archivo en cola. Se procesa en segundo plano (1 PDF a la vez, pdfplumber/Tesseract local).",
     }
 
 
@@ -1555,11 +1555,11 @@ async def drive_import_files(
             ftype = _file_type(name, mime)
             folder = plan.folder_group or _folder_group_from_path(path, name)
             if plan.kind == "statement":
-                apis = "pdfplumber (local $0), reglas CoA"
+                apis = "pdfplumber → Tesseract OCR (local $0), reglas CoA"
             elif plan.kind == "spreadsheet":
                 apis = "Google Drive"
             else:
-                apis = "pdfplumber (local $0), reglas CoA"
+                apis = _apis_used_for_upload(ftype)
 
             doc = await worker.enqueue_file(
                 workspace_id=wid,

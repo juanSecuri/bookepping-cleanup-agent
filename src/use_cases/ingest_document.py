@@ -132,9 +132,13 @@ class IngestDocumentUseCase:
     ) -> FinancialTransaction:
         settings = get_settings()
         if settings.use_local_extraction:
-            text = await self._local_pdf.extract_text_async(file_path)
+            extracted = await self._local_pdf.extract_text_with_engine_async(file_path)
             return await self._structure_local_text(
-                text, file_path, tenant_id, DocumentSource.PDF
+                extracted.text,
+                file_path,
+                tenant_id,
+                DocumentSource.PDF,
+                engine=extracted.engine,
             )
 
         from src.infrastructure.llm.openai_client import OpenAIClient
@@ -194,10 +198,11 @@ class IngestDocumentUseCase:
         match = self._coa.classify(tenant_id, f"{description} {text[:400]}")
         acct_type = self._coa_type(tenant_id, match.code)
         cf = infer_cash_flow_type(account_code=match.code, account_type=acct_type)
+        model_engine = engine if engine in ("tesseract", "pdfplumber") else "pdfplumber"
         meta = ExtractionMetadata(
             source=source,
             raw_file_path=str(file_path),
-            extraction_model=f"{engine}+rules_coa",
+            extraction_model=f"{model_engine}+rules_coa",
             confidence_score=max(0.4, match.confidence * 0.9),
             raw_text=text[:8000],
         )
