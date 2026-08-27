@@ -756,7 +756,7 @@ export default function Documents() {
                               {kindLabel}
                             </span>
                           </div>
-                          <p className="mt-0.5 text-xs text-muted-foreground">
+                          <p className="mt-0.5 text-xs font-medium text-foreground/80">
                             {doc.vendor ? `Detectado: ${String(doc.vendor)} · ` : ''}
                             {doc.apis_used
                               ? `APIs: ${String(doc.apis_used)}`
