@@ -23,6 +23,7 @@ from typing import Any
 from src.domain.models.enums import DocumentFileType, DocumentStatus
 from src.infrastructure.ocr.extraction_result import apis_used_for_engine
 from src.infrastructure.repositories.document_repository import DocumentRecord, DocumentRepository
+from src.infrastructure.storage.document_storage import materialize_to_path, put_document_bytes
 from src.use_cases.ingest_spreadsheet import SpreadsheetIngestUseCase
 
 logger = logging.getLogger("ledgerai.queue")
@@ -67,12 +68,22 @@ class DocumentQueueWorker:
         queue_payload: dict[str, Any] | None = None,
         raw_note: str | None = None,
     ) -> DocumentRecord:
-        """Persist bytes to disk + insert document as pending. Does not process."""
+        """Persist bytes to Storage + local cache; insert document as pending."""
         docs = DocumentRepository()
         doc_id = uuid.uuid4()
         suffix = Path(filename).suffix or ".bin"
         local = upload_dir() / f"{doc_id}{suffix}"
         local.write_bytes(content)
+
+        storage_path: str | None = None
+        try:
+            storage_path = await asyncio.to_thread(
+                put_document_bytes, workspace_id, doc_id, filename, content
+            )
+        except Exception:
+            logger.exception(
+                "Supabase Storage upload failed for %s — local disk only", doc_id
+            )
 
         doc = DocumentRecord(
             id=doc_id,
@@ -90,6 +101,7 @@ class DocumentQueueWorker:
             vendor=vendor,
             document_date=document_date,
             local_path=str(local),
+            storage_path=storage_path,
             queue_payload=queue_payload or {},
             raw_extracted_text=raw_note,
         )
@@ -178,21 +190,36 @@ class DocumentQueueWorker:
         if doc.local_path and Path(doc.local_path).exists():
             return Path(doc.local_path)
 
+        suffix = Path(doc.file_name).suffix or ".bin"
+        cache = upload_dir() / f"{doc.id}{suffix}"
+
+        if doc.storage_path:
+            await asyncio.to_thread(materialize_to_path, doc.storage_path, cache)
+            docs = DocumentRepository()
+            if doc.local_path != str(cache):
+                await docs.save(doc.model_copy(update={"local_path": str(cache)}))
+            return cache
+
         if doc.drive_file_id:
             from src.infrastructure.drive.google_drive_client import GoogleDriveClient
 
             content = GoogleDriveClient().download_bytes(doc.drive_file_id)
-            suffix = Path(doc.file_name).suffix or ".bin"
-            path = upload_dir() / f"{doc.id}{suffix}"
-            path.write_bytes(content)
+            cache.write_bytes(content)
+            storage_path: str | None = None
+            try:
+                storage_path = await asyncio.to_thread(
+                    put_document_bytes, doc.workspace_id, doc.id, doc.file_name, content
+                )
+            except Exception:
+                logger.exception("Storage upload failed re-downloading Drive file %s", doc.id)
             docs = DocumentRepository()
-            await docs.save(doc.model_copy(update={"local_path": str(path)}))
-            return path
+            await docs.save(
+                doc.model_copy(update={"local_path": str(cache), "storage_path": storage_path})
+            )
+            return cache
 
         raise FileNotFoundError(
-            "Archivo no disponible en disco. "
-            "Vuelve a subir el documento o reimporta desde Drive "
-            "(si el deploy no tiene disco persistente, los archivos se pierden al reiniciar)."
+            "Archivo no disponible. Vuelve a subir el documento o reimporta desde Drive."
         )
 
     async def _run_pipeline(self, doc: DocumentRecord, path: Path) -> None:

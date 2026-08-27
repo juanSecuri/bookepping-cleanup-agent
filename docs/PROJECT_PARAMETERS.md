@@ -253,6 +253,7 @@ Env: `EXTRACTION_MODE=local`, `LEDGERAI_UPLOAD_DIR=/var/data/ledgerai_uploads`.
 | **2026-08-27** | **Empresa (vía Juan)** | Reportes detallados (P&L columnar, Balance expandible, CF O/I/F); selector año/mes; Excel 4 tabs; rebrand TPC/LedgerAI (cero YASNAY); Drive anidado banco→cuenta→año. P&L no cargaba (periodo default = mes actual sin datos). Skip: counters/KPI animados, weekly columns. | **13a → 13b → 13c** |
 | **2026-08-27** | **Empresa (vía Juan)** | Render Starter comprado; **Auth NOW** — aceptar e implementar scaffold Supabase JWT + membership | **Auth IN PROGRESS** |
 | **2026-08-27** | **Sprint técnico (Juan)** | **Tesseract prioridad máxima** en PDFs escaneados; limpieza assets legado; tests fallback; UI fixes (KPI, visor, Starter copy); fix P&L 2024 paginación | **v2.0 demo-ready** |
+| **2026-08-27 EOD** | **Juan** | **Supabase Storage** bucket `documents` + `storage_path`; preview/worker leen de Storage; $0 en Free tier | **Sprint 08/27 cerrado** |
 
 ---
 
@@ -265,7 +266,7 @@ Env: `EXTRACTION_MODE=local`, `LEDGERAI_UPLOAD_DIR=/var/data/ledgerai_uploads`.
 - [x] Export Excel 4 tabs  
 - [x] Render Starter + disco `/var/data`  
 - [ ] Auth multi-usuario completo (invites, roles) — v2.1  
-- [ ] Supabase Storage para bytes (menos 410 en preview tras redeploy) — backlog  
+- [x] Supabase Storage para bytes (preview tras redeploy; bucket `documents` Free 1 GB)  
 
 
 ## 9. Principios técnicos (siempre)
@@ -286,7 +287,7 @@ Env: `EXTRACTION_MODE=local`, `LEDGERAI_UPLOAD_DIR=/var/data/ledgerai_uploads`.
 
 1. Upload/Drive → fila en cola (`pending`) en Supabase (no OCR síncrono en HTTP).  
 2. Worker/loop **en el mismo web process**: **1 documento** → extraer → persistir → liberar memoria → `processed` / `failed`.  
-3. Bytes en disco bajo `LEDGERAI_UPLOAD_DIR` (persistente en Starter); Supabase Storage = futuro.  
+3. Bytes en **Supabase Storage** (`documents` bucket) + caché local `LEDGERAI_UPLOAD_DIR` (Render disk).  
 4. UI: estado de carga elegante si el host está frío (menos relevante sin Free sleep).
 
 ### 10.2 Clasificación determinista
@@ -311,7 +312,9 @@ Split-screen extracto/OCR en Documentos | TanStack Table en Transacciones | Expo
 
 ## 11. Sprint activo
 
-**Estado 2026-08-27 PM:** **v2.0 demo-ready** — Tesseract PDF live; redeploy para producción.
+| **13e** | Supabase Storage para documentos + preview sin 410 | **DONE** |
+
+**Estado 2026-08-27 EOD:** **Sprint del día cerrado** — Storage live; smoke test en prod al volver del almuerzo.
 
 | Sprint | Objetivo | Estado |
 |--------|----------|--------|

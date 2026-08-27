@@ -32,6 +32,7 @@ class DocumentRecord(BaseModel):
     apis_used: str | None = None
     folder_group: str | None = None
     local_path: str | None = None
+    storage_path: str | None = None
     queue_payload: dict[str, Any] = Field(default_factory=dict)
     processing_started_at: datetime | None = None
     processed_at: datetime | None = None

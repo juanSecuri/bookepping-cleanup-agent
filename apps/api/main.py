@@ -4,6 +4,7 @@ LedgerAI FastAPI — REST API under /api + SPA static serve.
 from __future__ import annotations
 
 import base64
+import logging
 import mimetypes
 import uuid
 from contextlib import asynccontextmanager
@@ -32,6 +33,7 @@ from src.domain.models.enums import (
 from src.domain.models.transaction import ExtractionMetadata, FinancialTransaction
 from src.infrastructure.classification.cash_flow import infer_cash_flow_type
 from src.infrastructure.queue.document_worker import get_document_worker, upload_dir
+from src.infrastructure.storage.document_storage import resolve_document_bytes
 from src.infrastructure.reconciliation.statement_chain import (
     StatementPeriodRepository,
     acknowledge_chain,
@@ -43,6 +45,8 @@ from src.infrastructure.repositories.workspace_repository import Workspace, Work
 from src.use_cases.close_fiscal_year import FiscalYearAlreadyClosedError
 from src.use_cases.close_period import PeriodAlreadyClosedError
 from src.use_cases.emit_period_reports import EmitPeriodReportsUseCase
+
+logger = logging.getLogger(__name__)
 
 _FRONTEND_DIST = Path(__file__).resolve().parents[2] / "frontend" / "dist"
 
@@ -384,26 +388,44 @@ async def download_document_file(
     workspace_id: str,
     user: AuthUser = Depends(get_current_user),
 ):
-    """Serve local upload file if still on disk (persistent when LEDGERAI_UPLOAD_DIR is set)."""
+    """Serve document bytes from local cache or Supabase Storage."""
     assert_workspace_access(user, workspace_id)
     doc = await DocumentRepository().get_by_id(uuid.UUID(document_id))
     if not doc:
         raise HTTPException(404, "Document not found")
     if str(doc.workspace_id) != workspace_id:
         raise HTTPException(404, "Document not found")
-    path = Path(doc.local_path) if doc.local_path else None
-    if not path or not path.exists():
+
+    content: bytes | None = None
+    try:
+        content = resolve_document_bytes(
+            local_path=doc.local_path, storage_path=doc.storage_path
+        )
+    except FileNotFoundError:
+        pass
+    except Exception:
+        logger.exception("storage read failed for document %s", document_id)
+
+    if content is None and doc.drive_file_id:
+        try:
+            from src.infrastructure.drive.google_drive_client import GoogleDriveClient
+
+            content = GoogleDriveClient().download_bytes(doc.drive_file_id)
+        except Exception:
+            logger.exception("Drive re-download failed for document %s", document_id)
+
+    if content is None:
         raise HTTPException(
             410,
-            "Archivo no disponible en disco. "
-            "Reimporta desde Drive o vuelve a subir.",
+            "Archivo no disponible. Reimporta desde Drive o vuelve a subir.",
         )
-    media, _ = mimetypes.guess_type(doc.file_name or path.name)
-    return FileResponse(
-        path,
-        filename=doc.file_name,
+
+    media, _ = mimetypes.guess_type(doc.file_name or "")
+    filename = doc.file_name or "document"
+    return Response(
+        content=content,
         media_type=media or "application/octet-stream",
-        content_disposition_type="inline",
+        headers={"Content-Disposition": f'inline; filename="{filename}"'},
     )
 
 

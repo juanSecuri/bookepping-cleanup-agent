@@ -38,4 +38,4 @@ Ver `src/infrastructure/ocr/`.
 
 ## Deploy
 
-Render **Starter** + disco `/var/data` → `LEDGERAI_UPLOAD_DIR`. Ver `docs/RENDER_DOCKER.md`.
+Render **Starter** + disco `/var/data` → `LEDGERAI_UPLOAD_DIR`. Bytes durables en **Supabase Storage** bucket `documents` (Free 1 GB). Ver `docs/RENDER_DOCKER.md`.
