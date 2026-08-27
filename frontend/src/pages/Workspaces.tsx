@@ -10,12 +10,14 @@ import {
   Scale,
 } from 'lucide-react'
 import BrandMark from '../components/BrandMark'
+import { useTheme } from '../components/ThemeProvider'
 import { api, type Workspace } from '../lib/api'
 import { cn } from '../lib/utils'
 import { useLocale } from '../i18n'
 
 export default function Workspaces() {
   const { t, locale, toggleLocale } = useLocale()
+  const { theme, toggleTheme } = useTheme()
   const [items, setItems] = useState<Workspace[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -86,14 +88,23 @@ export default function Workspaces() {
     <div className="workspaces-shell min-h-screen text-foreground">
       <header className="border-b border-border bg-card/90 backdrop-blur-md">
         <div className="mx-auto flex max-w-5xl items-center justify-between px-4 py-4 sm:px-6">
-          <BrandMark size="sm" showWordmark />
-          <button
-            type="button"
-            onClick={toggleLocale}
-            className="btn-secondary px-3 py-1.5 text-sm text-muted-foreground"
-          >
-            {locale === 'es' ? 'EN' : 'ES'}
-          </button>
+          <BrandMark size="sm" />
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={toggleTheme}
+              className="btn-secondary px-3 py-1.5 text-sm text-muted-foreground"
+            >
+              {theme === 'dark' ? 'Light' : 'Dark'}
+            </button>
+            <button
+              type="button"
+              onClick={toggleLocale}
+              className="btn-secondary px-3 py-1.5 text-sm text-muted-foreground"
+            >
+              {locale === 'es' ? 'EN' : 'ES'}
+            </button>
+          </div>
         </div>
       </header>
 

@@ -49,6 +49,9 @@ El agente debe entonces:
 | 11 | Imagen OCR / Audio local | **DONE** |
 | 12 | Auth | **Futuro** (fuera de alcance $0 MVP — no implementar) |
 | — | Harden MVP (`harden-mvp-2026-08-26`) | **DONE** (cerrado 2026-08-26 EOD) |
+| **13a** | **Reportes detallados: fix P&L, año/mes, tablas columnar, CF, Excel 4 tabs** | **ACTIVO** |
+| **13b** | **Marca TPC/LedgerAI + paleta crema/verde + dark/light + landing** | Siguiente |
+| **13c** | **Drive UI: jerarquía banco → cuenta → año (todas las carpetas cliente)** | Después |
 
 ---
 
@@ -242,6 +245,7 @@ Env: `EXTRACTION_MODE=local` por defecto.
 | 2026-08-26 | Implementación | Tesseract+Docker, audio whisper/Groq, split Docs, TanStack txs | **ocr-audio-ux-docker** |
 | **2026-08-26** | **Harden MVP** | Auto `statement_month` desde PDF; preview archivo en Docs; params/checklist; Auth sigue futuro | **harden-mvp-2026-08-26** |
 | **2026-08-26** | **Cierre de día (Juan)** | Parar desarrollo; MVP $0 cerrado para hoy. Próximo: Auth u otro backlog solo con “Tarea de la fecha…” | **EOD** |
+| **2026-08-27** | **Empresa (vía Juan)** | Reportes detallados (P&L columnar, Balance expandible, CF O/I/F); selector año/mes; Excel 4 tabs; rebrand TPC/LedgerAI (cero YASNAY); Drive anidado banco→cuenta→año. P&L no cargaba (periodo default = mes actual sin datos). Skip: counters/KPI animados, weekly columns. | **13a → 13b → 13c** |
 
 ---
 
@@ -287,13 +291,17 @@ Split-screen extracto/OCR en Documentos | TanStack Table en Transacciones | Expo
 
 ## 11. Sprint activo
 
-**Estado 2026-08-26 EOD:** **cerrado.** Sin foco activo hasta nueva “Tarea de la fecha…”.
+**Estado 2026-08-27:** **13a+13b+13c en curso** — `reports-ui-2026-08-27`.
 
-**Último sprint:** `harden-mvp-2026-08-26` — DONE.
+| Sprint | Objetivo | Estado |
+|--------|----------|--------|
+| **13a** | P&L carga con año real; tablas mes×cuenta; Balance A=P+E; CF+Excel 4 tabs; `GET /api/available-years` | **Hecho en repo** (probar en live) |
+| **13b** | Cero logo/nombre legado; TPC + LedgerAI; CSS vars; toggle dark/light; landing | **Hecho en repo** |
+| **13c** | Drive: jerarquía banco → #cuenta → año para todas las carpetas del cliente | **Hecho en repo** (classify + folder_group) |
 
-**Live:** https://ledgerai-0wyy.onrender.com (Docker · YASNAY · cola · CoA · reportes · OCR).
+**Omitido a propósito:** counter animado KPI, columnas por semana.
 
-**Pendiente futuro (no hoy):** Auth · Email facturas · exceljs multipestaña (opcional) · Health Check Path en Dashboard si falta (`/health`).
+**Live:** https://ledgerai-0wyy.onrender.com — redeploy necesario para ver cambios.
 
 ---
 

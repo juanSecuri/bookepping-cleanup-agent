@@ -337,12 +337,8 @@ export default function Documents() {
   const groupedDocs = useMemo(() => {
     const map = new Map<string, Document[]>()
     for (const d of docs) {
-      const folder = String(d.folder_group || d.drive_path || 'Sin carpeta')
-      const key = folder.includes('/')
-        ? folder.replace(/\/[^/]+$/, '') || folder
-        : folder
-      // Prefer explicit folder_group from API
-      const group = String(d.folder_group || key || 'Sin carpeta')
+      // Prefer classify folder_group: "Wells Fargo / 8398 / 2025"
+      const group = String(d.folder_group || d.drive_path || 'Sin carpeta')
       if (!map.has(group)) map.set(group, [])
       map.get(group)!.push(d)
     }
@@ -696,7 +692,8 @@ export default function Documents() {
       {docs.length > 0 && (
         <div className="space-y-4">
           <p className="text-sm text-muted-foreground">
-            Agrupados por carpeta de Drive. Abre cada archivo para ver APIs usadas y el texto
+            Agrupados por banco / cuenta / año (como en Drive: Wells → 8398 → 2025,
+            Truist Checking 4461 → 2026, etc.). Abre cada archivo para ver APIs y texto
             extraído.
           </p>
           {groupedDocs.map(([folder, items]) => (

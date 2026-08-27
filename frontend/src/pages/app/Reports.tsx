@@ -1,16 +1,22 @@
-import { useCallback, useEffect, useState } from 'react'
-import { useParams } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Link, useParams } from 'react-router-dom'
 import {
   Bar,
   BarChart,
   CartesianGrid,
-  Legend,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts'
-import { api, type Period, type PnLLineItem, type PnLReport } from '../../lib/api'
+import {
+  api,
+  type BalanceLine,
+  type Period,
+  type PnLLineItem,
+  type PnLReport,
+  type StatementsBundle,
+} from '../../lib/api'
 import { useLocale } from '../../i18n'
 import { cn } from '../../lib/utils'
 
@@ -23,156 +29,189 @@ function periodSuggested(p: Period): boolean {
   return String(p.status ?? '').toLowerCase() === 'suggested'
 }
 
-type StatementsBundle = Awaited<ReturnType<typeof api.financialStatements>>
-
 function money(n: number) {
   return n.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
 }
 
-function periodToDates(period: string): { from?: string; to?: string } {
-  const p = period.trim()
-  if (/^\d{4}-\d{2}$/.test(p)) {
-    const [ys, ms] = p.split('-')
-    const y = Number(ys)
-    const m = Number(ms)
-    const last = new Date(y, m, 0).getDate()
-    return { from: `${p}-01`, to: `${p}-${String(last).padStart(2, '0')}` }
-  }
-  if (/^\d{4}$/.test(p)) {
-    return { from: `${p}-01-01`, to: `${p}-12-31` }
-  }
-  return {}
-}
+const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
+const MONTH_KEYS = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
 
-function pnlItems(pnl: PnLReport | null | undefined, key: 'revenueItems' | 'expenseItems'): PnLLineItem[] {
+function pnlItems(
+  pnl: PnLReport | null | undefined,
+  key: 'revenueItems' | 'expenseItems' | 'cogsItems',
+): PnLLineItem[] {
   if (!pnl) return []
   const items = pnl[key]
   return Array.isArray(items) ? items : []
 }
 
-function PnLDetailTables({
-  pnl,
-  t,
+function MonthTable({
+  title,
+  items,
+  total,
+  showUncategorizedHint,
 }: {
-  pnl: PnLReport
-  t: (key: string) => string
+  title: string
+  items: PnLLineItem[]
+  total: number
+  showUncategorizedHint?: boolean
 }) {
-  const revenue = pnlItems(pnl, 'revenueItems')
-  const expenses = pnlItems(pnl, 'expenseItems')
-  const revTotal = Number(pnl.revenue ?? pnl.totalRevenue ?? 0)
-  const expTotal = Number(pnl.expenses ?? pnl.totalExpenses ?? 0)
-  const net = Number(pnl.net_income ?? pnl.netIncome ?? revTotal - expTotal)
-
   return (
-    <div className="space-y-4">
-      <div className="grid gap-4 sm:grid-cols-3">
-        {[
-          { label: t('reports.revenue'), value: revTotal, tone: 'text-success-foreground' },
-          { label: t('reports.expenses'), value: expTotal, tone: 'text-destructive' },
-          { label: t('reports.net'), value: net, tone: 'text-primary' },
-        ].map((kpi) => (
-          <div key={kpi.label} className="rounded-xl border border-border bg-background p-4">
-            <p className="text-sm text-muted-foreground">{kpi.label}</p>
-            <p className={cn('mt-1 text-2xl font-semibold tabular-nums', kpi.tone)}>
-              {money(kpi.value)}
-            </p>
-          </div>
-        ))}
+    <div className="table-scroll animate-fade-up rounded-xl border border-border bg-card soft-shadow-lift">
+      <div className="border-b border-border px-4 py-3">
+        <h3 className="font-display text-lg tracking-wide">{title}</h3>
       </div>
+      {items.length === 0 ? (
+        <p className="px-4 py-6 text-sm text-muted-foreground">—</p>
+      ) : (
+        <table className="w-full min-w-[720px] text-left text-sm">
+          <thead className="bg-secondary/40 text-muted-foreground">
+            <tr>
+              <th className="px-3 py-2 font-medium">Código</th>
+              <th className="px-3 py-2 font-medium">Cuenta</th>
+              {MONTH_LABELS.map((m) => (
+                <th key={m} className="px-2 py-2 text-right font-medium">
+                  {m}
+                </th>
+              ))}
+              <th className="px-3 py-2 text-right font-medium">Total</th>
+            </tr>
+          </thead>
+          <tbody>
+            {items.map((row) => {
+              const isSuspense = row.code === '9999'
+              return (
+                <tr
+                  key={`${row.code}-${row.name}`}
+                  className="border-t border-border transition-colors duration-200 hover:bg-[color-mix(in_srgb,var(--accent-cream)_8%,transparent)]"
+                >
+                  <td className="px-3 py-2 font-mono text-xs">{row.code ?? '—'}</td>
+                  <td className="px-3 py-2">
+                    {row.name ?? '—'}
+                    {isSuspense && showUncategorizedHint && (
+                      <span
+                        className="ml-1 cursor-help text-warning-foreground"
+                        title="Txs sin clasificar — ir a Transacciones para resolver"
+                      >
+                        ⚠️
+                      </span>
+                    )}
+                  </td>
+                  {MONTH_KEYS.map((mk) => (
+                    <td key={mk} className="px-2 py-2 text-right tabular-nums text-xs">
+                      {money(Number(row.byMonth?.[mk] ?? 0))}
+                    </td>
+                  ))}
+                  <td className="px-3 py-2 text-right tabular-nums font-medium">
+                    {money(Number(row.amount ?? 0))}
+                  </td>
+                </tr>
+              )
+            })}
+            <tr className="border-t-2 border-border bg-secondary/30">
+              <td colSpan={14} className="px-3 py-2 text-right font-semibold">
+                TOTAL {title} {money(total)}
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      )}
+    </div>
+  )
+}
 
-      <div className="grid gap-4 lg:grid-cols-2">
-        <div className="table-scroll rounded-xl border border-border bg-background">
-          <div className="border-b border-border px-4 py-3">
-            <h3 className="font-semibold">{t('reports.revenue')}</h3>
-            <p className="text-xs text-muted-foreground">{t('reports.pnlDetail')}</p>
-          </div>
-          {revenue.length === 0 ? (
-            <p className="px-4 py-6 text-sm text-muted-foreground">—</p>
+function BalanceSection({
+  title,
+  lines,
+  total,
+  defaultOpen = true,
+}: {
+  title: string
+  lines: BalanceLine[]
+  total: number
+  defaultOpen?: boolean
+}) {
+  const [open, setOpen] = useState(defaultOpen)
+  return (
+    <div className="animate-fade-up rounded-xl border border-border bg-card soft-shadow-lift">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors duration-200 hover:bg-secondary/30"
+      >
+        <span className="font-display text-lg tracking-wide">
+          {open ? '▼' : '▶'} {title}
+        </span>
+        <span className="tabular-nums font-semibold">{money(total)}</span>
+      </button>
+      {open && (
+        <div className="table-scroll border-t border-border">
+          {lines.length === 0 ? (
+            <p className="px-4 py-4 text-sm text-muted-foreground">(vacío)</p>
           ) : (
-            <table className="w-full min-w-[320px] text-left text-sm">
+            <table className="w-full min-w-[560px] text-left text-sm">
               <thead className="bg-secondary/40 text-muted-foreground">
                 <tr>
-                  <th className="px-4 py-2 font-medium">Código</th>
-                  <th className="px-4 py-2 font-medium">Cuenta</th>
-                  <th className="px-4 py-2 text-right font-medium">Monto</th>
-                  <th className="px-4 py-2 text-right font-medium">{t('reports.txCount')}</th>
+                  <th className="px-3 py-2 font-medium">Código</th>
+                  <th className="px-3 py-2 font-medium">Cuenta</th>
+                  <th className="px-3 py-2 text-right font-medium">Saldo Inicial</th>
+                  <th className="px-3 py-2 text-right font-medium">Débitos</th>
+                  <th className="px-3 py-2 text-right font-medium">Créditos</th>
+                  <th className="px-3 py-2 text-right font-medium">Saldo Final</th>
                 </tr>
               </thead>
               <tbody>
-                {revenue.map((row) => (
-                  <tr key={`${row.code}-${row.name}`} className="border-t border-border">
-                    <td className="px-4 py-2 font-mono text-xs">{row.code ?? '—'}</td>
-                    <td className="px-4 py-2">{row.name ?? '—'}</td>
-                    <td className="px-4 py-2 text-right tabular-nums">{money(Number(row.amount ?? 0))}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
-                      {row.txCount ?? '—'}
+                {lines.map((row) => (
+                  <tr
+                    key={`${row.code}-${row.name}`}
+                    className="border-t border-border transition-colors duration-200 hover:bg-[color-mix(in_srgb,var(--accent-cream)_8%,transparent)]"
+                  >
+                    <td className="px-3 py-2 font-mono text-xs">{row.code ?? '—'}</td>
+                    <td className="px-3 py-2">{row.name ?? '—'}</td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {money(Number(row.opening ?? 0))}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {money(Number(row.debits ?? 0))}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums">
+                      {money(Number(row.credits ?? 0))}
+                    </td>
+                    <td className="px-3 py-2 text-right tabular-nums font-medium">
+                      {money(Number(row.closing ?? row.amount ?? 0))}
                     </td>
                   </tr>
                 ))}
+                <tr className="border-t-2 border-border bg-secondary/30">
+                  <td colSpan={6} className="px-3 py-2 text-right font-semibold">
+                    TOTAL {title} {money(total)}
+                  </td>
+                </tr>
               </tbody>
             </table>
           )}
         </div>
-
-        <div className="table-scroll rounded-xl border border-border bg-background">
-          <div className="border-b border-border px-4 py-3">
-            <h3 className="font-semibold">{t('reports.expenses')}</h3>
-            <p className="text-xs text-muted-foreground">{t('reports.pnlDetail')}</p>
-          </div>
-          {expenses.length === 0 ? (
-            <p className="px-4 py-6 text-sm text-muted-foreground">—</p>
-          ) : (
-            <table className="w-full min-w-[320px] text-left text-sm">
-              <thead className="bg-secondary/40 text-muted-foreground">
-                <tr>
-                  <th className="px-4 py-2 font-medium">Código</th>
-                  <th className="px-4 py-2 font-medium">Cuenta</th>
-                  <th className="px-4 py-2 text-right font-medium">Monto</th>
-                  <th className="px-4 py-2 text-right font-medium">{t('reports.txCount')}</th>
-                </tr>
-              </thead>
-              <tbody>
-                {expenses.map((row) => (
-                  <tr key={`${row.code}-${row.name}`} className="border-t border-border">
-                    <td className="px-4 py-2 font-mono text-xs">{row.code ?? '—'}</td>
-                    <td className="px-4 py-2">{row.name ?? '—'}</td>
-                    <td className="px-4 py-2 text-right tabular-nums">{money(Number(row.amount ?? 0))}</td>
-                    <td className="px-4 py-2 text-right tabular-nums text-muted-foreground">
-                      {row.txCount ?? '—'}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          )}
-        </div>
-      </div>
+      )}
     </div>
   )
 }
 
 const btnPrimary =
-  'cursor-pointer rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition hover:bg-champagne-bright focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50'
+  'cursor-pointer rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition duration-200 hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50'
 const btnSecondary =
-  'cursor-pointer rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium transition hover:border-primary/50 hover:bg-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50'
+  'cursor-pointer rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium transition duration-200 hover:border-primary/50 hover:bg-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50'
 
 export default function Reports() {
   const { workspaceId = '' } = useParams()
   const { t } = useLocale()
   const [periods, setPeriods] = useState<Period[]>([])
-  const [pnl, setPnl] = useState<PnLReport | null>(null)
   const [bundle, setBundle] = useState<StatementsBundle | null>(null)
-  const [periodInput, setPeriodInput] = useState(() => {
-    const d = new Date()
-    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`
-  })
-  const [dateFrom, setDateFrom] = useState('')
-  const [dateTo, setDateTo] = useState('')
+  const [availableYears, setAvailableYears] = useState<string[]>([])
+  const [fiscalYear, setFiscalYear] = useState('')
+  const [month, setMonth] = useState<string>('') // '' = whole year
   const [loading, setLoading] = useState(true)
   const [loadingStmt, setLoadingStmt] = useState(false)
-  const [loadingPnl, setLoadingPnl] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [pnlLoaded, setPnlLoaded] = useState(false)
   const [fiscalYears, setFiscalYears] = useState<
     Array<{
       fiscal_year?: string
@@ -184,79 +223,72 @@ export default function Reports() {
   >([])
   const [yearInput, setYearInput] = useState(() => String(new Date().getFullYear()))
   const [closingYear, setClosingYear] = useState(false)
+  const [yearsReady, setYearsReady] = useState(false)
 
-  const loadPeriods = useCallback(async () => {
+  const loadMeta = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [periodsData, yearsData] = await Promise.all([
+      const [periodsData, yearsData, avail] = await Promise.all([
         api.listPeriods({ workspace_id: workspaceId }),
         api.listFiscalYears(workspaceId),
+        api.availableYears(workspaceId),
       ])
       setPeriods(Array.isArray(periodsData) ? periodsData : [])
       setFiscalYears(Array.isArray(yearsData.years) ? yearsData.years : [])
+      const years = avail.verified_years?.length
+        ? avail.verified_years
+        : avail.years?.length
+          ? avail.years
+          : []
+      setAvailableYears(years)
+      const def = avail.default_year || years[0] || String(new Date().getFullYear())
+      setFiscalYear((prev) => prev || String(def))
+      setYearInput(String(def))
+      setYearsReady(true)
     } catch (e) {
       setError(e instanceof Error ? e.message : t('common.error'))
       setPeriods([])
+      setYearsReady(true)
     } finally {
       setLoading(false)
     }
   }, [workspaceId, t])
 
   useEffect(() => {
-    void loadPeriods()
-  }, [loadPeriods])
+    void loadMeta()
+  }, [loadMeta])
 
-  async function loadStatements() {
+  const loadStatements = useCallback(async () => {
+    if (!fiscalYear) return
     setLoadingStmt(true)
     setError(null)
     try {
       const data = await api.financialStatements({
         workspace_id: workspaceId,
-        period: periodInput || undefined,
-        date_from: dateFrom || undefined,
-        date_to: dateTo || undefined,
+        fiscal_year: fiscalYear,
+        month: month ? Number(month) : undefined,
       })
       setBundle(data)
-      if (data.pnl) {
-        setPnl(data.pnl)
-        setPnlLoaded(true)
-      }
-      await loadPeriods()
     } catch (e) {
       setError(e instanceof Error ? e.message : t('common.error'))
+      setBundle(null)
     } finally {
       setLoadingStmt(false)
     }
-  }
+  }, [workspaceId, fiscalYear, month, t])
 
-  async function loadPnl() {
-    setLoadingPnl(true)
-    setError(null)
-    setPnlLoaded(true)
-    try {
-      const derived = !dateFrom && !dateTo ? periodToDates(periodInput) : {}
-      const data = await api.pnlReport({
-        workspace_id: workspaceId,
-        date_from: dateFrom || derived.from,
-        date_to: dateTo || derived.to,
-      })
-      setPnl(data)
-      // Keep statement KPIs in sync when only loading P&L
-      setBundle((prev) => (prev ? { ...prev, pnl: data } : prev))
-    } catch (e) {
-      setError(e instanceof Error ? e.message : t('common.error'))
-      setPnl(null)
-    } finally {
-      setLoadingPnl(false)
-    }
-  }
+  // Auto-load when year is ready / changes
+  useEffect(() => {
+    if (!yearsReady || !fiscalYear) return
+    void loadStatements()
+  }, [yearsReady, fiscalYear, month, loadStatements])
 
   async function closePeriod(period: string) {
     setError(null)
     try {
       await api.closePeriod(period, workspaceId)
-      await loadPeriods()
+      await loadMeta()
     } catch (e) {
       setError(e instanceof Error ? e.message : t('common.error'))
     }
@@ -266,7 +298,7 @@ export default function Reports() {
     setError(null)
     try {
       await api.reopenPeriod(period, workspaceId)
-      await loadPeriods()
+      await loadMeta()
     } catch (e) {
       setError(e instanceof Error ? e.message : t('common.error'))
     }
@@ -280,8 +312,7 @@ export default function Reports() {
         workspace_id: workspaceId,
         allow_suspense: false,
       })
-      await loadPeriods()
-      setError(null)
+      await loadMeta()
       alert(
         `Año ${res.fiscal_year} cerrado. NI ${money(res.net_income)} → RE acumulada ${money(res.retained_earnings_after)}.`,
       )
@@ -296,22 +327,38 @@ export default function Reports() {
     setError(null)
     try {
       await api.reopenFiscalYear(year, workspaceId)
-      await loadPeriods()
+      await loadMeta()
     } catch (e) {
       setError(e instanceof Error ? e.message : t('common.error'))
     }
   }
 
-  const displayPnl = pnl || bundle?.pnl || null
-  const chartData = displayPnl
-    ? [
-        { name: t('reports.revenue'), value: Number(displayPnl.revenue ?? displayPnl.totalRevenue ?? 0) },
-        { name: t('reports.expenses'), value: Number(displayPnl.expenses ?? displayPnl.totalExpenses ?? 0) },
-        { name: t('reports.net'), value: Number(displayPnl.net_income ?? displayPnl.netIncome ?? 0) },
-      ]
-    : []
+  const displayPnl = bundle?.pnl || null
+  const revTotal = Number(displayPnl?.revenue ?? displayPnl?.totalRevenue ?? 0)
+  const expTotal = Number(displayPnl?.expenses ?? displayPnl?.totalExpenses ?? 0)
+  const cogsTotal = Number(displayPnl?.cogs ?? displayPnl?.totalCogs ?? 0)
+  const opexTotal = Number(
+    displayPnl?.operatingExpenses ??
+      pnlItems(displayPnl, 'expenseItems').reduce((s, r) => s + Number(r.amount ?? 0), 0),
+  )
+  const net = Number(displayPnl?.net_income ?? displayPnl?.netIncome ?? revTotal - expTotal)
 
-  const cfMonthly = bundle?.cash_flow_monthly || []
+  const cfMonthly = useMemo(() => {
+    const rows = bundle?.cash_flow_monthly || []
+    return rows.map((r) => ({
+      period: r.period,
+      inflows: Number(r.inflows ?? 0),
+      outflows: -Math.abs(Number(r.outflows ?? 0)),
+      net: Number(r.net ?? 0),
+    }))
+  }, [bundle])
+
+  const periodLabel = month ? `${fiscalYear}-${month}` : fiscalYear
+  const exportHref = api.exportStatementsUrl({
+    workspace_id: workspaceId,
+    fiscal_year: fiscalYear || undefined,
+    month: month ? Number(month) : undefined,
+  })
 
   return (
     <div>
@@ -326,66 +373,60 @@ export default function Reports() {
         </div>
       )}
 
-      <section className="mb-8 rounded-xl border border-border bg-card p-5">
-        <h2 className="mb-1 text-lg font-semibold tracking-tight">Emitir estados financieros</h2>
+      <section className="mb-8 rounded-xl border border-border bg-card p-5 soft-shadow-lift">
+        <h2 className="mb-1 font-display text-xl tracking-wide">Estados financieros</h2>
         <p className="mb-4 text-sm text-muted-foreground">
-          Balance + P&amp;L detallado + Cash flow (txs verificadas, motor local $0). Periodo{' '}
-          <code className="text-xs">YYYY-MM</code> o <code className="text-xs">YYYY</code>. Si no
-          pones fechas, «Cargar P&amp;L» usa el periodo.
+          Balance + P&amp;L por cuenta/mes + Cash flow O/I/F. Solo txs <strong>verificadas</strong>.
+          Año completo = columnas mensuales; año + mes = detalle del mes.
         </p>
+
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
           <label className="w-full text-sm sm:w-auto">
-            Periodo
-            <input
-              className="mt-1 block w-full rounded-lg border border-border bg-background px-3 py-2 sm:w-44"
-              placeholder="2026-05 o 2026"
-              value={periodInput}
-              onChange={(e) => setPeriodInput(e.target.value)}
-            />
+            Año
+            <select
+              className="mt-1 block w-full rounded-lg border border-border bg-background px-3 py-2 sm:w-36"
+              value={fiscalYear}
+              onChange={(e) => setFiscalYear(e.target.value)}
+            >
+              {availableYears.length === 0 && (
+                <option value={fiscalYear || String(new Date().getFullYear())}>
+                  {fiscalYear || new Date().getFullYear()}
+                </option>
+              )}
+              {availableYears.map((y) => (
+                <option key={y} value={y}>
+                  {y}
+                </option>
+              ))}
+            </select>
           </label>
           <label className="w-full text-sm sm:w-auto">
-            {t('reports.from')}
-            <input
-              type="date"
-              className="mt-1 block w-full rounded-lg border border-border bg-background px-3 py-2"
-              value={dateFrom}
-              onChange={(e) => setDateFrom(e.target.value)}
-            />
-          </label>
-          <label className="w-full text-sm sm:w-auto">
-            {t('reports.to')}
-            <input
-              type="date"
-              className="mt-1 block w-full rounded-lg border border-border bg-background px-3 py-2"
-              value={dateTo}
-              onChange={(e) => setDateTo(e.target.value)}
-            />
+            Mes (opcional)
+            <select
+              className="mt-1 block w-full rounded-lg border border-border bg-background px-3 py-2 sm:w-40"
+              value={month}
+              onChange={(e) => setMonth(e.target.value)}
+            >
+              <option value="">Todo el año</option>
+              {MONTH_KEYS.map((mk, i) => (
+                <option key={mk} value={mk}>
+                  {MONTH_LABELS[i]} ({mk})
+                </option>
+              ))}
+            </select>
           </label>
           <div className="flex w-full flex-wrap gap-2 sm:w-auto">
             <button
               type="button"
               onClick={() => void loadStatements()}
-              disabled={loadingStmt}
+              disabled={loadingStmt || !fiscalYear}
               className={cn(btnPrimary, 'flex-1 sm:flex-none')}
             >
-              {loadingStmt ? t('common.loading') : t('reports.emit')}
-            </button>
-            <button
-              type="button"
-              onClick={() => void loadPnl()}
-              disabled={loadingPnl}
-              className={cn(btnSecondary, 'flex-1 sm:flex-none')}
-            >
-              {loadingPnl ? t('common.loading') : t('reports.load')}
+              {loadingStmt ? t('common.loading') : 'Actualizar'}
             </button>
             <a
               className={cn(btnSecondary, 'flex-1 text-center sm:flex-none')}
-              href={api.exportStatementsUrl({
-                workspace_id: workspaceId,
-                period: periodInput || undefined,
-                date_from: dateFrom || undefined,
-                date_to: dateTo || undefined,
-              })}
+              href={exportHref}
             >
               Export Excel
             </a>
@@ -394,37 +435,92 @@ export default function Reports() {
 
         {bundle && (
           <p className="mb-4 text-xs text-muted-foreground">
-            {bundle.period_label} · {bundle.transaction_count ?? 0} txs · motor {bundle.engine}
+            {bundle.period_label} · {bundle.transaction_count ?? 0} txs verificadas
+            {(bundle.pending_count ?? 0) > 0 && (
+              <>
+                {' '}
+                ·{' '}
+                <Link
+                  to={`/app/${workspaceId}/transactions`}
+                  className="text-primary underline-offset-2 hover:underline"
+                >
+                  {bundle.pending_count} pendientes de revisar
+                </Link>
+              </>
+            )}{' '}
+            · motor {bundle.engine}
           </p>
         )}
 
+        {bundle && (bundle.transaction_count ?? 0) === 0 && (
+          <div className="mb-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
+            No hay txs verificadas en {periodLabel}.
+            {(bundle.pending_count ?? 0) > 0 ? (
+              <>
+                {' '}
+                Hay {bundle.pending_count} en revisión —{' '}
+                <Link className="underline" to={`/app/${workspaceId}/transactions`}>
+                  apruébalas en Transacciones
+                </Link>{' '}
+                para que entren al P&amp;L.
+              </>
+            ) : (
+              <> Importa extractos desde Documentos / Drive y clasifica.</>
+            )}
+          </div>
+        )}
+
+        {/* ── P&L ─────────────────────────────────────────────────────────── */}
         {displayPnl && (
-          <div className="mb-6">
-            <h3 className="mb-3 text-base font-semibold tracking-tight">{t('reports.pnl')}</h3>
-            <PnLDetailTables pnl={displayPnl} t={t} />
-            <div className="mt-4 h-56 rounded-xl border border-border bg-background p-3">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                  <XAxis dataKey="name" tick={{ fontSize: 12 }} />
-                  <YAxis tick={{ fontSize: 12 }} />
-                  <Tooltip formatter={(v) => money(Number(v ?? 0))} />
-                  <Bar dataKey="value" fill="var(--primary)" radius={[6, 6, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
+          <div className="mb-8 space-y-4">
+            <h3 className="font-display text-xl tracking-wide">{t('reports.pnl')}</h3>
+            <div className="grid gap-4 sm:grid-cols-3">
+              {[
+                { label: t('reports.revenue'), value: revTotal, tone: 'text-[var(--positive)]' },
+                { label: t('reports.expenses'), value: expTotal, tone: 'text-[var(--negative)]' },
+                { label: t('reports.net'), value: net, tone: 'text-primary' },
+              ].map((kpi) => (
+                <div
+                  key={kpi.label}
+                  className="animate-fade-up rounded-xl border border-border bg-background p-4 soft-shadow-lift"
+                >
+                  <p className="text-sm text-muted-foreground">{kpi.label}</p>
+                  <p className={cn('mt-1 text-2xl font-semibold tabular-nums', kpi.tone)}>
+                    {money(kpi.value)}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            <MonthTable
+              title="INGRESOS"
+              items={pnlItems(displayPnl, 'revenueItems')}
+              total={revTotal}
+            />
+            <MonthTable
+              title="COSTO DE VENTAS"
+              items={pnlItems(displayPnl, 'cogsItems')}
+              total={cogsTotal}
+            />
+            <MonthTable
+              title="GASTOS OPERATIVOS"
+              items={pnlItems(displayPnl, 'expenseItems')}
+              total={opexTotal}
+              showUncategorizedHint
+            />
+
+            <div className="rounded-xl border border-border bg-secondary/20 px-4 py-3 text-right">
+              <span className="font-display text-lg font-semibold tracking-wide">
+                UTILIDAD NETA {money(net)}
+              </span>
             </div>
           </div>
         )}
 
-        {pnlLoaded && !displayPnl && !loadingPnl && (
-          <p className="mb-4 text-sm text-muted-foreground">{t('reports.pnlEmpty')}</p>
-        )}
-
+        {/* ── Balance chain alerts ────────────────────────────────────────── */}
         {bundle?.balance_chain_alerts && bundle.balance_chain_alerts.length > 0 && (
           <div className="mb-6 rounded-xl border border-destructive/40 bg-destructive/10 p-4">
-            <h3 className="mb-2 font-semibold text-destructive">
-              Alertas de cadenazo bancario
-            </h3>
+            <h3 className="mb-2 font-semibold text-destructive">Alertas de cadenazo bancario</h3>
             <ul className="space-y-3 text-sm">
               {bundle.balance_chain_alerts.map((a) => (
                 <li
@@ -441,7 +537,7 @@ export default function Reports() {
                   {a.paused && a.statement_month && a.bank_account_number && (
                     <button
                       type="button"
-                      className="shrink-0 rounded-md border border-rose-400 px-3 py-1.5 text-xs font-medium hover:bg-rose-100 dark:hover:bg-rose-900"
+                      className={btnSecondary}
                       onClick={() =>
                         void (async () => {
                           try {
@@ -466,9 +562,10 @@ export default function Reports() {
           </div>
         )}
 
+        {/* ── Balance ─────────────────────────────────────────────────────── */}
         {bundle?.balance_sheet && (
-          <div className="mb-6">
-            <div className="mb-3 flex flex-wrap items-center gap-3 text-sm">
+          <div className="mb-8 space-y-4">
+            <div className="flex flex-wrap items-center gap-3 text-sm">
               <span
                 className={
                   bundle.balance_sheet.balanced
@@ -477,7 +574,7 @@ export default function Reports() {
                 }
               >
                 {bundle.balance_sheet.balanced
-                  ? 'Balance cuadrado (A = P + Patrimonio)'
+                  ? '✅ Balance cuadrado: A = P + E'
                   : `Descuadre Δ ${money(Number(bundle.balance_sheet.imbalance ?? 0))}`}
               </span>
               {bundle.balance_sheet.equation && (
@@ -485,112 +582,188 @@ export default function Reports() {
               )}
             </div>
             <div className="grid gap-4 lg:grid-cols-3">
-              <div className="rounded-xl border border-border bg-background p-4">
-                <h3 className="mb-2 font-semibold">Balance — Activos</h3>
-                <p className="mb-2 text-xl font-semibold tabular-nums">
-                  {money(Number(bundle.balance_sheet.totalAssets ?? 0))}
-                </p>
-                <ul className="space-y-1 text-sm text-muted-foreground">
-                  {(bundle.balance_sheet.assets || []).map((a) => (
-                    <li key={a.code} className="flex justify-between gap-2">
-                      <span>{a.name}</span>
-                      <span className="tabular-nums">{money(Number(a.amount ?? 0))}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="rounded-xl border border-border bg-background p-4">
-                <h3 className="mb-2 font-semibold">Pasivos</h3>
-                <p className="mb-2 text-xl font-semibold tabular-nums">
-                  {money(Number(bundle.balance_sheet.totalLiabilities ?? 0))}
-                </p>
-                <ul className="space-y-1 text-sm text-muted-foreground">
-                  {(bundle.balance_sheet.liabilities || []).length === 0 && <li>—</li>}
-                  {(bundle.balance_sheet.liabilities || []).map((a) => (
-                    <li key={a.code} className="flex justify-between gap-2">
-                      <span>{a.name}</span>
-                      <span className="tabular-nums">{money(Number(a.amount ?? 0))}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-              <div className="rounded-xl border border-border bg-background p-4">
-                <h3 className="mb-2 font-semibold">Patrimonio</h3>
-                <p className="mb-2 text-xl font-semibold tabular-nums">
-                  {money(Number(bundle.balance_sheet.totalEquity ?? 0))}
-                </p>
-                <ul className="space-y-1 text-sm text-muted-foreground">
-                  {(bundle.balance_sheet.equity || []).map((a) => (
-                    <li key={a.code || a.name} className="flex justify-between gap-2">
-                      <span>{a.name}</span>
-                      <span className="tabular-nums">{money(Number(a.amount ?? 0))}</span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
+              {[
+                {
+                  label: 'Activos',
+                  value: Number(bundle.balance_sheet.totalAssets ?? 0),
+                },
+                {
+                  label: 'Pasivos',
+                  value: Number(bundle.balance_sheet.totalLiabilities ?? 0),
+                },
+                {
+                  label: 'Patrimonio',
+                  value: Number(bundle.balance_sheet.totalEquity ?? 0),
+                },
+              ].map((kpi) => (
+                <div
+                  key={kpi.label}
+                  className="rounded-xl border border-border bg-background p-4 soft-shadow-lift"
+                >
+                  <p className="text-sm text-muted-foreground">{kpi.label}</p>
+                  <p className="mt-1 text-xl font-semibold tabular-nums">{money(kpi.value)}</p>
+                </div>
+              ))}
             </div>
+            <BalanceSection
+              title="ACTIVOS"
+              lines={bundle.balance_sheet.assets || []}
+              total={Number(bundle.balance_sheet.totalAssets ?? 0)}
+            />
+            <BalanceSection
+              title="PASIVOS"
+              lines={bundle.balance_sheet.liabilities || []}
+              total={Number(bundle.balance_sheet.totalLiabilities ?? 0)}
+            />
+            <BalanceSection
+              title="PATRIMONIO"
+              lines={bundle.balance_sheet.equity || []}
+              total={Number(bundle.balance_sheet.totalEquity ?? 0)}
+            />
           </div>
         )}
 
+        {/* ── Cash flow ───────────────────────────────────────────────────── */}
         {bundle?.cash_flow && (
-          <div className="mb-6 rounded-xl border border-border bg-background p-4">
-            <h3 className="mb-2 font-semibold">Cash flow (O / I / F)</h3>
-            <div className="grid gap-3 sm:grid-cols-4">
-              <div>
-                <p className="text-xs text-muted-foreground">Operativo neto</p>
-                <p className="text-lg font-semibold tabular-nums">
-                  {money(Number(bundle.cash_flow.operating?.net ?? 0))}
-                </p>
+          <div className="mb-6 space-y-4">
+            {cfMonthly.length > 0 && (
+              <div className="h-72 rounded-xl border border-border bg-background p-4 soft-shadow-lift">
+                <h3 className="mb-2 text-sm font-semibold">
+                  Cash flow mensual — entradas{' '}
+                  <span className="text-[var(--positive)]">■</span> / salidas{' '}
+                  <span className="text-[var(--negative)]">■</span>
+                </h3>
+                <ResponsiveContainer width="100%" height="90%">
+                  <BarChart data={cfMonthly} stackOffset="sign">
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+                    <XAxis dataKey="period" tick={{ fontSize: 11 }} />
+                    <YAxis tick={{ fontSize: 11 }} />
+                    <Tooltip
+                      formatter={(v) => money(Number(v ?? 0))}
+                      contentStyle={{
+                        background: 'var(--bg-card)',
+                        border: '1px solid var(--border)',
+                        borderRadius: 8,
+                      }}
+                    />
+                    <Bar
+                      dataKey="inflows"
+                      name="Entradas"
+                      stackId="cf"
+                      fill="var(--positive)"
+                      radius={[6, 6, 0, 0]}
+                    />
+                    <Bar
+                      dataKey="outflows"
+                      name="Salidas"
+                      stackId="cf"
+                      fill="var(--negative)"
+                      radius={[6, 6, 0, 0]}
+                    />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Inversión neto</p>
-                <p className="text-lg font-semibold tabular-nums">
-                  {money(Number(bundle.cash_flow.investing?.net ?? 0))}
-                </p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Financiación neto</p>
-                <p className="text-lg font-semibold tabular-nums">
-                  {money(Number(bundle.cash_flow.financing?.net ?? 0))}
-                </p>
-                <p className="text-xs text-muted-foreground">Incluye Owner&apos;s Draws</p>
-              </div>
-              <div>
-                <p className="text-xs text-muted-foreground">Cambio neto</p>
-                <p className="text-lg font-semibold tabular-nums">
-                  {money(Number(bundle.cash_flow.netChange ?? 0))}
-                </p>
-              </div>
-            </div>
-            {bundle.cash_flow.note && (
-              <p className="mt-2 text-xs text-muted-foreground">{bundle.cash_flow.note}</p>
             )}
-          </div>
-        )}
 
-        {cfMonthly.length > 0 && (
-          <div className="mb-2 h-64 rounded-xl border border-border bg-background p-4">
-            <h3 className="mb-2 text-sm font-semibold">Cash flow mensual</h3>
-            <ResponsiveContainer width="100%" height="90%">
-              <BarChart data={cfMonthly}>
-                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                <XAxis dataKey="period" tick={{ fontSize: 11 }} />
-                <YAxis tick={{ fontSize: 11 }} />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="inflows" name="Entradas" fill="#6fa98c" radius={[4, 4, 0, 0]} />
-                <Bar dataKey="outflows" name="Salidas" fill="#c45c5c" radius={[4, 4, 0, 0]} />
-              </BarChart>
-            </ResponsiveContainer>
+            <div className="table-scroll rounded-xl border border-border bg-card soft-shadow-lift">
+              <div className="border-b border-border px-4 py-3">
+                <h3 className="font-display text-lg tracking-wide">Cash flow — detalle O / I / F</h3>
+              </div>
+              <table className="w-full min-w-[420px] text-left text-sm">
+                <thead className="bg-secondary/40 text-muted-foreground">
+                  <tr>
+                    <th className="px-3 py-2 font-medium">Tipo</th>
+                    <th className="px-3 py-2 font-medium">Código</th>
+                    <th className="px-3 py-2 font-medium">Cuenta</th>
+                    <th className="px-3 py-2 text-right font-medium">Monto</th>
+                    <th className="px-3 py-2 text-right font-medium"># txs</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(
+                    [
+                      ['OPERATIVO', 'operating', 'operatingSubtotal'],
+                      ['INVERSIÓN', 'investing', 'investingSubtotal'],
+                      ['FINANCIACIÓN', 'financing', 'financingSubtotal'],
+                    ] as const
+                  ).flatMap(([label, key, sub]) => {
+                    const lines = bundle.cash_flow_detail?.[key] || []
+                    const subtotal = Number(
+                      bundle.cash_flow_detail?.[sub] ??
+                        bundle.cash_flow?.[
+                          key === 'operating'
+                            ? 'operating'
+                            : key === 'investing'
+                              ? 'investing'
+                              : 'financing'
+                        ]?.net ??
+                        0,
+                    )
+                    const rows =
+                      lines.length === 0
+                        ? [
+                            <tr key={`${key}-empty`} className="border-t border-border">
+                              <td className="px-3 py-2 font-medium">{label}</td>
+                              <td colSpan={2} className="px-3 py-2 text-muted-foreground">
+                                (vacío)
+                              </td>
+                              <td className="px-3 py-2 text-right tabular-nums">{money(subtotal)}</td>
+                              <td />
+                            </tr>,
+                          ]
+                        : lines.map((row) => (
+                            <tr
+                              key={`${key}-${row.code}-${row.name}`}
+                              className="border-t border-border transition-colors duration-200 hover:bg-[color-mix(in_srgb,var(--accent-cream)_8%,transparent)]"
+                            >
+                              <td className="px-3 py-2 font-medium">{label}</td>
+                              <td className="px-3 py-2 font-mono text-xs">{row.code}</td>
+                              <td className="px-3 py-2">{row.name}</td>
+                              <td className="px-3 py-2 text-right tabular-nums">
+                                {money(Number(row.amount ?? 0))}
+                              </td>
+                              <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
+                                {row.txCount ?? '—'}
+                              </td>
+                            </tr>
+                          ))
+                    return [
+                      ...rows,
+                      <tr key={`${key}-sub`} className="border-t border-border bg-secondary/20">
+                        <td colSpan={3} className="px-3 py-2 text-right font-semibold">
+                          SUBTOTAL {label}
+                        </td>
+                        <td className="px-3 py-2 text-right font-semibold tabular-nums">
+                          {money(subtotal)}
+                        </td>
+                        <td />
+                      </tr>,
+                    ]
+                  })}
+                  <tr className="border-t-2 border-border bg-secondary/40">
+                    <td colSpan={3} className="px-3 py-3 text-right font-display text-base font-semibold">
+                      FLUJO NETO TOTAL
+                    </td>
+                    <td className="px-3 py-3 text-right font-semibold tabular-nums">
+                      {money(
+                        Number(
+                          bundle.cash_flow_detail?.netTotal ?? bundle.cash_flow?.netChange ?? 0,
+                        ),
+                      )}
+                    </td>
+                    <td />
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
         )}
       </section>
 
       <section className="mb-8">
-        <h2 className="mb-3 text-lg font-semibold tracking-tight">Cierre anual</h2>
+        <h2 className="mb-3 font-display text-xl tracking-wide">Cierre anual</h2>
         <p className="mb-3 max-w-2xl text-sm text-muted-foreground">
-          Al cerrar el año, la utilidad neta del P&amp;L se acumula en Utilidades retenidas (3020)
-          para los balances siguientes. Requiere txs verificadas y sin Suspense (9999).
+          Al cerrar el año, la utilidad neta del P&amp;L se acumula en Utilidades retenidas (3020).
         </p>
         <div className="mb-4 flex flex-wrap items-end gap-3">
           <label className="text-sm">
@@ -628,7 +801,7 @@ export default function Reports() {
                 {y.status === 'closed' && y.fiscal_year && (
                   <button
                     type="button"
-                    className="rounded-md border border-border px-3 py-1.5 text-xs font-medium hover:bg-muted"
+                    className={btnSecondary}
                     onClick={() => void reopenFiscalYear(String(y.fiscal_year))}
                   >
                     Reabrir año
@@ -641,7 +814,7 @@ export default function Reports() {
       </section>
 
       <section className="mb-8">
-        <h2 className="mb-3 text-lg font-semibold tracking-tight">{t('reports.periods')}</h2>
+        <h2 className="mb-3 font-display text-xl tracking-wide">{t('reports.periods')}</h2>
         {loading && <p className="text-muted-foreground">{t('common.loading')}</p>}
         {!loading && periods.length === 0 && (
           <div className="soft-shadow rounded-xl border border-dashed border-border bg-card px-6 py-10 text-center">
@@ -649,13 +822,6 @@ export default function Reports() {
             <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
               {t('reports.periodsEmptyHint')}
             </p>
-            <button
-              type="button"
-              onClick={() => void closePeriod(periodInput)}
-              className={cn(btnPrimary, 'mt-5')}
-            >
-              {t('reports.close')} ({periodInput})
-            </button>
           </div>
         )}
         <div className="space-y-2">
@@ -695,12 +861,13 @@ export default function Reports() {
                   <button
                     type="button"
                     onClick={() => {
-                      setPeriodInput(p.period)
-                      void loadStatements()
+                      const [y, m] = p.period.split('-')
+                      if (y) setFiscalYear(y)
+                      if (m) setMonth(m)
                     }}
                     className={btnSecondary}
                   >
-                    {t('reports.emit')}
+                    Ver periodo
                   </button>
                   <button
                     type="button"

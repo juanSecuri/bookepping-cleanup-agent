@@ -103,6 +103,7 @@ class SyncDriveUseCase:
         imported_docs: list[dict] = []
 
         from src.container import get_container
+        from src.infrastructure.drive.classify import classify_drive_file
 
         container = get_container()
         upload_dir = Path(tempfile.gettempdir()) / "ledgerai_drive"
@@ -119,6 +120,7 @@ class SyncDriveUseCase:
                 tmp = upload_dir / f"{node.id}{suffix}"
                 tmp.write_bytes(content)
 
+                plan = classify_drive_file(node.name, node.path, node.mime_type)
                 doc = DocumentRecord(
                     workspace_id=workspace_id,
                     file_name=node.name,
@@ -128,6 +130,9 @@ class SyncDriveUseCase:
                     drive_file_id=node.id,
                     drive_path=node.path,
                     source="google_drive",
+                    folder_group=plan.folder_group,
+                    pipeline_kind=plan.kind,
+                    vendor=plan.bank_name if plan.kind == "statement" else None,
                 )
                 doc = await self._docs.save(doc)
 

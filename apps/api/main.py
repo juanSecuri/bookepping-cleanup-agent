@@ -252,8 +252,15 @@ async def workspace_stats(workspace_id: str) -> dict:
 # ── Documents ─────────────────────────────────────────────────────────────────
 
 def _folder_group_from_path(path: str | None, file_name: str | None = None) -> str:
+    """Build UI group Bank / #### / YYYY from Drive path (all client folders)."""
+    from src.infrastructure.drive.classify import classify_drive_file
+
     if not path:
         return "Subida local"
+    name = file_name or path.rstrip("/").split("/")[-1]
+    plan = classify_drive_file(name, path)
+    if plan.folder_group:
+        return plan.folder_group
     parts = [p for p in path.replace("\\", "/").split("/") if p]
     if file_name and parts and parts[-1] == file_name:
         parts = parts[:-1]
@@ -960,23 +967,57 @@ async def reopen_fiscal_year(fiscal_year: str, body: FiscalYearBody) -> dict:
     return {"fiscal_year": fiscal_year, "status": row.get("status"), "row": row}
 
 
+@api.get("/available-years")
+async def available_years(workspace_id: str) -> dict:
+    """Distinct fiscal years from transaction dates (for Reportes year selector)."""
+    from src.infrastructure.repositories.transaction_repository import TransactionRepository
+
+    txns = await TransactionRepository().list_by_tenant(uuid.UUID(workspace_id), limit=20000)
+    years = sorted(
+        {str(t.transaction_date)[:4] for t in txns if t.transaction_date},
+        reverse=True,
+    )
+    verified_years = sorted(
+        {
+            str(t.transaction_date)[:4]
+            for t in txns
+            if t.transaction_date
+            and t.status in (TransactionStatus.VERIFIED, TransactionStatus.CLOSED)
+        },
+        reverse=True,
+    )
+    return {
+        "workspace_id": workspace_id,
+        "years": years,
+        "verified_years": verified_years,
+        "default_year": (verified_years or years or [None])[0],
+    }
+
+
 @api.get("/reports/pnl")
 async def pnl_report(
     workspace_id: str,
     date_from: str | None = None,
     date_to: str | None = None,
+    fiscal_year: str | None = None,
+    month: int | None = None,
+    period: str | None = None,
 ) -> dict:
     """P&L from verified txs — excludes Owner's Draws / equity (same engine as statements)."""
     bundle = await EmitPeriodReportsUseCase().execute(
         uuid.UUID(workspace_id),
+        period=period,
         date_from=date_from,
         date_to=date_to,
+        fiscal_year=fiscal_year,
+        month=month,
     )
     pnl = dict(bundle.pnl)
     net = float(pnl.get("netIncome") or pnl.get("net_income") or 0)
     rev = float(pnl.get("totalRevenue") or pnl.get("revenue") or 0)
     revenue_items = pnl.get("revenueItems") or []
     expense_items = pnl.get("expenseItems") or []
+    cogs_items = pnl.get("cogsItems") or []
     pnl.update(
         {
             "grossMargin": (net / rev * 100) if rev else 0,
@@ -986,11 +1027,19 @@ async def pnl_report(
                     for i in revenue_items
                 ],
                 *[
+                    {"account": i["name"], "amount": i["amount"], "category": "cogs"}
+                    for i in cogs_items
+                ],
+                *[
                     {"account": i["name"], "amount": i["amount"], "category": "expense"}
                     for i in expense_items
                 ],
             ],
             "transactionCount": bundle.transaction_count,
+            "pendingCount": bundle.pending_count,
+            "fiscal_year": bundle.fiscal_year,
+            "month": bundle.month,
+            "granularity": bundle.granularity,
         }
     )
     return pnl
@@ -1002,13 +1051,17 @@ async def financial_statements_report(
     period: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    fiscal_year: str | None = None,
+    month: int | None = None,
 ) -> dict:
-    """Emit P&L + Balance + Cash flow for a month (YYYY-MM), year (YYYY), or date range."""
+    """Emit P&L + Balance + Cash flow. Prefer fiscal_year (+ optional month)."""
     bundle = await EmitPeriodReportsUseCase().execute(
         uuid.UUID(workspace_id),
         period=period,
         date_from=date_from,
         date_to=date_to,
+        fiscal_year=fiscal_year,
+        month=month,
     )
     chain_alerts = StatementPeriodRepository().list_alerts(uuid.UUID(workspace_id))
     return {
@@ -1016,14 +1069,19 @@ async def financial_statements_report(
         "period_label": bundle.period_label,
         "date_from": bundle.date_from,
         "date_to": bundle.date_to,
+        "fiscal_year": bundle.fiscal_year,
+        "month": bundle.month,
+        "granularity": bundle.granularity,
         "currency": bundle.currency,
         "transaction_count": bundle.transaction_count,
+        "pending_count": bundle.pending_count,
         "engine": bundle.engine,
         "pnl": bundle.pnl,
         "balance_sheet": bundle.balance_sheet,
         "cash_flow": bundle.cash_flow,
         "cash_flow_monthly": bundle.cash_flow_monthly,
         "cash_flow_annual": bundle.cash_flow_annual,
+        "cash_flow_detail": bundle.cash_flow_detail,
         "balance_chain_alerts": chain_alerts,
     }
 
@@ -1094,15 +1152,22 @@ async def export_statements_xlsx(
     period: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
+    fiscal_year: str | None = None,
+    month: int | None = None,
 ):
-    """Descarga P&L + Balance + Cash flow en Excel (openpyxl, $0)."""
+    """Descarga P&L + Balance + Cash flow + Transacciones en Excel (openpyxl, $0)."""
+    from src.infrastructure.repositories.transaction_repository import TransactionRepository
+
     bundle = await EmitPeriodReportsUseCase().execute(
         uuid.UUID(workspace_id),
         period=period,
         date_from=date_from,
         date_to=date_to,
+        fiscal_year=fiscal_year,
+        month=month,
     )
-    data = bundle_to_xlsx_bytes(bundle)
+    txns = await TransactionRepository().list_by_tenant(uuid.UUID(workspace_id), limit=20000)
+    data = bundle_to_xlsx_bytes(bundle, transactions=txns)
     fname = f"ledgerai-{bundle.period_label.replace(' ', '_')}.xlsx"
     return Response(
         content=data,
@@ -1303,7 +1368,7 @@ async def drive_import_files(body: DriveImportFilesBody, background_tasks: Backg
         try:
             content = drive.download_bytes(fid)
             ftype = _file_type(name, mime)
-            folder = _folder_group_from_path(path, name)
+            folder = plan.folder_group or _folder_group_from_path(path, name)
             if plan.kind == "statement":
                 apis = "pdfplumber (local $0), reglas CoA"
             elif plan.kind == "spreadsheet":

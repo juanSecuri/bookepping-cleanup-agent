@@ -151,19 +151,93 @@ export type PnLLineItem = {
   name?: string
   amount?: number
   txCount?: number
+  byMonth?: Record<string, number>
+  debits?: number
+  credits?: number
+  opening?: number
+  closing?: number
 }
 
 export type PnLReport = {
   revenue?: number
   expenses?: number
+  cogs?: number
+  operatingExpenses?: number
   net_income?: number
   totalRevenue?: number
   totalExpenses?: number
+  totalCogs?: number
   netIncome?: number
   revenueItems?: PnLLineItem[]
+  cogsItems?: PnLLineItem[]
   expenseItems?: PnLLineItem[]
+  months?: string[]
+  granularity?: string
   lines?: Array<{ account?: string; amount?: number; category?: string }>
   [key: string]: unknown
+}
+
+export type BalanceLine = {
+  code?: string
+  name?: string
+  amount?: number
+  txCount?: number
+  debits?: number
+  credits?: number
+  opening?: number
+  closing?: number
+}
+
+export type StatementsBundle = {
+  period_label?: string
+  transaction_count?: number
+  pending_count?: number
+  engine?: string
+  fiscal_year?: string
+  month?: number
+  granularity?: string
+  pnl?: PnLReport
+  balance_sheet?: {
+    assets?: BalanceLine[]
+    liabilities?: BalanceLine[]
+    equity?: BalanceLine[]
+    totalAssets?: number
+    totalLiabilities?: number
+    totalEquity?: number
+    imbalance?: number
+    balanced?: boolean
+    equation?: string
+    note?: string
+  }
+  cash_flow?: {
+    operating?: { inflows?: number; outflows?: number; net?: number }
+    investing?: { inflows?: number; outflows?: number; net?: number }
+    financing?: { inflows?: number; outflows?: number; net?: number; note?: string }
+    netChange?: number
+    note?: string
+  }
+  cash_flow_monthly?: Array<{ period?: string; inflows?: number; outflows?: number; net?: number }>
+  cash_flow_annual?: Array<{ period?: string; inflows?: number; outflows?: number; net?: number }>
+  cash_flow_detail?: {
+    operating?: PnLLineItem[]
+    investing?: PnLLineItem[]
+    financing?: PnLLineItem[]
+    operatingSubtotal?: number
+    investingSubtotal?: number
+    financingSubtotal?: number
+    netTotal?: number
+  }
+  balance_chain_alerts?: Array<{
+    statement_month?: string
+    bank_account_number?: string
+    bank_name?: string
+    chain_ok?: boolean | null
+    paused?: boolean
+    chain_delta?: number | null
+    alert_message?: string | null
+    opening_balance?: number | null
+    closing_balance?: number | null
+  }>
 }
 
 export const api = {
@@ -276,60 +350,43 @@ export const api = {
       body: JSON.stringify({ workspace_id }),
     }),
 
-  pnlReport: (params: { workspace_id: string; date_from?: string; date_to?: string }) => {
+  pnlReport: (params: {
+    workspace_id: string
+    date_from?: string
+    date_to?: string
+    fiscal_year?: string
+    month?: number
+    period?: string
+  }) => {
     const q = new URLSearchParams({ workspace_id: params.workspace_id })
     if (params.date_from) q.set('date_from', params.date_from)
     if (params.date_to) q.set('date_to', params.date_to)
+    if (params.fiscal_year) q.set('fiscal_year', params.fiscal_year)
+    if (params.month != null) q.set('month', String(params.month))
+    if (params.period) q.set('period', params.period)
     return request<PnLReport>(`/api/reports/pnl?${q}`)
   },
+  availableYears: (workspace_id: string) =>
+    request<{
+      years: string[]
+      verified_years?: string[]
+      default_year?: string | null
+    }>(`/api/available-years?workspace_id=${encodeURIComponent(workspace_id)}`),
   financialStatements: (params: {
     workspace_id: string
     period?: string
     date_from?: string
     date_to?: string
+    fiscal_year?: string
+    month?: number
   }) => {
     const q = new URLSearchParams({ workspace_id: params.workspace_id })
     if (params.period) q.set('period', params.period)
     if (params.date_from) q.set('date_from', params.date_from)
     if (params.date_to) q.set('date_to', params.date_to)
-    return request<{
-      period_label?: string
-      transaction_count?: number
-      engine?: string
-      pnl?: PnLReport
-      balance_sheet?: {
-        assets?: Array<{ code?: string; name?: string; amount?: number }>
-        liabilities?: Array<{ code?: string; name?: string; amount?: number }>
-        equity?: Array<{ code?: string; name?: string; amount?: number }>
-        totalAssets?: number
-        totalLiabilities?: number
-        totalEquity?: number
-        imbalance?: number
-        balanced?: boolean
-        equation?: string
-        note?: string
-      }
-      cash_flow?: {
-        operating?: { inflows?: number; outflows?: number; net?: number }
-        investing?: { inflows?: number; outflows?: number; net?: number }
-        financing?: { inflows?: number; outflows?: number; net?: number; note?: string }
-        netChange?: number
-        note?: string
-      }
-      cash_flow_monthly?: Array<{ period?: string; inflows?: number; outflows?: number; net?: number }>
-      cash_flow_annual?: Array<{ period?: string; inflows?: number; outflows?: number; net?: number }>
-      balance_chain_alerts?: Array<{
-        statement_month?: string
-        bank_account_number?: string
-        bank_name?: string
-        chain_ok?: boolean | null
-        paused?: boolean
-        chain_delta?: number | null
-        alert_message?: string | null
-        opening_balance?: number | null
-        closing_balance?: number | null
-      }>
-    }>(`/api/reports/statements?${q}`)
+    if (params.fiscal_year) q.set('fiscal_year', params.fiscal_year)
+    if (params.month != null) q.set('month', String(params.month))
+    return request<StatementsBundle>(`/api/reports/statements?${q}`)
   },
 
   balanceChain: (workspace_id: string) =>
@@ -384,11 +441,15 @@ export const api = {
     period?: string
     date_from?: string
     date_to?: string
+    fiscal_year?: string
+    month?: number
   }) => {
     const q = new URLSearchParams({ workspace_id: params.workspace_id })
     if (params.period) q.set('period', params.period)
     if (params.date_from) q.set('date_from', params.date_from)
     if (params.date_to) q.set('date_to', params.date_to)
+    if (params.fiscal_year) q.set('fiscal_year', params.fiscal_year)
+    if (params.month != null) q.set('month', String(params.month))
     return `${API_BASE}/api/reports/export.xlsx?${q}`
   },
 
