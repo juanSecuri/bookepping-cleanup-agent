@@ -112,7 +112,14 @@ class DocumentQueueWorker:
             logger.info("queue drain finished: %s document(s)", processed)
         return processed
 
-    async def start_polling(self, interval_sec: float = 8.0) -> None:
+    async def start_polling(self, interval_sec: float | None = None) -> None:
+        if interval_sec is None:
+            raw = (os.environ.get("LEDGERAI_QUEUE_POLL_SEC") or "").strip()
+            if raw:
+                interval_sec = float(raw)
+            else:
+                # Starter has more RAM; poll faster than Free default.
+                interval_sec = 4.0 if os.environ.get("APP_ENV") == "production" else 8.0
         if self._poll_task and not self._poll_task.done():
             return
         self._stop.clear()

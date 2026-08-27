@@ -2,6 +2,7 @@ import {
   createContext,
   useCallback,
   useContext,
+  useEffect,
   useMemo,
   useState,
   type ReactNode,
@@ -22,6 +23,12 @@ const es: Dict = {
   'nav.pipeline': 'Pipeline',
   'nav.expand': 'Abrir menú',
   'nav.collapse': 'Cerrar menú',
+  'nav.signOut': 'Salir',
+  'pipeline.ingest': 'Ingesta',
+  'pipeline.read': 'Leer',
+  'pipeline.classify': 'Clasificar',
+  'pipeline.reconcile': 'Conciliar',
+  'pipeline.emit': 'Emitir',
   'brand.subtitle': 'Limpieza contable',
   'landing.heroBody':
     'Organiza años de contabilidad atrasada. Clasifica, concilia y emite estados financieros por mes y año — sin pagar agentes IA.',
@@ -309,10 +316,12 @@ const es: Dict = {
   'common.selected': 'seleccionadas',
   'coldStart.title': 'Despertando LedgerAI…',
   'coldStart.body':
-    'El servidor gratis se dormía por inactividad. En unos segundos responde; no cierres la pestaña.',
+    'El servidor en Render estaba dormido (Starter). Responde en unos segundos — deja esta pestaña abierta.',
   'coldStart.dismiss': 'Ocultar',
   'documents.queueHint':
-    'Los archivos entran en cola y se procesan de a uno (protege Render Free / 512MB RAM).',
+    'Importás todos de una vez; la extracción corre en segundo plano (1 PDF a la vez, pdfplumber local $0). Render Starter + disco persistente.',
+  'documents.queueBulkHint':
+    'Tip: «Sincronizar desde Drive» encola toda la carpeta. Cada PDF tarda ~30s–2min — no hay magia instantánea sin API de pago.',
   'documents.statusPending': 'En cola',
   'documents.statusProcessing': 'Procesando',
 }
@@ -328,6 +337,12 @@ const en: Dict = {
   'nav.pipeline': 'Pipeline',
   'nav.expand': 'Expand menu',
   'nav.collapse': 'Collapse menu',
+  'nav.signOut': 'Sign out',
+  'pipeline.ingest': 'Ingest',
+  'pipeline.read': 'Read',
+  'pipeline.classify': 'Classify',
+  'pipeline.reconcile': 'Reconcile',
+  'pipeline.emit': 'Emit',
   'brand.subtitle': 'Bookkeeping Cleanup',
   'landing.badge': 'Bookkeeping agent',
   'landing.title': 'LedgerAI',
@@ -619,10 +634,12 @@ const en: Dict = {
   'common.selected': 'selected',
   'coldStart.title': 'Waking LedgerAI…',
   'coldStart.body':
-    'The free server was asleep. It should respond in a few seconds — keep this tab open.',
+    'The Render server was asleep (Starter). It should respond in a few seconds — keep this tab open.',
   'coldStart.dismiss': 'Dismiss',
   'documents.queueHint':
-    'Files are queued and processed one at a time (protects Render Free / 512MB RAM).',
+    'Import all at once; extraction runs in the background (1 PDF at a time, local pdfplumber $0). Render Starter + persistent disk.',
+  'documents.queueBulkHint':
+    'Tip: “Sync from Drive” queues the whole folder. No instant magic API — each PDF takes ~30s–2min to read.',
   'documents.statusPending': 'Queued',
   'documents.statusProcessing': 'Processing',
 }
@@ -662,6 +679,10 @@ export function LocaleProvider({ children }: { children: ReactNode }) {
     () => ({ locale, setLocale: persist, t, toggleLocale }),
     [locale, persist, t, toggleLocale],
   )
+
+  useEffect(() => {
+    document.documentElement.lang = locale
+  }, [locale])
 
   return <LocaleContext.Provider value={value}>{children}</LocaleContext.Provider>
 }

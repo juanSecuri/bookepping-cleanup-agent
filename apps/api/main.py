@@ -432,7 +432,7 @@ async def upload_document(
         pipeline_kind=kind,
         apis_used=_apis_used_for_upload(ftype),
         queue_payload={"plan_kind": kind},
-        raw_note="En cola — procesamiento secuencial (1 archivo).",
+        raw_note="En cola — extracción en segundo plano (1 PDF a la vez).",
     )
     background_tasks.add_task(worker.drain)
 
@@ -441,7 +441,7 @@ async def upload_document(
         "filename": doc.file_name,
         "name": doc.file_name,
         "queued": True,
-        "message": "Archivo en cola. Se procesa de a uno para no saturar el host.",
+        "message": "Archivo en cola. Se procesa en segundo plano (1 PDF a la vez, pdfplumber local).",
     }
 
 
@@ -1623,7 +1623,7 @@ async def drive_import_files(
         "message": (
             f"En cola {imported} "
             f"(estados {statements}, facturas {invoices}, excel {sheets}). "
-            f"Procesamiento secuencial (1 a la vez) — no satura Render Free."
+            f"Extracción en segundo plano (1 PDF a la vez) — Render Starter + disco persistente."
         ),
     }
 

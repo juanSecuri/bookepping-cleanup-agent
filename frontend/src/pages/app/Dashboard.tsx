@@ -29,6 +29,7 @@ import {
   Cell,
 } from 'recharts'
 import { api, type Workspace, type WorkspaceStats } from '../../lib/api'
+import MetricValue from '../../components/MetricValue'
 import { useLocale } from '../../i18n'
 import { cn } from '../../lib/utils'
 
@@ -84,7 +85,10 @@ export default function Dashboard() {
           avail.default_year && ys.includes(String(avail.default_year))
             ? String(avail.default_year)
             : ys[0] || ''
-        setFiscalYear((prev) => prev || def)
+        setFiscalYear((prev) => {
+          if (prev && ys.includes(prev)) return prev
+          return def || String(new Date().getFullYear())
+        })
       } catch {
         if (!cancelled) setYears([])
       }
@@ -322,7 +326,6 @@ export default function Dashboard() {
             value={fiscalYear}
             onChange={(e) => setFiscalYear(e.target.value)}
           >
-            <option value="">{t('dashboard.yearAll')}</option>
             {years.map((y) => (
               <option key={y} value={y}>
                 {y}
@@ -422,11 +425,8 @@ export default function Dashboard() {
               <div className={cn('mb-3 flex h-9 w-9 items-center justify-center rounded-lg', kpi.bg, kpi.tone)}>
                 <Icon className="h-4 w-4" />
               </div>
-              <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                {kpi.label}
-                {fiscalYear ? ` · ${fiscalYear}` : ''}
-              </p>
-              <p className="mt-1 font-display text-2xl font-semibold tracking-tight">{kpi.value}</p>
+              <p className="mt-1 font-medium text-muted-foreground">{kpi.label}</p>
+              <MetricValue>{kpi.value}</MetricValue>
             </div>
           )
         })}
@@ -448,7 +448,7 @@ export default function Dashboard() {
                 <Icon className="h-4 w-4" />
                 <span className="text-xs font-medium uppercase tracking-wide">{kpi.label}</span>
               </div>
-              <p className="font-display text-2xl font-semibold">{kpi.value}</p>
+              <MetricValue size="md">{kpi.value}</MetricValue>
             </Link>
           )
         })}

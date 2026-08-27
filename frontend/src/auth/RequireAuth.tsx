@@ -10,8 +10,15 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   if (!configured) return children
   if (loading) {
     return (
-      <div className="flex min-h-dvh items-center justify-center bg-background text-muted-foreground">
-        Checking session…
+      <div className="flex min-h-dvh flex-col items-center justify-center gap-3 bg-background text-muted-foreground">
+        <p className="text-sm">Verificando sesión…</p>
+        <button
+          type="button"
+          className="text-xs underline-offset-2 hover:underline"
+          onClick={() => window.location.reload()}
+        >
+          Recargar
+        </button>
       </div>
     )
   }

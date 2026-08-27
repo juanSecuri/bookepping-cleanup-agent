@@ -73,26 +73,45 @@ function DocumentFilePreview({
   workspaceId: string
 }) {
   const [failed, setFailed] = useState(false)
+  const [failMsg, setFailMsg] = useState<string | null>(null)
   const [ready, setReady] = useState(false)
   const [blobUrl, setBlobUrl] = useState<string | null>(null)
   const kind = docPreviewKind(doc)
-  const url = api.documentFileUrl(String(doc.id), workspaceId)
+  const status = String(doc.status || '').toLowerCase()
 
   useEffect(() => {
     let cancelled = false
     let objectUrl: string | null = null
     setFailed(false)
+    setFailMsg(null)
     setReady(false)
     setBlobUrl(null)
     if (kind === 'other') return
+    if (status === 'pending' || status === 'processing') {
+      setFailMsg('El archivo se está extrayendo. La vista previa aparece cuando termine.')
+      return
+    }
     ;(async () => {
+      const ctrl = new AbortController()
+      const timer = window.setTimeout(() => ctrl.abort(), 45000)
       try {
         const res = await api.fetchDocumentFile(String(doc.id), workspaceId, {
           method: 'GET',
           cache: 'no-store',
+          signal: ctrl.signal,
         })
         if (cancelled) return
+        if (res.status === 401 || res.status === 403) {
+          setFailMsg('Sesión expirada o sin acceso. Vuelve a entrar desde Salir → login.')
+          setFailed(true)
+          return
+        }
         if (!res.ok) {
+          setFailMsg(
+            res.status === 410
+              ? 'Archivo no en disco. Reimportá desde Drive (disco Starter guarda nuevos uploads).'
+              : `No se pudo cargar (${res.status}).`,
+          )
           setFailed(true)
           return
         }
@@ -101,23 +120,33 @@ function DocumentFilePreview({
         objectUrl = URL.createObjectURL(blob)
         setBlobUrl(objectUrl)
         setReady(true)
-      } catch {
-        if (!cancelled) setFailed(true)
+      } catch (e) {
+        if (!cancelled) {
+          setFailMsg(
+            e instanceof DOMException && e.name === 'AbortError'
+              ? 'Tiempo de espera agotado. El servidor puede estar procesando otros PDFs — reintenta.'
+              : 'No se pudo cargar la vista previa.',
+          )
+          setFailed(true)
+        }
+      } finally {
+        window.clearTimeout(timer)
       }
     })()
     return () => {
       cancelled = true
       if (objectUrl) URL.revokeObjectURL(objectUrl)
     }
-  }, [url, kind, doc.id, workspaceId])
+  }, [kind, doc.id, workspaceId, status])
 
   if (kind === 'other') {
+    const fileUrl = api.documentFileUrl(String(doc.id), workspaceId)
     return (
       <div className="flex max-h-72 min-h-[12rem] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-card p-4 text-center text-xs text-muted-foreground">
         <p>Vista previa en pantalla para PDF e imágenes. El texto extraído está a la izquierda.</p>
         <a
           className="rounded-md border border-border px-3 py-1.5 font-medium text-foreground hover:bg-muted"
-          href={blobUrl || url}
+          href={blobUrl || fileUrl}
           target="_blank"
           rel="noreferrer"
         >
@@ -127,13 +156,10 @@ function DocumentFilePreview({
     )
   }
 
-  if (failed) {
+  if (failed || failMsg) {
     return (
       <div className="flex max-h-72 min-h-[12rem] flex-col items-center justify-center gap-3 rounded-lg border border-dashed border-border bg-card p-4 text-center text-xs text-muted-foreground">
-        <p>
-          Archivo no disponible en disco (montá disco Starter en /var/data o reimportá).
-          El texto OCR a la izquierda sigue disponible.
-        </p>
+        <p>{failMsg || 'Archivo no disponible.'}</p>
       </div>
     )
   }
@@ -551,6 +577,7 @@ export default function Documents() {
         <h1 className="page-title">{t('documents.title')}</h1>
         <p className="mt-1.5 text-muted-foreground">{t('documents.subtitle')}</p>
         <p className="mt-2 text-xs text-muted-foreground">{t('documents.queueHint')}</p>
+        <p className="mt-1 text-xs text-muted-foreground/80">{t('documents.queueBulkHint')}</p>
       </div>
 
       <section className="animate-fade-up-delay-1 soft-shadow mb-6 rounded-xl border border-border bg-card p-5 sm:p-6">

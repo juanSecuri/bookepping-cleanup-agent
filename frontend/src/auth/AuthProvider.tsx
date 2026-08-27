@@ -42,11 +42,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     let cancelled = false
+    const timeout = window.setTimeout(() => {
+      if (!cancelled) setLoading(false)
+    }, 8000)
+
     void sb.auth.getSession().then(({ data }) => {
       if (cancelled) return
       setSession(data.session)
       syncTokenFromSession(data.session)
       setLoading(false)
+      window.clearTimeout(timeout)
     })
 
     const { data: sub } = sb.auth.onAuthStateChange((_event, next) => {
@@ -57,6 +62,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return () => {
       cancelled = true
+      window.clearTimeout(timeout)
       sub.subscription.unsubscribe()
     }
   }, [])

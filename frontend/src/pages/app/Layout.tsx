@@ -33,11 +33,11 @@ const navItems = [
 ]
 
 const pipeline = [
-  'dashboard.stage.ingest',
-  'dashboard.stage.classify',
-  'dashboard.stage.review',
-  'dashboard.stage.reconcile',
-  'dashboard.stage.close',
+  'pipeline.ingest',
+  'pipeline.read',
+  'pipeline.classify',
+  'pipeline.reconcile',
+  'pipeline.emit',
 ] as const
 
 const SIDEBAR_KEY = 'ledgerai.sidebarCollapsed'
@@ -118,7 +118,7 @@ export default function Layout() {
       {authOn ? (
         <button
           type="button"
-          title="Sign out"
+          title={t('nav.signOut')}
           onClick={() => {
             void signOut().then(() => navigate('/login', { replace: true }))
           }}
@@ -128,7 +128,7 @@ export default function Layout() {
           )}
         >
           <LogOut className="h-3.5 w-3.5" />
-          {!compact && <span>Sign out</span>}
+          {!compact && <span>{t('nav.signOut')}</span>}
         </button>
       ) : null}
     </div>
@@ -207,7 +207,7 @@ export default function Layout() {
         <div className={cn('flex-1 overflow-y-auto py-4', collapsed ? 'px-2' : 'px-3')}>
           {nav(collapsed)}
           {!collapsed && (
-            <div className="mt-6 animate-fade-up-delay-2">
+            <div className="mt-6 animate-fade-up-delay-2" translate="no">
               <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[#f3ead8]/80">
                 {t('nav.pipeline')}
               </p>
