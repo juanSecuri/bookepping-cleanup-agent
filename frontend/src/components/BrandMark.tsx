@@ -60,7 +60,7 @@ export default function BrandMark({
         </span>
       )}
       {(subtitle || size === 'hero') && (
-        <span className="mt-1.5 text-[10px] uppercase tracking-[0.16em] text-[var(--text-muted)] sm:text-xs">
+        <span className="mt-1.5 text-[11px] font-medium uppercase tracking-[0.16em] text-[var(--accent-cream-soft)]/85 sm:text-xs">
           {subtitle || 'Bookkeeping Cleanup'}
         </span>
       )}

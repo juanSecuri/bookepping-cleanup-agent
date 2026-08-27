@@ -129,8 +129,8 @@ export default function Layout() {
               'animate-fade-up flex items-center rounded-md py-2.5 text-sm transition duration-200',
               compact ? 'justify-center px-2' : 'gap-3 px-3',
               isActive
-                ? 'nav-item-active border border-[var(--accent-cream)]/35 bg-sidebar-accent text-[var(--accent-cream-soft)]'
-                : 'border border-transparent text-sidebar-foreground/80 hover:border-[var(--accent-cream)]/25 hover:bg-sidebar-accent/70 hover:text-[var(--accent-cream-soft)]',
+                ? 'nav-item-active border border-[var(--accent-cream)]/45 bg-[var(--accent-green)] text-[var(--accent-cream-soft)]'
+                : 'border border-transparent text-[var(--accent-cream-soft)]/90 hover:border-[var(--accent-cream)]/35 hover:bg-[var(--accent-green)] hover:text-[var(--accent-cream-soft)]',
             )
           }
         >
@@ -177,7 +177,7 @@ export default function Layout() {
             </button>
           </div>
           {!collapsed && workspace?.name && (
-            <p className="mt-2 truncate text-xs font-medium text-[var(--accent-cream-soft)]/85">
+            <p className="mt-2 truncate text-sm font-semibold text-[var(--accent-cream-soft)]">
               {workspace.name}
             </p>
           )}
@@ -188,16 +188,16 @@ export default function Layout() {
           {nav(collapsed)}
           {!collapsed && (
             <div className="mt-6 animate-fade-up-delay-2">
-              <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
+              <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--accent-cream-soft)]/75">
                 {t('nav.pipeline')}
               </p>
               <ol className="space-y-1.5">
                 {pipeline.map((key, i) => (
                   <li
                     key={key}
-                    className="flex items-center gap-2.5 text-xs text-sidebar-foreground/80 transition duration-200 hover:text-[var(--accent-cream-soft)]"
+                    className="flex items-center gap-2.5 text-xs font-medium text-[var(--accent-cream-soft)] transition duration-200 hover:text-white"
                   >
-                    <span className="flex h-5 w-5 items-center justify-center rounded-md border border-[var(--accent-cream)]/25 bg-sidebar-accent text-[10px] font-medium text-[var(--accent-cream-soft)]">
+                    <span className="flex h-5 w-5 items-center justify-center rounded-md border border-[var(--accent-cream)]/40 bg-[var(--accent-green)] text-[10px] font-semibold text-[var(--accent-cream-soft)]">
                       {i + 1}
                     </span>
                     {t(key)}

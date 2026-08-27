@@ -965,28 +965,66 @@ async def reopen_fiscal_year(fiscal_year: str, body: FiscalYearBody) -> dict:
 
 @api.get("/available-years")
 async def available_years(workspace_id: str) -> dict:
-    """Distinct fiscal years from transaction dates (for Reportes year selector)."""
+    """Years from txs + documents + statement periods (so 2024 Drive folders appear)."""
     from src.infrastructure.repositories.transaction_repository import TransactionRepository
+    from src.infrastructure.reconciliation.statement_chain import StatementPeriodRepository
 
-    txns = await TransactionRepository().list_by_tenant(uuid.UUID(workspace_id), limit=20000)
-    years = sorted(
-        {str(t.transaction_date)[:4] for t in txns if t.transaction_date},
-        reverse=True,
-    )
-    verified_years = sorted(
-        {
-            str(t.transaction_date)[:4]
-            for t in txns
-            if t.transaction_date
-            and t.status in (TransactionStatus.VERIFIED, TransactionStatus.CLOSED)
-        },
-        reverse=True,
-    )
+    tid = uuid.UUID(workspace_id)
+    years: set[str] = set()
+    verified_years: set[str] = set()
+
+    txns = await TransactionRepository().list_by_tenant(tid, limit=20000)
+    for t in txns:
+        if not t.transaction_date:
+            continue
+        y = str(t.transaction_date)[:4]
+        if y.isdigit():
+            years.add(y)
+            if t.status in (TransactionStatus.VERIFIED, TransactionStatus.CLOSED):
+                verified_years.add(y)
+
+    # Documents: document_date, folder_group (.../2024), drive_path
+    docs = await DocumentRepository().list_by_workspace(tid, limit=2000)
+    for d in docs:
+        if d.document_date and str(d.document_date)[:4].isdigit():
+            years.add(str(d.document_date)[:4])
+        for text in (d.folder_group, d.drive_path, d.file_name):
+            if not text:
+                continue
+            for part in str(text).replace("\\", "/").split("/"):
+                if len(part) == 4 and part.isdigit() and part.startswith("20"):
+                    years.add(part)
+
+    # Statement periods (bank chain)
+    try:
+        for p in StatementPeriodRepository().list_by_tenant(tid):
+            sm = str(p.get("statement_month") or "")
+            if len(sm) >= 4 and sm[:4].isdigit():
+                years.add(sm[:4])
+    except Exception:
+        pass
+
+    # Bank movements
+    try:
+        movements = await get_container().movements.list_by_tenant(tid, limit=5000)
+        for m in movements:
+            md = getattr(m, "movement_date", None) or getattr(m, "date", None)
+            if md and str(md)[:4].isdigit():
+                years.add(str(md)[:4])
+    except Exception:
+        pass
+
+    years_sorted = sorted(years, reverse=True)
+    verified_sorted = sorted(verified_years, reverse=True)
     return {
         "workspace_id": workspace_id,
-        "years": years,
-        "verified_years": verified_years,
-        "default_year": (verified_years or years or [None])[0],
+        "years": years_sorted,
+        "verified_years": verified_sorted,
+        "default_year": (verified_sorted or years_sorted or [None])[0],
+        "note": (
+            "years incluye docs/Drive/extractos; P&L usa txs verificadas. "
+            "Si ves 2024 en el selector pero P&L vacío, aprueba txs en Transacciones."
+        ),
     }
 
 

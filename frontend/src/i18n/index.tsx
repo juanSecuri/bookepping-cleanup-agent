@@ -42,6 +42,9 @@ const es: Dict = {
   'coa.origin': 'Origen',
   'coa.account': 'Cuenta',
   'coa.rulesEmpty': 'Sin reglas — pulsa sembrar.',
+  'coa.seedExplain':
+    'Sembrar carga el plan de cuentas estándar (plantilla CoA + keywords). No lee PDFs. Los montos en vivo salen de Documentos → cola → Transacciones verificadas → Reportes.',
+  'coa.seedExplainShort': 'Plantilla CoA (no es data de extractos).',
   'reports.statementsTitle': 'Estados financieros',
   'reports.statementsHint':
     'Balance + P&L por cuenta/mes + Cash flow O/I/F. Solo txs verificadas. Año completo = columnas mensuales; año + mes = detalle del mes.',
@@ -332,6 +335,9 @@ const en: Dict = {
   'coa.origin': 'Source',
   'coa.account': 'Account',
   'coa.rulesEmpty': 'No rules yet — click seed rules.',
+  'coa.seedExplain':
+    'Seed loads the standard chart of accounts (CoA template + keywords). It does not read PDFs. Live amounts come from Documents → queue → verified Transactions → Reports.',
+  'coa.seedExplainShort': 'CoA template (not statement data).',
   'reports.statementsTitle': 'Financial statements',
   'reports.statementsHint':
     'Balance + P&L by account/month + Cash flow O/I/F. Verified txs only. Full year = monthly columns; year + month = month detail.',

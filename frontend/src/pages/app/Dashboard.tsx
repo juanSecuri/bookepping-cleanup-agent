@@ -366,8 +366,8 @@ export default function Dashboard() {
       <div className="mb-8 grid gap-4 lg:grid-cols-5">
         <section className="animate-fade-up-delay-2 soft-shadow rounded-xl border border-border bg-card p-5 sm:p-6 lg:col-span-3">
           <h2 className="mb-1 text-lg font-semibold tracking-tight">{t('dashboard.chartTitle')}</h2>
-          <p className="mb-4 text-sm text-muted-foreground">
-            Comparación clara: ingresos, gastos y utilidad (totales verificados).
+          <p className="mb-4 text-sm text-foreground/75">
+            {t('dashboard.chartSubtitle')}
           </p>
           <div className="h-64 w-full">
             <ResponsiveContainer width="100%" height="100%">
@@ -376,23 +376,29 @@ export default function Dashboard() {
                 layout="vertical"
                 margin={{ top: 8, right: 16, left: 8, bottom: 0 }}
               >
-                <CartesianGrid strokeDasharray="3 3" stroke="rgba(220,208,185,0.12)" horizontal={false} />
-                <XAxis type="number" tick={{ fontSize: 12, fill: '#A89F8C' }} stroke="#A89F8C" />
+                <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" horizontal={false} />
+                <XAxis
+                  type="number"
+                  tick={{ fontSize: 12, fill: 'var(--chart-tick)' }}
+                  stroke="var(--chart-tick)"
+                />
                 <YAxis
                   type="category"
                   dataKey="name"
-                  width={88}
-                  tick={{ fontSize: 12, fill: '#A89F8C' }}
-                  stroke="#A89F8C"
+                  width={96}
+                  tick={{ fontSize: 12, fill: 'var(--chart-tick)', fontWeight: 600 }}
+                  stroke="var(--chart-tick)"
                 />
                 <Tooltip
                   formatter={(value) => formatMoney(Number(value ?? 0), locale)}
+                  labelStyle={{ color: 'var(--chart-tooltip-fg)', fontWeight: 600 }}
+                  itemStyle={{ color: 'var(--chart-tooltip-fg)' }}
                   contentStyle={{
-                    borderRadius: 6,
-                    border: '1px solid rgba(220,208,185,0.22)',
-                    background: '#0A342C',
-                    color: '#E5D9C3',
-                    boxShadow: 'var(--shadow-soft)',
+                    borderRadius: 8,
+                    border: '1px solid var(--chart-tooltip-border)',
+                    background: 'var(--chart-tooltip-bg)',
+                    color: 'var(--chart-tooltip-fg)',
+                    boxShadow: 'var(--shadow-lift)',
                   }}
                 />
                 <Bar dataKey="valor" radius={[0, 6, 6, 0]} maxBarSize={28}>

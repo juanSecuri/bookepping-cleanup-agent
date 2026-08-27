@@ -246,13 +246,17 @@ export default function Reports() {
       ])
       setPeriods(Array.isArray(periodsData) ? periodsData : [])
       setFiscalYears(Array.isArray(yearsData.years) ? yearsData.years : [])
-      const years = avail.verified_years?.length
-        ? avail.verified_years
-        : avail.years?.length
-          ? avail.years
+      // Prefer all discovered years (docs/Drive/txs); verified_years alone hid 2024
+      const years = avail.years?.length
+        ? avail.years
+        : avail.verified_years?.length
+          ? avail.verified_years
           : []
       setAvailableYears(years)
-      const def = avail.default_year || years[0] || String(new Date().getFullYear())
+      const def =
+        avail.default_year && years.includes(String(avail.default_year))
+          ? String(avail.default_year)
+          : years[0] || String(new Date().getFullYear())
       setFiscalYear((prev) => prev || String(def))
       setYearInput(String(def))
       setYearsReady(true)

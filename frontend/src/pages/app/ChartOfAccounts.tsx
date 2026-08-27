@@ -132,8 +132,11 @@ export default function ChartOfAccounts() {
       {!loading && accounts.length === 0 && (
         <div className="soft-shadow rounded-xl border border-dashed border-border bg-card px-6 py-12 text-center">
           <p className="font-medium">{t('coa.empty')}</p>
-          <p className="mx-auto mt-2 max-w-md text-sm text-muted-foreground">
+          <p className="mx-auto mt-2 max-w-md text-sm text-foreground/80">
             {t('coa.emptyHint')}
+          </p>
+          <p className="mx-auto mt-3 max-w-lg text-xs leading-relaxed text-foreground/70">
+            {t('coa.seedExplain')}
           </p>
           <button
             type="button"
@@ -200,25 +203,36 @@ export default function ChartOfAccounts() {
           </section>
 
           <section className="mb-6">
-            <h2 className="mb-3 text-sm font-semibold uppercase tracking-wide text-muted-foreground">
+            <h2 className="mb-1 text-sm font-semibold uppercase tracking-wide text-foreground/80">
               {t('coa.summary')}
             </h2>
+            <p className="mb-3 text-xs text-foreground/70">{t('coa.seedExplainShort')}</p>
             <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
-              <div className="soft-shadow rounded-xl border border-border bg-card p-4">
-                <p className="text-2xl font-semibold tabular-nums">{accounts.length}</p>
-                <p className="text-sm text-muted-foreground">{t('coa.total')}</p>
+              <div className="soft-shadow-lift animate-fade-up rounded-xl border border-border bg-card p-4 transition duration-200 hover:-translate-y-0.5">
+                <p className="text-2xl font-semibold tabular-nums text-foreground">{accounts.length}</p>
+                <p className="text-sm font-medium text-foreground/75">{t('coa.total')}</p>
               </div>
-              <div className="soft-shadow rounded-xl border border-border bg-card p-4">
-                <p className="text-2xl font-semibold tabular-nums">{activeCount}</p>
-                <p className="text-sm text-muted-foreground">{t('coa.active')}</p>
+              <div className="soft-shadow-lift animate-fade-up-delay-1 rounded-xl border border-border bg-card p-4 transition duration-200 hover:-translate-y-0.5">
+                <p className="text-2xl font-semibold tabular-nums text-foreground">{activeCount}</p>
+                <p className="text-sm font-medium text-foreground/75">{t('coa.active')}</p>
               </div>
               {[...typeCounts.entries()]
                 .sort((a, b) => a[0].localeCompare(b[0]))
                 .slice(0, 4)
-                .map(([typ, count]) => (
-                  <div key={typ} className="soft-shadow rounded-xl border border-border bg-card p-4">
-                    <p className="text-2xl font-semibold tabular-nums">{count}</p>
-                    <p className="truncate text-sm text-muted-foreground">
+                .map(([typ, count], i) => (
+                  <div
+                    key={typ}
+                    className={cn(
+                      'soft-shadow-lift rounded-xl border border-border bg-card p-4 transition duration-200 hover:-translate-y-0.5',
+                      i === 0
+                        ? 'animate-fade-up-delay-2'
+                        : i === 1
+                          ? 'animate-fade-up-delay-3'
+                          : 'animate-fade-up-delay-4',
+                    )}
+                  >
+                    <p className="text-2xl font-semibold tabular-nums text-foreground">{count}</p>
+                    <p className="truncate text-sm font-medium text-foreground/75">
                       {typeLabel(typ)}
                     </p>
                   </div>
