@@ -18,6 +18,7 @@ import { useEffect, useState } from 'react'
 import BrandMark from '../../components/BrandMark'
 import { useTheme } from '../../components/ThemeProvider'
 import { useLocale } from '../../i18n'
+import { api, type Workspace } from '../../lib/api'
 import { cn } from '../../lib/utils'
 
 const navItems = [
@@ -43,6 +44,7 @@ export default function Layout() {
   const { workspaceId } = useParams()
   const { t, locale, toggleLocale } = useLocale()
   const { theme, toggleTheme } = useTheme()
+  const [workspace, setWorkspace] = useState<Workspace | null>(null)
   const [mobileOpen, setMobileOpen] = useState(false)
   const [collapsed, setCollapsed] = useState(() => {
     try {
@@ -61,22 +63,74 @@ export default function Layout() {
     }
   }, [collapsed])
 
+  useEffect(() => {
+    if (!workspaceId) return
+    let cancelled = false
+    setWorkspace(null)
+    void api
+      .getWorkspace(workspaceId)
+      .then((ws) => {
+        if (!cancelled) setWorkspace(ws)
+      })
+      .catch(() => {
+        if (!cancelled) setWorkspace(null)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [workspaceId])
+
+  const controls = (compact: boolean) => (
+    <div
+      className={cn(
+        'sidebar-controls flex gap-1.5',
+        compact ? 'flex-col items-center' : 'flex-row',
+      )}
+    >
+      <button
+        type="button"
+        onClick={toggleLocale}
+        title={`${t('common.lang')}: ${locale.toUpperCase()}`}
+        className={cn(
+          'flex items-center rounded-md border border-sidebar-border bg-sidebar-accent/50 text-sm text-sidebar-foreground transition duration-200 hover:border-[var(--accent-cream)]/40 hover:bg-sidebar-accent',
+          compact ? 'justify-center px-2 py-2' : 'gap-1.5 px-2.5 py-1.5',
+        )}
+      >
+        <Languages className="h-3.5 w-3.5" />
+        {!compact && <span className="font-semibold tracking-wide">{locale.toUpperCase()}</span>}
+      </button>
+      <button
+        type="button"
+        onClick={toggleTheme}
+        title="Dark / Light"
+        className={cn(
+          'flex items-center rounded-md border border-sidebar-border bg-sidebar-accent/50 text-sm text-sidebar-foreground transition duration-200 hover:border-[var(--accent-cream)]/40 hover:bg-sidebar-accent',
+          compact ? 'justify-center px-2 py-2' : 'gap-1.5 px-2.5 py-1.5',
+        )}
+      >
+        {theme === 'dark' ? <Sun className="h-3.5 w-3.5" /> : <Moon className="h-3.5 w-3.5" />}
+        {!compact && <span>{theme === 'dark' ? 'Light' : 'Dark'}</span>}
+      </button>
+    </div>
+  )
+
   const nav = (compact: boolean) => (
     <nav className="flex flex-col gap-1">
-      {navItems.map(({ to, end, key, icon: Icon }) => (
+      {navItems.map(({ to, end, key, icon: Icon }, i) => (
         <NavLink
           key={key}
           to={to ? `${base}/${to}` : base}
           end={end}
           title={t(key)}
           onClick={() => setMobileOpen(false)}
+          style={{ animationDelay: `${i * 40}ms` }}
           className={({ isActive }) =>
             cn(
-              'flex items-center rounded-md py-2.5 text-sm transition duration-200',
+              'animate-fade-up flex items-center rounded-md py-2.5 text-sm transition duration-200',
               compact ? 'justify-center px-2' : 'gap-3 px-3',
               isActive
-                ? 'border border-[var(--accent-cream)]/30 bg-sidebar-accent text-sidebar-primary'
-                : 'border border-transparent text-sidebar-foreground/75 hover:border-[var(--accent-cream)]/20 hover:bg-sidebar-accent/70 hover:text-sidebar-foreground',
+                ? 'nav-item-active border border-[var(--accent-cream)]/35 bg-sidebar-accent text-[var(--accent-cream-soft)]'
+                : 'border border-transparent text-sidebar-foreground/80 hover:border-[var(--accent-cream)]/25 hover:bg-sidebar-accent/70 hover:text-[var(--accent-cream-soft)]',
             )
           }
         >
@@ -95,106 +149,92 @@ export default function Layout() {
           collapsed ? 'w-[72px]' : 'w-64',
         )}
       >
-        <div className={cn('border-b border-sidebar-border py-5', collapsed ? 'px-3' : 'px-5')}>
+        {/* Sticky top: brand + lang/theme always visible */}
+        <div
+          className={cn(
+            'sticky top-0 z-10 border-b border-sidebar-border bg-sidebar/95 backdrop-blur-md',
+            collapsed ? 'px-2 py-3' : 'px-4 py-4',
+          )}
+        >
           <div className="flex items-start justify-between gap-2">
             {collapsed ? (
               <Link to="/" title="The Profit Catalyst · LedgerAI" className="mx-auto block">
-                <span className="font-display text-lg text-sidebar-primary">L</span>
+                <span className="font-display text-xl font-semibold text-[var(--accent-cream-soft)]">
+                  L
+                </span>
               </Link>
             ) : (
-              <div className="min-w-0">
-                <BrandMark size="sm" />
-                <p className="mt-1 text-[10px] uppercase tracking-[0.16em] text-sidebar-foreground/45">
-                  Bookkeeping Cleanup
-                </p>
-              </div>
+              <BrandMark size="sm" subtitle={t('brand.subtitle')} />
             )}
             <button
               type="button"
               onClick={() => setCollapsed((v) => !v)}
-              className="rounded-md p-1.5 text-sidebar-foreground/60 transition duration-200 hover:bg-sidebar-accent hover:text-sidebar-foreground"
-              title={collapsed ? 'Abrir menú' : 'Cerrar menú'}
+              className="rounded-md p-1.5 text-sidebar-foreground/70 transition duration-200 hover:bg-sidebar-accent hover:text-[var(--accent-cream-soft)]"
+              title={collapsed ? t('nav.expand') : t('nav.collapse')}
               aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
             >
               {collapsed ? <PanelLeft className="h-4 w-4" /> : <PanelLeftClose className="h-4 w-4" />}
             </button>
           </div>
-          {!collapsed && (
-            <p className="mt-1.5 truncate text-xs text-sidebar-foreground/45">{workspaceId}</p>
+          {!collapsed && workspace?.name && (
+            <p className="mt-2 truncate text-xs font-medium text-[var(--accent-cream-soft)]/85">
+              {workspace.name}
+            </p>
           )}
+          <div className={cn('mt-3', collapsed && 'mt-2')}>{controls(collapsed)}</div>
         </div>
+
         <div className={cn('flex-1 overflow-y-auto py-4', collapsed ? 'px-2' : 'px-3')}>
           {nav(collapsed)}
-        </div>
-        <div className={cn('border-t border-sidebar-border py-4', collapsed ? 'px-2' : 'px-4')}>
           {!collapsed && (
-            <>
-              <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-sidebar-foreground/45">
+            <div className="mt-6 animate-fade-up-delay-2">
+              <p className="mb-2.5 text-[10px] font-semibold uppercase tracking-[0.18em] text-[var(--text-muted)]">
                 {t('nav.pipeline')}
               </p>
-              <ol className="mb-3 space-y-1.5">
+              <ol className="space-y-1.5">
                 {pipeline.map((key, i) => (
-                  <li key={key} className="flex items-center gap-2.5 text-xs text-sidebar-foreground/70">
-                    <span className="flex h-5 w-5 items-center justify-center rounded-md border border-[var(--accent-cream)]/20 bg-sidebar-accent text-[10px] font-medium text-sidebar-primary">
+                  <li
+                    key={key}
+                    className="flex items-center gap-2.5 text-xs text-sidebar-foreground/80 transition duration-200 hover:text-[var(--accent-cream-soft)]"
+                  >
+                    <span className="flex h-5 w-5 items-center justify-center rounded-md border border-[var(--accent-cream)]/25 bg-sidebar-accent text-[10px] font-medium text-[var(--accent-cream-soft)]">
                       {i + 1}
                     </span>
                     {t(key)}
                   </li>
                 ))}
               </ol>
-            </>
+            </div>
           )}
-          <button
-            type="button"
-            onClick={toggleTheme}
-            title="Dark / Light"
+        </div>
+
+        <div className={cn('border-t border-sidebar-border py-3', collapsed ? 'px-2' : 'px-4')}>
+          <Link
+            to="/workspaces"
             className={cn(
-              'mb-2 flex w-full items-center rounded-md border border-sidebar-border text-sm text-sidebar-foreground/80 transition duration-200 hover:bg-sidebar-accent',
-              collapsed ? 'justify-center px-2 py-2' : 'gap-2 px-3 py-2',
+              'block text-center text-xs text-[var(--text-muted)] transition duration-200 hover:text-[var(--accent-cream-soft)]',
+              collapsed && 'truncate',
             )}
           >
-            {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            {!collapsed && <span>{theme === 'dark' ? 'Light' : 'Dark'}</span>}
-          </button>
-          <button
-            type="button"
-            onClick={toggleLocale}
-            title={`${t('common.lang')}: ${locale.toUpperCase()}`}
-            className={cn(
-              'flex w-full items-center rounded-md border border-sidebar-border text-sm text-sidebar-foreground/80 transition duration-200 hover:bg-sidebar-accent',
-              collapsed ? 'justify-center px-2 py-2' : 'gap-2 px-3 py-2',
-            )}
-          >
-            <Languages className="h-4 w-4" />
-            {!collapsed && (
-              <span>
-                {t('common.lang')}: {locale.toUpperCase()}
-              </span>
-            )}
-          </button>
-          {!collapsed && (
-            <Link
-              to="/workspaces"
-              className="mt-2 block text-center text-xs text-sidebar-foreground/45 transition hover:text-sidebar-foreground"
-            >
-              ← {t('nav.workspaces')}
-            </Link>
-          )}
+            {collapsed ? '←' : `← ${t('nav.workspaces')}`}
+          </Link>
         </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex items-center justify-between border-b border-border bg-card px-4 py-3 lg:hidden">
+        <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-card/95 px-4 py-3 backdrop-blur-md lg:hidden">
           <button type="button" onClick={() => setMobileOpen(true)} className="rounded-md p-2">
             <Menu className="h-5 w-5" />
           </button>
-          <span className="font-display text-lg tracking-[0.04em] text-primary">LedgerAI</span>
+          <span className="font-display text-lg font-semibold tracking-[0.04em] text-primary">
+            LedgerAI
+          </span>
           <div className="flex items-center gap-1">
+            <button type="button" onClick={toggleLocale} className="rounded-md px-2 py-1 text-sm font-semibold">
+              {locale.toUpperCase()}
+            </button>
             <button type="button" onClick={toggleTheme} className="rounded-md px-2 py-1 text-sm">
               {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
-            </button>
-            <button type="button" onClick={toggleLocale} className="rounded-md px-2 py-1 text-sm">
-              {locale.toUpperCase()}
             </button>
           </div>
         </header>
@@ -207,13 +247,14 @@ export default function Layout() {
               onClick={() => setMobileOpen(false)}
               aria-label="Close"
             />
-            <div className="relative flex h-full w-72 flex-col bg-sidebar text-sidebar-foreground">
+            <div className="relative flex h-full w-72 flex-col bg-sidebar text-sidebar-foreground animate-fade-up">
               <div className="flex items-center justify-between border-b border-sidebar-border px-4 py-4">
-                <BrandMark size="sm" to="" />
+                <BrandMark size="sm" to="" subtitle={t('brand.subtitle')} />
                 <button type="button" onClick={() => setMobileOpen(false)}>
                   <X className="h-5 w-5" />
                 </button>
               </div>
+              <div className="border-b border-sidebar-border px-4 py-3">{controls(false)}</div>
               <div className="flex-1 overflow-y-auto px-3 py-4">{nav(false)}</div>
             </div>
           </div>

@@ -56,6 +56,11 @@ function MonthTable({
   total: number
   showUncategorizedHint?: boolean
 }) {
+  const { t, locale } = useLocale()
+  const monthLabels =
+    locale === 'en'
+      ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+      : MONTH_LABELS
   return (
     <div className="table-scroll animate-fade-up rounded-xl border border-border bg-card soft-shadow-lift">
       <div className="border-b border-border px-4 py-3">
@@ -67,14 +72,14 @@ function MonthTable({
         <table className="w-full min-w-[720px] text-left text-sm">
           <thead className="bg-secondary/40 text-muted-foreground">
             <tr>
-              <th className="px-3 py-2 font-medium">Código</th>
-              <th className="px-3 py-2 font-medium">Cuenta</th>
-              {MONTH_LABELS.map((m) => (
+              <th className="px-3 py-2 font-medium">{t('reports.code')}</th>
+              <th className="px-3 py-2 font-medium">{t('reports.account')}</th>
+              {monthLabels.map((m) => (
                 <th key={m} className="px-2 py-2 text-right font-medium">
                   {m}
                 </th>
               ))}
-              <th className="px-3 py-2 text-right font-medium">Total</th>
+              <th className="px-3 py-2 text-right font-medium">{t('reports.total')}</th>
             </tr>
           </thead>
           <tbody>
@@ -91,7 +96,7 @@ function MonthTable({
                     {isSuspense && showUncategorizedHint && (
                       <span
                         className="ml-1 cursor-help text-warning-foreground"
-                        title="Txs sin clasificar — ir a Transacciones para resolver"
+                        title={t('transactions.suspenseHint')}
                       >
                         ⚠️
                       </span>
@@ -110,7 +115,7 @@ function MonthTable({
             })}
             <tr className="border-t-2 border-border bg-secondary/30">
               <td colSpan={14} className="px-3 py-2 text-right font-semibold">
-                TOTAL {title} {money(total)}
+                {t('reports.total')} {title} {money(total)}
               </td>
             </tr>
           </tbody>
@@ -131,6 +136,7 @@ function BalanceSection({
   total: number
   defaultOpen?: boolean
 }) {
+  const { t } = useLocale()
   const [open, setOpen] = useState(defaultOpen)
   return (
     <div className="animate-fade-up rounded-xl border border-border bg-card soft-shadow-lift">
@@ -147,17 +153,17 @@ function BalanceSection({
       {open && (
         <div className="table-scroll border-t border-border">
           {lines.length === 0 ? (
-            <p className="px-4 py-4 text-sm text-muted-foreground">(vacío)</p>
+            <p className="px-4 py-4 text-sm text-muted-foreground">{t('reports.emptySection')}</p>
           ) : (
             <table className="w-full min-w-[560px] text-left text-sm">
               <thead className="bg-secondary/40 text-muted-foreground">
                 <tr>
-                  <th className="px-3 py-2 font-medium">Código</th>
-                  <th className="px-3 py-2 font-medium">Cuenta</th>
-                  <th className="px-3 py-2 text-right font-medium">Saldo Inicial</th>
-                  <th className="px-3 py-2 text-right font-medium">Débitos</th>
-                  <th className="px-3 py-2 text-right font-medium">Créditos</th>
-                  <th className="px-3 py-2 text-right font-medium">Saldo Final</th>
+                  <th className="px-3 py-2 font-medium">{t('reports.code')}</th>
+                  <th className="px-3 py-2 font-medium">{t('reports.account')}</th>
+                  <th className="px-3 py-2 text-right font-medium">{t('reports.opening')}</th>
+                  <th className="px-3 py-2 text-right font-medium">{t('reports.debits')}</th>
+                  <th className="px-3 py-2 text-right font-medium">{t('reports.credits')}</th>
+                  <th className="px-3 py-2 text-right font-medium">{t('reports.closing')}</th>
                 </tr>
               </thead>
               <tbody>
@@ -184,7 +190,7 @@ function BalanceSection({
                 ))}
                 <tr className="border-t-2 border-border bg-secondary/30">
                   <td colSpan={6} className="px-3 py-2 text-right font-semibold">
-                    TOTAL {title} {money(total)}
+                    {t('reports.total')} {title} {money(total)}
                   </td>
                 </tr>
               </tbody>
@@ -203,7 +209,11 @@ const btnSecondary =
 
 export default function Reports() {
   const { workspaceId = '' } = useParams()
-  const { t } = useLocale()
+  const { t, locale } = useLocale()
+  const monthLabels =
+    locale === 'en'
+      ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+      : MONTH_LABELS
   const [periods, setPeriods] = useState<Period[]>([])
   const [bundle, setBundle] = useState<StatementsBundle | null>(null)
   const [availableYears, setAvailableYears] = useState<string[]>([])
@@ -374,15 +384,12 @@ export default function Reports() {
       )}
 
       <section className="mb-8 rounded-xl border border-border bg-card p-5 soft-shadow-lift">
-        <h2 className="mb-1 font-display text-xl tracking-wide">Estados financieros</h2>
-        <p className="mb-4 text-sm text-muted-foreground">
-          Balance + P&amp;L por cuenta/mes + Cash flow O/I/F. Solo txs <strong>verificadas</strong>.
-          Año completo = columnas mensuales; año + mes = detalle del mes.
-        </p>
+        <h2 className="mb-1 font-display text-xl tracking-wide">{t('reports.statementsTitle')}</h2>
+        <p className="mb-4 text-sm text-muted-foreground">{t('reports.statementsHint')}</p>
 
         <div className="mb-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
           <label className="w-full text-sm sm:w-auto">
-            Año
+            {t('reports.year')}
             <select
               className="mt-1 block w-full rounded-lg border border-border bg-background px-3 py-2 sm:w-36"
               value={fiscalYear}
@@ -401,16 +408,16 @@ export default function Reports() {
             </select>
           </label>
           <label className="w-full text-sm sm:w-auto">
-            Mes (opcional)
+            {t('reports.month')}
             <select
               className="mt-1 block w-full rounded-lg border border-border bg-background px-3 py-2 sm:w-40"
               value={month}
               onChange={(e) => setMonth(e.target.value)}
             >
-              <option value="">Todo el año</option>
-              {MONTH_KEYS.map((mk, i) => (
-                <option key={mk} value={mk}>
-                  {MONTH_LABELS[i]} ({mk})
+              <option value="">{t('reports.monthAll')}</option>
+              {monthLabels.map((label, i) => (
+                <option key={MONTH_KEYS[i]} value={MONTH_KEYS[i]}>
+                  {label} ({MONTH_KEYS[i]})
                 </option>
               ))}
             </select>
@@ -422,20 +429,20 @@ export default function Reports() {
               disabled={loadingStmt || !fiscalYear}
               className={cn(btnPrimary, 'flex-1 sm:flex-none')}
             >
-              {loadingStmt ? t('common.loading') : 'Actualizar'}
+              {loadingStmt ? t('common.loading') : t('reports.refresh')}
             </button>
             <a
               className={cn(btnSecondary, 'flex-1 text-center sm:flex-none')}
               href={exportHref}
             >
-              Export Excel
+              {t('reports.exportExcel')}
             </a>
           </div>
         </div>
 
         {bundle && (
           <p className="mb-4 text-xs text-muted-foreground">
-            {bundle.period_label} · {bundle.transaction_count ?? 0} txs verificadas
+            {bundle.period_label} · {bundle.transaction_count ?? 0} {t('reports.verifiedTxs')}
             {(bundle.pending_count ?? 0) > 0 && (
               <>
                 {' '}
@@ -444,28 +451,27 @@ export default function Reports() {
                   to={`/app/${workspaceId}/transactions`}
                   className="text-primary underline-offset-2 hover:underline"
                 >
-                  {bundle.pending_count} pendientes de revisar
+                  {bundle.pending_count} {t('reports.pendingReview')}
                 </Link>
               </>
             )}{' '}
-            · motor {bundle.engine}
+            · {bundle.engine}
           </p>
         )}
 
         {bundle && (bundle.transaction_count ?? 0) === 0 && (
           <div className="mb-4 rounded-lg border border-warning/40 bg-warning/10 px-4 py-3 text-sm">
-            No hay txs verificadas en {periodLabel}.
+            {t('reports.emptyPeriod').replace('{period}', periodLabel)}
             {(bundle.pending_count ?? 0) > 0 ? (
               <>
                 {' '}
-                Hay {bundle.pending_count} en revisión —{' '}
+                {t('reports.emptyPendingHint').replace('{n}', String(bundle.pending_count))}{' '}
                 <Link className="underline" to={`/app/${workspaceId}/transactions`}>
-                  apruébalas en Transacciones
-                </Link>{' '}
-                para que entren al P&amp;L.
+                  {t('nav.transactions')}
+                </Link>
               </>
             ) : (
-              <> Importa extractos desde Documentos / Drive y clasifica.</>
+              <> {t('reports.emptyImportHint')}</>
             )}
           </div>
         )}
@@ -493,17 +499,17 @@ export default function Reports() {
             </div>
 
             <MonthTable
-              title="INGRESOS"
+              title={t('reports.sectionRevenue')}
               items={pnlItems(displayPnl, 'revenueItems')}
               total={revTotal}
             />
             <MonthTable
-              title="COSTO DE VENTAS"
+              title={t('reports.sectionCogs')}
               items={pnlItems(displayPnl, 'cogsItems')}
               total={cogsTotal}
             />
             <MonthTable
-              title="GASTOS OPERATIVOS"
+              title={t('reports.sectionOpex')}
               items={pnlItems(displayPnl, 'expenseItems')}
               total={opexTotal}
               showUncategorizedHint
@@ -511,7 +517,7 @@ export default function Reports() {
 
             <div className="rounded-xl border border-border bg-secondary/20 px-4 py-3 text-right">
               <span className="font-display text-lg font-semibold tracking-wide">
-                UTILIDAD NETA {money(net)}
+                {t('reports.netIncomeLine')} {money(net)}
               </span>
             </div>
           </div>
@@ -520,7 +526,7 @@ export default function Reports() {
         {/* ── Balance chain alerts ────────────────────────────────────────── */}
         {bundle?.balance_chain_alerts && bundle.balance_chain_alerts.length > 0 && (
           <div className="mb-6 rounded-xl border border-destructive/40 bg-destructive/10 p-4">
-            <h3 className="mb-2 font-semibold text-destructive">Alertas de cadenazo bancario</h3>
+            <h3 className="mb-2 font-semibold text-destructive">{t('reports.chainAlerts')}</h3>
             <ul className="space-y-3 text-sm">
               {bundle.balance_chain_alerts.map((a) => (
                 <li
@@ -553,7 +559,7 @@ export default function Reports() {
                         })()
                       }
                     >
-                      Marcar revisado
+                      {t('reports.ackChain')}
                     </button>
                   )}
                 </li>
@@ -574,8 +580,8 @@ export default function Reports() {
                 }
               >
                 {bundle.balance_sheet.balanced
-                  ? '✅ Balance cuadrado: A = P + E'
-                  : `Descuadre Δ ${money(Number(bundle.balance_sheet.imbalance ?? 0))}`}
+                  ? `✅ ${t('reports.balanceOk')}`
+                  : `Δ ${money(Number(bundle.balance_sheet.imbalance ?? 0))}`}
               </span>
               {bundle.balance_sheet.equation && (
                 <span className="text-muted-foreground">{bundle.balance_sheet.equation}</span>
@@ -584,15 +590,15 @@ export default function Reports() {
             <div className="grid gap-4 lg:grid-cols-3">
               {[
                 {
-                  label: 'Activos',
+                  label: t('reports.assets'),
                   value: Number(bundle.balance_sheet.totalAssets ?? 0),
                 },
                 {
-                  label: 'Pasivos',
+                  label: t('reports.liabilities'),
                   value: Number(bundle.balance_sheet.totalLiabilities ?? 0),
                 },
                 {
-                  label: 'Patrimonio',
+                  label: t('reports.equity'),
                   value: Number(bundle.balance_sheet.totalEquity ?? 0),
                 },
               ].map((kpi) => (
@@ -606,17 +612,17 @@ export default function Reports() {
               ))}
             </div>
             <BalanceSection
-              title="ACTIVOS"
+              title={t('reports.assets').toUpperCase()}
               lines={bundle.balance_sheet.assets || []}
               total={Number(bundle.balance_sheet.totalAssets ?? 0)}
             />
             <BalanceSection
-              title="PASIVOS"
+              title={t('reports.liabilities').toUpperCase()}
               lines={bundle.balance_sheet.liabilities || []}
               total={Number(bundle.balance_sheet.totalLiabilities ?? 0)}
             />
             <BalanceSection
-              title="PATRIMONIO"
+              title={t('reports.equity').toUpperCase()}
               lines={bundle.balance_sheet.equity || []}
               total={Number(bundle.balance_sheet.totalEquity ?? 0)}
             />
@@ -629,8 +635,8 @@ export default function Reports() {
             {cfMonthly.length > 0 && (
               <div className="h-72 rounded-xl border border-border bg-background p-4 soft-shadow-lift">
                 <h3 className="mb-2 text-sm font-semibold">
-                  Cash flow mensual — entradas{' '}
-                  <span className="text-[var(--positive)]">■</span> / salidas{' '}
+                  {t('reports.cfMonthly')} —{' '}
+                  <span className="text-[var(--positive)]">■</span> /{' '}
                   <span className="text-[var(--negative)]">■</span>
                 </h3>
                 <ResponsiveContainer width="100%" height="90%">
@@ -667,24 +673,24 @@ export default function Reports() {
 
             <div className="table-scroll rounded-xl border border-border bg-card soft-shadow-lift">
               <div className="border-b border-border px-4 py-3">
-                <h3 className="font-display text-lg tracking-wide">Cash flow — detalle O / I / F</h3>
+                <h3 className="font-display text-lg tracking-wide">{t('reports.cfDetail')}</h3>
               </div>
               <table className="w-full min-w-[420px] text-left text-sm">
                 <thead className="bg-secondary/40 text-muted-foreground">
                   <tr>
-                    <th className="px-3 py-2 font-medium">Tipo</th>
-                    <th className="px-3 py-2 font-medium">Código</th>
-                    <th className="px-3 py-2 font-medium">Cuenta</th>
-                    <th className="px-3 py-2 text-right font-medium">Monto</th>
-                    <th className="px-3 py-2 text-right font-medium"># txs</th>
+                    <th className="px-3 py-2 font-medium">{t('reports.type')}</th>
+                    <th className="px-3 py-2 font-medium">{t('reports.code')}</th>
+                    <th className="px-3 py-2 font-medium">{t('reports.account')}</th>
+                    <th className="px-3 py-2 text-right font-medium">{t('reports.amount')}</th>
+                    <th className="px-3 py-2 text-right font-medium">{t('reports.txCount')}</th>
                   </tr>
                 </thead>
                 <tbody>
                   {(
                     [
-                      ['OPERATIVO', 'operating', 'operatingSubtotal'],
-                      ['INVERSIÓN', 'investing', 'investingSubtotal'],
-                      ['FINANCIACIÓN', 'financing', 'financingSubtotal'],
+                      [t('reports.cfOperating'), 'operating', 'operatingSubtotal'],
+                      [t('reports.cfInvesting'), 'investing', 'investingSubtotal'],
+                      [t('reports.cfFinancing'), 'financing', 'financingSubtotal'],
                     ] as const
                   ).flatMap(([label, key, sub]) => {
                     const lines = bundle.cash_flow_detail?.[key] || []
@@ -705,7 +711,7 @@ export default function Reports() {
                             <tr key={`${key}-empty`} className="border-t border-border">
                               <td className="px-3 py-2 font-medium">{label}</td>
                               <td colSpan={2} className="px-3 py-2 text-muted-foreground">
-                                (vacío)
+                                {t('reports.emptySection')}
                               </td>
                               <td className="px-3 py-2 text-right tabular-nums">{money(subtotal)}</td>
                               <td />
@@ -731,7 +737,7 @@ export default function Reports() {
                       ...rows,
                       <tr key={`${key}-sub`} className="border-t border-border bg-secondary/20">
                         <td colSpan={3} className="px-3 py-2 text-right font-semibold">
-                          SUBTOTAL {label}
+                          {t('reports.subtotal')} {label}
                         </td>
                         <td className="px-3 py-2 text-right font-semibold tabular-nums">
                           {money(subtotal)}
@@ -742,7 +748,7 @@ export default function Reports() {
                   })}
                   <tr className="border-t-2 border-border bg-secondary/40">
                     <td colSpan={3} className="px-3 py-3 text-right font-display text-base font-semibold">
-                      FLUJO NETO TOTAL
+                      {t('reports.cfNetTotal')}
                     </td>
                     <td className="px-3 py-3 text-right font-semibold tabular-nums">
                       {money(
@@ -761,13 +767,11 @@ export default function Reports() {
       </section>
 
       <section className="mb-8">
-        <h2 className="mb-3 font-display text-xl tracking-wide">Cierre anual</h2>
-        <p className="mb-3 max-w-2xl text-sm text-muted-foreground">
-          Al cerrar el año, la utilidad neta del P&amp;L se acumula en Utilidades retenidas (3020).
-        </p>
+        <h2 className="mb-3 font-display text-xl tracking-wide">{t('reports.yearClose')}</h2>
+        <p className="mb-3 max-w-2xl text-sm text-muted-foreground">{t('reports.yearCloseHint')}</p>
         <div className="mb-4 flex flex-wrap items-end gap-3">
           <label className="text-sm">
-            Año
+            {t('reports.year')}
             <input
               className="mt-1 block w-28 rounded-md border border-border bg-background px-3 py-2"
               value={yearInput}
@@ -781,7 +785,9 @@ export default function Reports() {
             onClick={() => void closeFiscalYear()}
             className={btnPrimary}
           >
-            {closingYear ? 'Cerrando…' : `Cerrar año ${yearInput}`}
+            {closingYear
+              ? t('common.loading')
+              : t('reports.closeYear').replace('{year}', yearInput)}
           </button>
         </div>
         {fiscalYears.length > 0 && (
@@ -804,7 +810,7 @@ export default function Reports() {
                     className={btnSecondary}
                     onClick={() => void reopenFiscalYear(String(y.fiscal_year))}
                   >
-                    Reabrir año
+                    {t('reports.reopenYear')}
                   </button>
                 )}
               </li>
@@ -867,7 +873,7 @@ export default function Reports() {
                     }}
                     className={btnSecondary}
                   >
-                    Ver periodo
+                    {t('reports.viewPeriod')}
                   </button>
                   <button
                     type="button"

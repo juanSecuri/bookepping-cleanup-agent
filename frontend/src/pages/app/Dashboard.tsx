@@ -232,28 +232,28 @@ export default function Dashboard() {
   const agentSteps = [
     {
       icon: HardDrive,
-      title: '1. Ingesta',
-      body: 'Drive o subida web (PC/móvil): PDF, Excel/CSV, imagen. Guarda ruta y tipo (estado vs factura).',
+      title: t('dashboard.step1Title'),
+      body: t('dashboard.step1Body'),
     },
     {
       icon: ScanText,
-      title: '2. Leer',
-      body: 'Extracción local $0 (pdfplumber / openpyxl). Sin LlamaParse ni OpenAI obligatorios.',
+      title: t('dashboard.step2Title'),
+      body: t('dashboard.step2Body'),
     },
     {
       icon: BookOpen,
-      title: '3. Clasificar CoA',
-      body: 'Reglas y keywords vs plan de cuentas. Facturas → transacciones; estados → movimientos.',
+      title: t('dashboard.step3Title'),
+      body: t('dashboard.step3Body'),
     },
     {
       icon: Landmark,
-      title: '4. Conciliar',
-      body: 'Empareja movimientos bancarios con transacciones verificadas del periodo.',
+      title: t('dashboard.step4Title'),
+      body: t('dashboard.step4Body'),
     },
     {
       icon: LineChart,
-      title: '5. Emitir',
-      body: 'Balance + P&L + Cash flow mensual/anual desde txs verificadas (motor local).',
+      title: t('dashboard.step5Title'),
+      body: t('dashboard.step5Body'),
     },
   ]
 

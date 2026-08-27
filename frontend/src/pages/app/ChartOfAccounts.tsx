@@ -7,15 +7,6 @@ import { cn } from '../../lib/utils'
 
 const TYPE_ORDER = ['asset', 'liability', 'equity', 'income', 'cogs', 'expense'] as const
 
-const TYPE_LABELS: Record<string, string> = {
-  asset: 'Activo (Asset)',
-  liability: 'Pasivo (Liability)',
-  equity: 'Patrimonio (Equity)',
-  income: 'Ingreso (Income)',
-  cogs: 'Costo de ventas (COGS)',
-  expense: 'Gasto (Expense)',
-}
-
 function normalBalance(type: string): 'debit' | 'credit' {
   const t = type.toLowerCase()
   if (t === 'asset' || t === 'expense' || t === 'cogs') return 'debit'
@@ -29,6 +20,12 @@ function accountType(acct: ChartAccount): string {
 export default function ChartOfAccounts() {
   const { workspaceId = '' } = useParams()
   const { t } = useLocale()
+
+  function typeLabel(typ: string): string {
+    const key = `coa.type.${typ}`
+    const translated = t(key)
+    return translated === key ? typ : translated
+  }
   const [accounts, setAccounts] = useState<ChartAccount[]>([])
   const [rules, setRules] = useState<Array<Record<string, unknown>>>([])
   const [loading, setLoading] = useState(true)
@@ -39,6 +36,9 @@ export default function ChartOfAccounts() {
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
+    setAccounts([])
+    setRules([])
+    setQuery('')
     try {
       const [data, r] = await Promise.all([
         api.chartOfAccounts(workspaceId),
@@ -166,16 +166,16 @@ export default function ChartOfAccounts() {
               </button>
             </div>
             {rules.length === 0 ? (
-              <p className="text-sm text-muted-foreground">Sin reglas — pulsa sembrar.</p>
+              <p className="text-sm text-muted-foreground">{t('coa.rulesEmpty')}</p>
             ) : (
               <div className="soft-shadow table-scroll rounded-xl border border-border bg-card">
                 <table className="w-full min-w-[560px] text-left text-sm">
                   <thead className="border-b border-border bg-secondary/50 text-muted-foreground">
                     <tr>
-                      <th className="px-4 py-2 font-medium">Keywords</th>
-                      <th className="px-4 py-2 font-medium">Código</th>
-                      <th className="px-4 py-2 font-medium">Cuenta</th>
-                      <th className="px-4 py-2 font-medium">Origen</th>
+                      <th className="px-4 py-2 font-medium">{t('coa.keywords')}</th>
+                      <th className="px-4 py-2 font-medium">{t('coa.code')}</th>
+                      <th className="px-4 py-2 font-medium">{t('coa.account')}</th>
+                      <th className="px-4 py-2 font-medium">{t('coa.origin')}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -219,7 +219,7 @@ export default function ChartOfAccounts() {
                   <div key={typ} className="soft-shadow rounded-xl border border-border bg-card p-4">
                     <p className="text-2xl font-semibold tabular-nums">{count}</p>
                     <p className="truncate text-sm text-muted-foreground">
-                      {TYPE_LABELS[typ] || typ}
+                      {typeLabel(typ)}
                     </p>
                   </div>
                 ))}
@@ -242,7 +242,7 @@ export default function ChartOfAccounts() {
           <section key={category}>
             <div className="mb-2 flex flex-wrap items-center gap-2">
               <h2 className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">
-                {TYPE_LABELS[category] || category}
+                {typeLabel(category)}
               </h2>
               <span className="rounded-md bg-secondary px-2 py-0.5 text-xs text-muted-foreground">
                 {rows.length} {t('coa.count')}
@@ -281,7 +281,7 @@ export default function ChartOfAccounts() {
                     <dl className="mt-3 grid grid-cols-2 gap-2 text-xs text-muted-foreground">
                       <div>
                         <dt className="font-medium text-foreground/70">{t('coa.type')}</dt>
-                        <dd>{TYPE_LABELS[typ] || typ}</dd>
+                        <dd>{typeLabel(typ)}</dd>
                       </div>
                       <div>
                         <dt className="font-medium text-foreground/70">{t('coa.subcategory')}</dt>
@@ -323,7 +323,7 @@ export default function ChartOfAccounts() {
                         <td className="px-4 py-3 font-mono text-xs">{String(acct.code ?? '—')}</td>
                         <td className="px-4 py-3 font-medium">{String(acct.name ?? acct.id)}</td>
                         <td className="px-4 py-3 text-muted-foreground">
-                          {TYPE_LABELS[typ] || typ}
+                          {typeLabel(typ)}
                         </td>
                         <td className="px-4 py-3 text-muted-foreground">
                           {String(acct.subcategory ?? '—')}

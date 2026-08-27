@@ -7,17 +7,20 @@ type BrandMarkProps = {
   size?: 'sm' | 'md' | 'lg' | 'hero'
   showProduct?: boolean
   className?: string
+  /** Optional subtitle under product (localized by parent). */
+  subtitle?: string
 }
 
 /**
  * Text brand: The Profit Catalyst (company) + LedgerAI (product).
- * Typography-only mark — no legacy image assets.
+ * High-contrast cream on dark sidebar / surfaces.
  */
 export default function BrandMark({
   to = '/',
   size = 'md',
   showProduct = true,
   className,
+  subtitle,
 }: BrandMarkProps) {
   const tag =
     size === 'hero'
@@ -32,21 +35,34 @@ export default function BrandMark({
       : size === 'lg'
         ? 'text-2xl'
         : size === 'sm'
-          ? 'text-base'
+          ? 'text-lg'
           : 'text-xl'
 
   const inner = (
     <span className={cn('inline-flex flex-col', className)}>
-      <span className={cn('font-medium uppercase text-[var(--text-muted)]', tag)}>
+      <span
+        className={cn(
+          'font-medium uppercase tracking-[0.2em] text-[var(--accent-cream-soft)] opacity-90',
+          tag,
+        )}
+      >
         The Profit Catalyst
       </span>
       {showProduct && (
-        <span className={cn('font-display font-medium leading-none text-[var(--accent-cream)]', product)}>
+        <span
+          className={cn(
+            'font-display font-semibold leading-none text-[var(--accent-cream-soft)]',
+            product,
+          )}
+          style={{ textShadow: '0 1px 12px rgba(0,0,0,0.35)' }}
+        >
           LedgerAI
         </span>
       )}
-      {size === 'hero' && (
-        <span className="mt-2 text-sm text-[var(--text-muted)] sm:text-base">Bookkeeping Cleanup</span>
+      {(subtitle || size === 'hero') && (
+        <span className="mt-1.5 text-[10px] uppercase tracking-[0.16em] text-[var(--text-muted)] sm:text-xs">
+          {subtitle || 'Bookkeeping Cleanup'}
+        </span>
       )}
     </span>
   )

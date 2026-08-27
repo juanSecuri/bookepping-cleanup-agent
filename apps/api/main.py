@@ -185,11 +185,7 @@ async def create_workspace(body: WorkspaceCreate) -> dict:
         timezone=body.timezone,
     )
     saved = await WorkspaceRepository().save(ws)
-    # Auto-seed free CoA so classification works immediately
-    try:
-        await seed_chart_of_accounts(SeedCoABody(workspace_id=str(saved.id)))
-    except Exception:
-        pass
+    # Clean workspace: no auto-seed CoA/rules — user seeds when ready
     return saved.model_dump(mode="json")
 
 
