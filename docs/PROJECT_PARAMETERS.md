@@ -50,9 +50,10 @@ El agente debe entonces:
 | 11 | Imagen OCR / Audio local | **DONE** |
 | 12 | Auth | **IN PROGRESS** (Supabase JWT + workspace_members + login gate — ver `docs/AUTH.md`) |
 | — | Harden MVP (`harden-mvp-2026-08-26`) | **DONE** (cerrado 2026-08-26 EOD) |
-| **13a** | **Reportes detallados: fix P&L, año/mes, tablas columnar, CF, Excel 4 tabs** | **ACTIVO** |
-| **13b** | **Marca TPC/LedgerAI + paleta crema/verde + dark/light + landing** | Siguiente |
-| **13c** | **Drive UI: jerarquía banco → cuenta → año (todas las carpetas cliente)** | Después |
+| **13a–13e** | Reportes, marca, Drive, OCR, Storage | **DONE** |
+| **14** | **CPA Taxes 2025: CoA auto + BS completo + P&L drill + conciliación banco×mes** | **ACTIVO** |
+| **13b** | Marca TPC/LedgerAI (histórico) | DONE |
+| **13c** | Drive UI jerarquía (histórico) | DONE |
 
 ---
 
@@ -254,6 +255,7 @@ Env: `EXTRACTION_MODE=local`, `LEDGERAI_UPLOAD_DIR=/var/data/ledgerai_uploads`.
 | **2026-08-27** | **Empresa (vía Juan)** | Render Starter comprado; **Auth NOW** — aceptar e implementar scaffold Supabase JWT + membership | **Auth IN PROGRESS** |
 | **2026-08-27** | **Sprint técnico (Juan)** | **Tesseract prioridad máxima** en PDFs escaneados; limpieza assets legado; tests fallback; UI fixes (KPI, visor, Starter copy); fix P&L 2024 paginación | **v2.0 demo-ready** |
 | **2026-08-27 EOD** | **Juan** | **Supabase Storage** bucket `documents` + `storage_path`; preview/worker leen de Storage; $0 en Free tier | **Sprint 08/27 cerrado** |
+| **2026-09-08** | **Empresa (vía Juan)** | Gastos sin categoría → buscar proveedor y categorizar; pagos/ingresos → cuenta ingresos; Balance con todas las cuentas; P&L drill detalle; conciliación banco×mes; reportes año/mes estilo QuickBooks para **CPA/SPA taxes 2025** | **Sprint 14 CPA Taxes** |
 
 ---
 
@@ -312,9 +314,19 @@ Split-screen extracto/OCR en Documentos | TanStack Table en Transacciones | Expo
 
 ## 11. Sprint activo
 
-| **13e** | Supabase Storage para documentos + preview sin 410 | **DONE** |
+### Sprint 14 — CPA / SPA Taxes 2025 (tarea 2026-09-08)
 
-**Estado 2026-08-27 EOD:** **Sprint del día cerrado** — Storage live; smoke test en prod al volver del almuerzo.
+**Objetivo medible:** paquetes listos para CPA — categorización fiable + Balance/P&L drill + conciliación banco×mes + periodo año/mes (estilo QuickBooks).
+
+| Orden | Tarea | DoD *full verificado* | Estado |
+|------:|-------|----------------------|--------|
+| T1 | Gastos no categorizados: vendor/keywords → CoA; créditos/ingresos → cuentas 4010–4040 (no Cash 1010) | Clasificar con dirección; seeds ingresos; re-run suspense | **DONE** (2026-09-08) |
+| T2 | Balance general organizado: Activo / Pasivo / Patrimonio con subgrupos CoA | Secciones + cuentas del plan (incl. cero) | **DONE** (2026-09-08) |
+| T3 | P&L: click cuenta → detalle transacciones (ingresos, COGS, gastos) | API filtro cuenta+periodo + UI drill | **DONE** (2026-09-08) |
+| T4 | Conciliación banco×mes + detalle txs categorizadas | Selector banco + mes; movements filtrados | **DONE** (2026-09-08) |
+| T5 | Reportes año / mes a mes (ya parcial 13a) | Selector QuickBooks-like en Reports + export CPA | **DONE** (2026-09-08) |
+
+**Constraint:** $0 APIs IA; reglas + parsers. Un foco activo a la vez.
 
 | Sprint | Objetivo | Estado |
 |--------|----------|--------|
@@ -322,10 +334,12 @@ Split-screen extracto/OCR en Documentos | TanStack Table en Transacciones | Expo
 | **13b** | Cero logo/nombre legado; TPC + LedgerAI; CSS vars; toggle dark/light; landing | **DONE** |
 | **13c** | Drive: jerarquía banco → #cuenta → año para todas las carpetas del cliente | **DONE** |
 | **13d** | Tesseract OCR fallback en PDFs escaneados + tests | **DONE** |
+| **13e** | Supabase Storage documentos + preview | **DONE** |
+| **14** | CPA Taxes 2025 (CoA + BS + P&L drill + recon banco×mes) | **DONE** (código; falta redeploy + smoke CPA) |
 
-**Omitido a propósito:** counter animado KPI, columnas por semana.
+**Omitido a propósito (14):** tax forms IRS, multi-entity packs, PDF binder.
 
-**Live:** https://ledgerai-0wyy.onrender.com — redeploy necesario para ver cambios.
+**Live:** https://ledgerai-0wyy.onrender.com — redeploy tras merge.
 
 ---
 

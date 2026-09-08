@@ -134,6 +134,22 @@ export default function Transactions() {
     await load()
   }
 
+  async function recategorize() {
+    setError(null)
+    setInfo(null)
+    try {
+      const res = await api.recategorizeTransactions(workspaceId, true)
+      const msg = t('transactions.recategorizeDone')
+        .replace('{n}', String(res.updated ?? 0))
+        .replace('{i}', String(res.income ?? 0))
+        .replace('{e}', String(res.expense ?? 0))
+      setInfo(msg)
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('common.error'))
+    }
+  }
+
   function toggle(id: string) {
     setSelected((prev) => {
       const next = new Set(prev)
@@ -335,7 +351,7 @@ export default function Transactions() {
         )}
       </div>
 
-      <div className="mb-4 flex flex-wrap gap-2">
+      <div className="mb-4 flex flex-wrap items-center gap-2">
         {tabs.map((item) => (
           <button
             key={item.id}
@@ -354,6 +370,15 @@ export default function Transactions() {
             )}
           </button>
         ))}
+        {(tab === 'suspense' || tab === 'pending') && (
+          <button
+            type="button"
+            onClick={() => void recategorize()}
+            className="cursor-pointer rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium hover:border-primary/50"
+          >
+            {t('transactions.recategorize')}
+          </button>
+        )}
       </div>
 
       {selected.size > 0 && (

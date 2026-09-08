@@ -171,7 +171,10 @@ class IngestDocumentUseCase:
             )
         saved: list[BankMovement] = []
         for movement in movements:
-            match = self._coa.classify(tenant_id, movement.description)
+            direction = "expense" if movement.debit_amount > 0 else "income"
+            match = self._coa.classify(
+                tenant_id, movement.description, direction=direction
+            )
             movement = movement.model_copy(
                 update={
                     "chart_of_accounts_code": match.code,
@@ -195,7 +198,9 @@ class IngestDocumentUseCase:
         tx_date = self._guess_date(text)
         vendor = self._guess_vendor(text, file_path.name)
         description = (vendor or file_path.stem)[:512]
-        match = self._coa.classify(tenant_id, f"{description} {text[:400]}")
+        match = self._coa.classify(
+            tenant_id, f"{description} {text[:400]}", direction="expense"
+        )
         acct_type = self._coa_type(tenant_id, match.code)
         cf = infer_cash_flow_type(account_code=match.code, account_type=acct_type)
         model_engine = engine if engine in ("tesseract", "pdfplumber") else "pdfplumber"

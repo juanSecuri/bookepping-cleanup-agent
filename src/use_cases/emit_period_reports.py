@@ -9,14 +9,17 @@ Emits:
 from __future__ import annotations
 
 import uuid
+from calendar import monthrange
 from collections import defaultdict
 from dataclasses import dataclass, field
+from datetime import date as date_cls
 from decimal import Decimal
 
 from src.domain.models.enums import TransactionStatus, TransactionType
 from src.infrastructure.classification.cash_flow import infer_cash_flow_type
 from src.infrastructure.repositories.supabase_client import get_supabase_client
 from src.infrastructure.repositories.transaction_repository import TransactionRepository
+from src.use_cases.close_fiscal_year import FiscalYearCloseRepository
 
 # Equity accounts that must never hit P&L
 EQUITY_CODES = frozenset({"3010", "3020", "3030"})
@@ -24,9 +27,25 @@ OWNER_DRAWS_CODE = "3030"
 COGS_CODES = frozenset({"5010", "5000", "5100"})
 MONTH_KEYS = [f"{m:02d}" for m in range(1, 13)]
 
+# QuickBooks-like subcategory order within Balance Sheet major groups
+ASSET_SUBCATEGORY_ORDER = ("Current Assets", "Fixed Assets")
+LIABILITY_SUBCATEGORY_ORDER = ("Current Liabilities", "Long-Term Liabilities")
+EQUITY_SUBCATEGORY_ORDER = ("Equity",)
+BS_ACCOUNT_TYPES = frozenset({"asset", "liability", "equity"})
+
 
 def _empty_months() -> dict[str, float]:
     return {k: 0.0 for k in MONTH_KEYS}
+
+
+def _default_subcategory(account_type: str) -> str:
+    if account_type == "asset":
+        return "Current Assets"
+    if account_type == "liability":
+        return "Current Liabilities"
+    if account_type == "equity":
+        return "Equity"
+    return "Other"
 
 
 def _acct_bucket() -> dict:
@@ -38,6 +57,7 @@ def _acct_bucket() -> dict:
         "byMonth": defaultdict(lambda: Decimal("0")),
         "debits": Decimal("0"),
         "credits": Decimal("0"),
+        "subcategory": "",
     }
 
 
@@ -51,6 +71,7 @@ def _serialize_line(v: dict, *, with_months: bool = True) -> dict:
         "credits": float(v.get("credits") or 0),
         "opening": 0.0,
         "closing": float(v["amount"]),
+        "subcategory": v.get("subcategory") or "",
     }
     if with_months:
         by_m = _empty_months()
@@ -62,6 +83,74 @@ def _serialize_line(v: dict, *, with_months: bool = True) -> dict:
     return row
 
 
+def merge_coa_zero_balances(
+    asset_map: dict[str, dict],
+    liability_map: dict[str, dict],
+    equity_map: dict[str, dict],
+    coa: dict[str, dict],
+) -> None:
+    """Ensure every CoA asset/liability/equity account appears (zero if no activity)."""
+    targets = {
+        "asset": asset_map,
+        "liability": liability_map,
+        "equity": equity_map,
+    }
+    for code, meta in coa.items():
+        acct_type = str(meta.get("account_type") or "").lower()
+        if acct_type not in targets:
+            continue
+        store = targets[acct_type]
+        sub = str(meta.get("subcategory") or "").strip() or _default_subcategory(acct_type)
+        name = str(meta.get("name") or code)
+        if code not in store:
+            entry = _acct_bucket()
+            entry["code"] = code
+            entry["name"] = name
+            entry["subcategory"] = sub
+            store[code] = entry
+        else:
+            store[code]["subcategory"] = sub or store[code].get("subcategory") or ""
+            if name and (not store[code].get("name") or store[code]["name"] == code):
+                store[code]["name"] = name
+
+
+def build_balance_sections(
+    assets: list[dict],
+    liabilities: list[dict],
+    equity: list[dict],
+) -> dict[str, list[dict]]:
+    """Group BS lines by CoA subcategory (QuickBooks-style)."""
+
+    def _group(lines: list[dict], preferred: tuple[str, ...]) -> list[dict]:
+        buckets: dict[str, list[dict]] = defaultdict(list)
+        for line in lines:
+            sub = str(line.get("subcategory") or "").strip() or "Other"
+            buckets[sub].append(line)
+        ordered_keys: list[str] = []
+        for key in preferred:
+            if key in buckets:
+                ordered_keys.append(key)
+        for key in sorted(k for k in buckets if k not in preferred):
+            ordered_keys.append(key)
+        sections: list[dict] = []
+        for key in ordered_keys:
+            group_lines = sorted(buckets[key], key=lambda x: str(x.get("code") or ""))
+            sections.append(
+                {
+                    "subcategory": key,
+                    "lines": group_lines,
+                    "total": sum(float(x.get("amount") or 0) for x in group_lines),
+                }
+            )
+        return sections
+
+    return {
+        "assets": _group(assets, ASSET_SUBCATEGORY_ORDER),
+        "liabilities": _group(liabilities, LIABILITY_SUBCATEGORY_ORDER),
+        "equity": _group(equity, EQUITY_SUBCATEGORY_ORDER),
+    }
+
+
 def _bump(
     store: dict[str, dict],
     code: str,
@@ -70,10 +159,13 @@ def _bump(
     month_key: str,
     *,
     as_debit: bool | None = None,
+    subcategory: str | None = None,
 ) -> None:
     entry = store.setdefault(code, _acct_bucket())
     entry["code"] = code
     entry["name"] = name or entry["name"] or code
+    if subcategory and not entry.get("subcategory"):
+        entry["subcategory"] = subcategory
     entry["amount"] += amount
     entry["txCount"] += 1
     month_num = month_key[5:7] if len(month_key) >= 7 else month_key
@@ -135,8 +227,6 @@ class EmitPeriodReportsUseCase:
         if period and len(period) == 7 and period[4] == "-":
             date_from = f"{period}-01"
             y, m = int(period[:4]), int(period[5:7])
-            from calendar import monthrange
-
             date_to = f"{y}-{m:02d}-{monthrange(y, m)[1]:02d}"
             label = period
             granularity = "monthly"
@@ -190,7 +280,8 @@ class EmitPeriodReportsUseCase:
         ]
         pending_count = len(pending_in_period)
 
-        coa_types = self._coa_types(str(workspace_id))
+        coa = self._coa_accounts(str(workspace_id))
+        coa_types = {k: str(v.get("account_type") or "") for k, v in coa.items()}
         as_of_year = self._as_of_year(period, date_to, date_from)
         prior_re = self._prior_retained_earnings(str(workspace_id), as_of_year)
 
@@ -232,6 +323,10 @@ class EmitPeriodReportsUseCase:
             code = t.chart_of_accounts_code or "9999"
             name = t.chart_of_accounts_name or "Uncategorized"
             acct_type = coa_types.get(code) or self._infer_type(t.transaction_type)
+            coa_meta = coa.get(code) or {}
+            sub = str(coa_meta.get("subcategory") or "").strip() or _default_subcategory(
+                acct_type if acct_type in BS_ACCOUNT_TYPES else ""
+            )
             cf = t.cash_flow_type or infer_cash_flow_type(
                 account_code=code, account_type=acct_type
             )
@@ -244,6 +339,10 @@ class EmitPeriodReportsUseCase:
                 cash0 = _acct_bucket()
                 cash0["code"] = "1010"
                 cash0["name"] = "Cash and Cash Equivalents"
+                cash0["subcategory"] = (
+                    str((coa.get("1010") or {}).get("subcategory") or "").strip()
+                    or "Current Assets"
+                )
                 asset_map["1010"] = cash0
             cash = asset_map["1010"]
 
@@ -253,7 +352,15 @@ class EmitPeriodReportsUseCase:
                     cash["txCount"] += 1
                     cash["debits"] += t.amount
                     cash["byMonth"][month_key[5:7]] += t.amount
-                    _bump(equity_map, code, name, t.amount, month_key, as_debit=False)
+                    _bump(
+                        equity_map,
+                        code,
+                        name,
+                        t.amount,
+                        month_key,
+                        as_debit=False,
+                        subcategory=sub or "Equity",
+                    )
                     financing_in += t.amount
                     monthly[month_key]["financing_in"] += t.amount
                     annual[year_key]["financing_in"] += t.amount
@@ -263,7 +370,15 @@ class EmitPeriodReportsUseCase:
                     cash["txCount"] += 1
                     cash["credits"] += t.amount
                     cash["byMonth"][month_key[5:7]] -= t.amount
-                    _bump(equity_map, code, name, -t.amount, month_key, as_debit=True)
+                    _bump(
+                        equity_map,
+                        code,
+                        name,
+                        -t.amount,
+                        month_key,
+                        as_debit=True,
+                        subcategory=sub or "Equity",
+                    )
                     financing_out += t.amount
                     monthly[month_key]["financing_out"] += t.amount
                     annual[year_key]["financing_out"] += t.amount
@@ -273,7 +388,15 @@ class EmitPeriodReportsUseCase:
             if acct_type == "liability" or cf == "financing":
                 if t.transaction_type == TransactionType.INCOME:
                     if acct_type == "liability":
-                        _bump(liability_map, code, name, t.amount, month_key, as_debit=False)
+                        _bump(
+                            liability_map,
+                            code,
+                            name,
+                            t.amount,
+                            month_key,
+                            as_debit=False,
+                            subcategory=sub,
+                        )
                     cash["amount"] += t.amount
                     cash["txCount"] += 1
                     cash["debits"] += t.amount
@@ -284,7 +407,15 @@ class EmitPeriodReportsUseCase:
                     _bump(cf_fin_map, code, name, t.amount, month_key, as_debit=False)
                 else:
                     if acct_type == "liability":
-                        _bump(liability_map, code, name, -t.amount, month_key, as_debit=True)
+                        _bump(
+                            liability_map,
+                            code,
+                            name,
+                            -t.amount,
+                            month_key,
+                            as_debit=True,
+                            subcategory=sub,
+                        )
                     cash["amount"] -= t.amount
                     cash["txCount"] += 1
                     cash["credits"] += t.amount
@@ -301,11 +432,33 @@ class EmitPeriodReportsUseCase:
                     cash["debits"] += t.amount
                     investing_in += t.amount
                     _bump(cf_inv_map, code, name, t.amount, month_key, as_debit=False)
+                    # Sale of non-cash asset → reduce that asset (cash still rolls via 1010)
+                    if acct_type == "asset" and code != "1010":
+                        _bump(
+                            asset_map,
+                            code,
+                            name,
+                            -t.amount,
+                            month_key,
+                            as_debit=False,
+                            subcategory=sub,
+                        )
                 else:
                     cash["amount"] -= t.amount
                     cash["credits"] += t.amount
                     investing_out += t.amount
                     _bump(cf_inv_map, code, name, -t.amount, month_key, as_debit=True)
+                    # Purchase of non-cash asset → increase that asset
+                    if acct_type == "asset" and code != "1010":
+                        _bump(
+                            asset_map,
+                            code,
+                            name,
+                            t.amount,
+                            month_key,
+                            as_debit=True,
+                            subcategory=sub,
+                        )
                 cash["txCount"] += 1
                 cash["byMonth"][month_key[5:7]] += (
                     t.amount if t.transaction_type == TransactionType.INCOME else -t.amount
@@ -340,8 +493,16 @@ class EmitPeriodReportsUseCase:
         total_expenses = float(operating_out)
         net_income = total_revenue - total_expenses
 
-        assets = [_serialize_line(v) for v in asset_map.values()]
-        liabilities = [_serialize_line(v) for v in liability_map.values()]
+        merge_coa_zero_balances(asset_map, liability_map, equity_map, coa)
+
+        assets = [
+            _serialize_line(v)
+            for v in sorted(asset_map.values(), key=lambda x: str(x["code"]))
+        ]
+        liabilities = [
+            _serialize_line(v)
+            for v in sorted(liability_map.values(), key=lambda x: str(x["code"]))
+        ]
         equity_lines = [
             _serialize_line(v)
             for v in sorted(equity_map.values(), key=lambda x: x["code"])
@@ -349,6 +510,7 @@ class EmitPeriodReportsUseCase:
         ]
         prior_re_row = equity_map.get("3020")
         re_tx_amount = float(prior_re_row["amount"]) if prior_re_row else 0.0
+        equity_sub = str((coa.get("3020") or {}).get("subcategory") or "").strip() or "Equity"
         if prior_re != 0:
             equity_lines.append(
                 {
@@ -361,6 +523,7 @@ class EmitPeriodReportsUseCase:
                     "opening": float(prior_re),
                     "closing": float(prior_re),
                     "byMonth": _empty_months(),
+                    "subcategory": equity_sub,
                 }
             )
         equity_lines.append(
@@ -374,6 +537,7 @@ class EmitPeriodReportsUseCase:
                 "opening": 0.0,
                 "closing": net_income + re_tx_amount,
                 "byMonth": _empty_months(),
+                "subcategory": equity_sub,
             }
         )
         total_assets = sum(a["amount"] for a in assets)
@@ -459,6 +623,7 @@ class EmitPeriodReportsUseCase:
             "assets": assets,
             "liabilities": liabilities,
             "equity": equity_lines,
+            "sections": build_balance_sections(assets, liabilities, equity_lines),
             "totalAssets": total_assets,
             "totalLiabilities": total_liabilities,
             "totalEquity": total_equity,
@@ -472,7 +637,9 @@ class EmitPeriodReportsUseCase:
             "note": (
                 "Balance desde txs verificadas/cerradas: cash proxy del periodo; "
                 "Owner's Draws reducen Patrimonio; utilidad del periodo en 3020; "
-                "RE de años cerrados en 3020-PY (no entra al cuadre del periodo)."
+                "RE de años cerrados en 3020-PY (no entra al cuadre del periodo); "
+                "secciones CoA (Current/Fixed Assets, Current/LT Liabilities, Equity) "
+                "incluyen cuentas en cero."
             ),
         }
 
@@ -529,15 +696,22 @@ class EmitPeriodReportsUseCase:
             granularity=granularity,
         )
 
-    def _coa_types(self, tenant_id: str) -> dict[str, str]:
+    def _coa_accounts(self, tenant_id: str) -> dict[str, dict]:
         client = get_supabase_client()
         result = (
             client.table("chart_of_accounts")
-            .select("code,account_type")
+            .select("code,name,account_type,subcategory")
             .eq("tenant_id", tenant_id)
             .execute()
         )
-        return {str(r["code"]): str(r["account_type"]) for r in (result.data or [])}
+        out: dict[str, dict] = {}
+        for r in result.data or []:
+            out[str(r["code"])] = {
+                "name": str(r.get("name") or ""),
+                "account_type": str(r.get("account_type") or ""),
+                "subcategory": str(r.get("subcategory") or ""),
+            }
+        return out
 
     def _infer_type(self, tx_type: TransactionType) -> str:
         if tx_type == TransactionType.INCOME:
@@ -556,13 +730,9 @@ class EmitPeriodReportsUseCase:
             return date_to[:4]
         if date_from and len(date_from) >= 4 and date_from[:4].isdigit():
             return date_from[:4]
-        from datetime import date as date_cls
-
         return str(date_cls.today().year)
 
     def _prior_retained_earnings(self, tenant_id: str, as_of_year: str) -> Decimal:
-        from src.use_cases.close_fiscal_year import FiscalYearCloseRepository
-
         return FiscalYearCloseRepository().sum_prior_retained(
             uuid.UUID(tenant_id), as_of_year
         )

@@ -108,6 +108,7 @@ class TransactionRepository(AbstractRepository[FinancialTransaction]):
         date_from: str | None = None,
         date_to: str | None = None,
         statuses: list[str] | None = None,
+        account_code: str | None = None,
         limit: int = 50000,
     ) -> list[FinancialTransaction]:
         """Server-side date filter so older years are not truncated by recent pages."""
@@ -115,6 +116,7 @@ class TransactionRepository(AbstractRepository[FinancialTransaction]):
         page_size = 1000
         out: list[FinancialTransaction] = []
         cursor = 0
+        code_q = account_code.strip() if account_code else None
         while len(out) < limit:
             take = min(page_size, limit - len(out))
             query = (
@@ -129,6 +131,12 @@ class TransactionRepository(AbstractRepository[FinancialTransaction]):
                 query = query.lte("transaction_date", date_to[:10])
             if statuses:
                 query = query.in_("status", statuses)
+            if code_q:
+                # Match posted CoA or AI suggestion (P&L drill uses posted codes).
+                query = query.or_(
+                    f"chart_of_accounts_code.eq.{code_q},"
+                    f"ai_suggested_account_code.eq.{code_q}"
+                )
             result = query.range(cursor, cursor + take - 1).execute()
             rows = result.data or []
             out.extend(self._from_row(r) for r in rows)

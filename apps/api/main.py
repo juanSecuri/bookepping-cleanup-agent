@@ -93,6 +93,33 @@ def _status_map(status: str | None) -> str | None:
     return status
 
 
+def _status_filters(status: str | None) -> list[str] | None:
+    """Parse status query: single value or comma-separated (e.g. verified,closed)."""
+    if not status or status == "all":
+        return None
+    out: list[str] = []
+    for part in status.split(","):
+        mapped = _status_map(part.strip())
+        if mapped and mapped not in out:
+            out.append(mapped)
+    return out or None
+
+
+def _normalize_statement_month(raw: str | None) -> str | None:
+    """Normalize to YYYY-MM; drop values that are not a year-month."""
+    if not raw:
+        return None
+    text = str(raw).strip()
+    if len(text) >= 7 and text[4] == "-":
+        y, rest = text[:4], text[5:]
+        month_part = rest.split("-", 1)[0]
+        if y.isdigit() and month_part.isdigit():
+            m = int(month_part)
+            if 1 <= m <= 12:
+                return f"{y}-{m:02d}"
+    return None
+
+
 def _file_type(filename: str) -> DocumentFileType:
     ext = Path(filename).suffix.lower()
     if ext in {".jpg", ".jpeg", ".png", ".gif", ".webp", ".tif", ".tiff", ".bmp"}:
@@ -480,6 +507,10 @@ async def list_transactions(
     tenant_id: str,
     status: str | None = None,
     suspense: bool = False,
+    account_code: str | None = None,
+    date_from: str | None = None,
+    date_to: str | None = None,
+    transaction_type: str | None = None,
     limit: int = 200,
     offset: int = 0,
 ) -> list[dict]:
@@ -487,19 +518,60 @@ async def list_transactions(
 
     tid = uuid.UUID(tenant_id)
     c = get_container()
-    mapped = _status_map(status)
-    if mapped == TransactionStatus.PENDING_REVIEW.value and not suspense:
+    status_filters = _status_filters(status)
+    fetch_limit = max(limit + offset, 5000)
+    # Fast path: pending queue only (no extra filters).
+    if (
+        status_filters == [TransactionStatus.PENDING_REVIEW.value]
+        and not suspense
+        and not (account_code or date_from or date_to or transaction_type)
+    ):
         items = await c.transactions.list_pending(tid)
+    elif date_from or date_to:
+        items = await c.transactions.list_by_tenant_date_range(
+            tid,
+            date_from=date_from,
+            date_to=date_to,
+            statuses=status_filters,
+            account_code=account_code,
+            limit=fetch_limit,
+        )
     else:
-        items = await c.transactions.list_by_tenant(tid, limit=max(limit + offset, 5000), offset=0)
-        if mapped:
-            items = [t for t in items if t.status.value == mapped]
+        items = await c.transactions.list_by_tenant(tid, limit=fetch_limit, offset=0)
+        if status_filters:
+            allowed = set(status_filters)
+            items = [t for t in items if t.status.value in allowed]
     if suspense:
         items = [
             t
             for t in items
             if (t.chart_of_accounts_code or t.ai_suggested_account_code or "") == SUSPENSE_CODE
             or (t.category_confidence is not None and float(t.category_confidence) < 0.4)
+        ]
+    if account_code:
+        code_q = account_code.strip()
+        items = [
+            t
+            for t in items
+            if (t.chart_of_accounts_code or t.ai_suggested_account_code or "") == code_q
+        ]
+    if date_from:
+        df = date_from[:10]
+        items = [t for t in items if str(t.transaction_date)[:10] >= df]
+    if date_to:
+        dt = date_to[:10]
+        items = [t for t in items if str(t.transaction_date)[:10] <= dt]
+    if transaction_type:
+        tt = transaction_type.strip().lower()
+        items = [
+            t
+            for t in items
+            if str(
+                t.transaction_type.value
+                if hasattr(t.transaction_type, "value")
+                else t.transaction_type
+            ).lower()
+            == tt
         ]
     page = items[offset : offset + limit]
     return [_tx_json(t) for t in page]
@@ -683,6 +755,72 @@ async def bulk_reject(
     return {"updated": updated, "rejected": updated}
 
 
+class RecategorizeBody(BaseModel):
+    workspace_id: str
+    only_suspense: bool = True
+    limit: int = 500
+
+
+@api.post("/transactions/recategorize")
+async def recategorize_transactions(
+    body: RecategorizeBody,
+    user: AuthUser = Depends(get_current_user),
+) -> dict:
+    """Re-run rule CoA on pending/suspense txs (direction-aware). Does not auto-verify."""
+    from src.infrastructure.classification.rule_coa import SUSPENSE_CODE, RuleCoAClassifier
+
+    tid = uuid.UUID(body.workspace_id)
+    assert_workspace_access(user, tid)
+    c = get_container()
+    coa = RuleCoAClassifier()
+    coa.upgrade_income_seed_rules(tid)
+    items = await c.transactions.list_by_tenant(tid, limit=max(body.limit, 5000))
+    updated = 0
+    income_n = 0
+    expense_n = 0
+    for tx in items:
+        if updated >= body.limit:
+            break
+        code = tx.chart_of_accounts_code or tx.ai_suggested_account_code or ""
+        low_conf = tx.category_confidence is not None and float(tx.category_confidence) < 0.4
+        is_suspense = code == SUSPENSE_CODE or low_conf
+        if body.only_suspense and not is_suspense:
+            # Also fix income wrongly parked on Cash 1010
+            if not (
+                tx.transaction_type == TransactionType.INCOME
+                and code == "1010"
+                and tx.status == TransactionStatus.PENDING_REVIEW
+            ):
+                continue
+        direction = (
+            "income" if tx.transaction_type == TransactionType.INCOME else "expense"
+        )
+        match = coa.classify(tid, tx.description or "", direction=direction)
+        if match.code == code and abs(float(match.confidence) - float(tx.category_confidence or 0)) < 0.01:
+            continue
+        updates = {
+            "chart_of_accounts_code": match.code,
+            "chart_of_accounts_name": match.name,
+            "category_confidence": match.confidence,
+            "ai_suggested_account_code": match.code,
+            "ai_suggested_account_name": match.name,
+        }
+        if match.vendor and not tx.vendor_name:
+            updates["vendor_name"] = match.vendor
+        await c.transactions.save(tx.model_copy(update=updates))
+        updated += 1
+        if direction == "income":
+            income_n += 1
+        else:
+            expense_n += 1
+    return {
+        "updated": updated,
+        "income": income_n,
+        "expense": expense_n,
+        "engine": "local_rules+direction",
+    }
+
+
 # Legacy PATCH for compatibility
 class TransactionPatch(BaseModel):
     chart_of_accounts_code: str | None = None
@@ -805,8 +943,16 @@ async def list_account_rules(workspace_id: str) -> list[dict]:
 async def seed_account_rules(body: SeedCoABody) -> dict:
     from src.infrastructure.classification.rule_coa import RuleCoAClassifier
 
-    rows = RuleCoAClassifier().ensure_seed_rules(uuid.UUID(body.workspace_id))
-    return {"workspace_id": body.workspace_id, "rules": len(rows), "engine": "local_rules"}
+    clf = RuleCoAClassifier()
+    rows = clf.ensure_seed_rules(uuid.UUID(body.workspace_id))
+    upgrade = clf.upgrade_income_seed_rules(uuid.UUID(body.workspace_id))
+    rows = clf.list_rules(uuid.UUID(body.workspace_id))
+    return {
+        "workspace_id": body.workspace_id,
+        "rules": len(rows),
+        "upgrade": upgrade,
+        "engine": "local_rules",
+    }
 
 
 @api.post("/account-rules")
@@ -842,6 +988,8 @@ async def list_movements(
     workspace_id: str | None = None,
     tenant_id: str | None = None,
     statement_month: str | None = None,
+    bank_account_number: str | None = None,
+    bank_name: str | None = None,
     status: str | None = None,
     limit: int = 200,
 ) -> list[dict]:
@@ -850,8 +998,14 @@ async def list_movements(
         raise HTTPException(400, "workspace_id required")
     c = get_container()
     tid = uuid.UUID(wid)
-    if statement_month:
-        movements = await c.movements.list_by_period(tid, statement_month)
+    if statement_month or bank_account_number or bank_name:
+        movements = await c.movements.list_filtered(
+            tid,
+            statement_month=statement_month,
+            bank_account_number=bank_account_number,
+            bank_name=bank_name,
+            limit=max(limit, 5000),
+        )
     else:
         movements = await c.movements.list_by_tenant(tid, limit=limit)
     if status:
@@ -861,11 +1015,86 @@ async def list_movements(
             **m.model_dump(mode="json"),
             "date": str(m.movement_date),
             "amount": float(abs(m.net_amount)),
+            "debit": float(m.debit_amount),
+            "credit": float(m.credit_amount),
             "matched": m.matched_transaction_id is not None,
             "transaction_id": str(m.matched_transaction_id) if m.matched_transaction_id else None,
         }
         for m in movements
     ]
+
+
+@api.get("/reconciliation/banks")
+async def list_reconciliation_banks(
+    workspace_id: str | None = None,
+    tenant_id: str | None = None,
+) -> dict:
+    """Distinct banks + months with movement counts (QuickBooks-style bank×month)."""
+    wid = workspace_id or tenant_id
+    if not wid:
+        raise HTTPException(400, "workspace_id required")
+    tid = uuid.UUID(wid)
+    c = get_container()
+
+    # key = (bank_name, bank_account_number)
+    buckets: dict[tuple[str, str], dict] = {}
+
+    def _bucket(bank_name: str, acct: str) -> dict:
+        key = (bank_name, acct)
+        if key not in buckets:
+            buckets[key] = {
+                "bank_name": bank_name,
+                "bank_account_number": acct,
+                "months": set(),
+                "movement_count": 0,
+            }
+        return buckets[key]
+
+    for p in StatementPeriodRepository().list_by_tenant(tid, limit=500):
+        name = str(p.get("bank_name") or "Bank").strip() or "Bank"
+        acct = str(p.get("bank_account_number") or "").strip()
+        if not acct:
+            continue
+        b = _bucket(name, acct)
+        month = _normalize_statement_month(str(p.get("statement_month") or ""))
+        if month:
+            b["months"].add(month)
+        try:
+            b["movement_count"] = max(b["movement_count"], int(p.get("movement_count") or 0))
+        except (TypeError, ValueError):
+            pass
+
+    movements = await c.movements.list_by_tenant(tid, limit=20000)
+    # Recount from movements (source of truth for movement_count + months).
+    counts: dict[tuple[str, str], int] = {}
+    for m in movements:
+        name = (m.bank_name or "Bank").strip() or "Bank"
+        acct = (m.bank_account_number or "").strip()
+        if not acct:
+            continue
+        key = (name, acct)
+        b = _bucket(name, acct)
+        month = _normalize_statement_month(m.statement_month)
+        if month:
+            b["months"].add(month)
+        counts[key] = counts.get(key, 0) + 1
+
+    for key, n in counts.items():
+        buckets[key]["movement_count"] = n
+
+    banks = []
+    for b in buckets.values():
+        months = sorted(b["months"], reverse=True)
+        banks.append(
+            {
+                "bank_name": b["bank_name"],
+                "bank_account_number": b["bank_account_number"],
+                "months": months,
+                "movement_count": b["movement_count"],
+            }
+        )
+    banks.sort(key=lambda x: (-x["movement_count"], x["bank_name"], x["bank_account_number"]))
+    return {"banks": banks}
 
 
 class MatchBody(BaseModel):

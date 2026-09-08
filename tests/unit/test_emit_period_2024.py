@@ -63,7 +63,19 @@ async def test_emit_2024_uses_date_range_query(monkeypatch: pytest.MonkeyPatch) 
 
     # Avoid live CoA / RE lookups
     uc = EmitPeriodReportsUseCase(transaction_repo=repo)
-    monkeypatch.setattr(uc, "_coa_types", lambda _tid: {"4000": "income", "6000": "expense"})
+    monkeypatch.setattr(
+        uc,
+        "_coa_accounts",
+        lambda _tid: {
+            "4000": {"name": "Revenue", "account_type": "income", "subcategory": "Operating Revenue"},
+            "6000": {"name": "OpEx", "account_type": "expense", "subcategory": "Operating Expenses"},
+            "1010": {
+                "name": "Cash",
+                "account_type": "asset",
+                "subcategory": "Current Assets",
+            },
+        },
+    )
     monkeypatch.setattr(uc, "_prior_retained_earnings", lambda *_a, **_k: Decimal("0"))
 
     bundle = await uc.execute(wid, fiscal_year="2024")

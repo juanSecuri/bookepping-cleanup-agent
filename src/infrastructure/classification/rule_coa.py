@@ -1,8 +1,11 @@
 """
 Rule-based Chart of Accounts classifier — $0, no OpenAI embeddings.
 
-Flow: clean description → match account_rules (DB) → else builtin seeds → Suspense 9999.
+Flow: clean description → match account_rules (DB) → else builtin seeds → Suspense 9999
+(or income default 4040 when direction=income).
+
 Passive learning: when user assigns a real CoA, persist a keyword rule.
+Direction-aware: credits/income prefer revenue accounts; debits/expenses prefer expense/COGS.
 """
 from __future__ import annotations
 
@@ -10,12 +13,22 @@ import re
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Literal
 
 from src.infrastructure.repositories.supabase_client import get_supabase_client
 
 SUSPENSE_CODE = "9999"
 SUSPENSE_NAME = "Gastos No Categorizados (Suspense)"
+INCOME_DEFAULT_CODE = "4040"
+INCOME_DEFAULT_NAME = "Other Income"
+SALES_REVENUE_CODE = "4010"
+SERVICE_REVENUE_CODE = "4020"
+
+Direction = Literal["income", "expense"]
+
+INCOME_CODES = frozenset({"4010", "4020", "4030", "4040"})
+# Codes that must not swallow operating revenue when direction=income
+BLOCK_FOR_INCOME = frozenset({"1010", "9999"})
 
 # Bootstrap seeds when tenant has no account_rules yet
 DEFAULT_SEED_RULES: list[tuple[list[str], str, str]] = [
@@ -50,9 +63,38 @@ DEFAULT_SEED_RULES: list[tuple[list[str], str, str]] = [
     (["fee", "bank fee", "service charge", "overdraft"], "6110", "Bank Fees & Charges"),
     (["tax", "irs", "license", "permit"], "6130", "Taxes & Licenses"),
     (["salary", "payroll", "wage", "gusto", "adp"], "6010", "Salaries & Wages"),
-    (["interest income", "dividend"], "4030", "Interest Income"),
-    (["payment thank", "autopay", "online payment", "thank you"], "1010", "Cash and Cash Equivalents"),
-    (["deposit", "wire in", "ach credit"], "1010", "Cash and Cash Equivalents"),
+    (["interest income", "dividend", "interest earned"], "4030", "Interest Income"),
+    # Customer / operating revenue (credits) — never Cash 1010
+    (
+        [
+            "payment received",
+            "customer payment",
+            "client payment",
+            "invoice payment",
+            "payment thank",
+            "thank you",
+            "stripe",
+            "square",
+            "paypal",
+            "zelle from",
+            "venmo from",
+            "sales",
+            "revenue",
+            "pos sale",
+        ],
+        "4010",
+        "Sales Revenue",
+    ),
+    (
+        ["service fee income", "consulting income", "professional fee", "retainer"],
+        "4020",
+        "Service Revenue",
+    ),
+    (
+        ["deposit", "wire in", "wire credit", "ach credit", "incoming wire", "mobile deposit", "remote deposit"],
+        "4040",
+        "Other Income",
+    ),
     (["costco", "walmart", "target", "amazon", "exxon", "shell", "chevron", "fuel"], "5010", "Cost of Goods Sold"),
     (
         ["owner draw", "owners draw", "personal", "retiro socio", "owner's draw", "draws"],
@@ -68,30 +110,24 @@ class CoAMatch:
     name: str
     confidence: float
     matched_keyword: str | None = None
-    source: str = "none"  # seed | learned | manual | builtin | suspense
+    source: str = "none"  # seed | learned | manual | builtin | suspense | income_default
+    vendor: str | None = None
 
 
 def clean_description(raw: str) -> str:
     """Strip invoice refs, auth codes, noisy dates so keyword match works."""
     text = (raw or "").lower()
-    # auth / ref / confirmation codes
     text = re.sub(r"\b(auth|ref|conf|confirmation|invoice|inv|trx|txn)[#:\s-]*[a-z0-9-]{4,}\b", " ", text)
-    text = re.sub(r"\b\d{4,}[-*]?\d{2,}[-*]?\d*\b", " ", text)  # long numeric ids
-    text = re.sub(r"\b\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?\b", " ", text)  # dates
+    text = re.sub(r"\b\d{4,}[-*]?\d{2,}[-*]?\d*\b", " ", text)
+    text = re.sub(r"\b\d{1,2}[/-]\d{1,2}([/-]\d{2,4})?\b", " ", text)
     text = re.sub(r"[*#]+", " ", text)
     text = re.sub(r"[^a-z0-9\s&./]", " ", text)
     text = re.sub(r"\s+", " ", text).strip()
     return text
 
 
-def extract_learn_keyword(description: str) -> str | None:
-    """Pick a stable token/phrase from a cleaned description for passive learning."""
-    cleaned = clean_description(description)
-    if not cleaned:
-        return None
-    # Prefer multi-word vendor-ish tokens (2–3 words) if short enough
-    words = [w for w in cleaned.split() if len(w) >= 3 and not w.isdigit()]
-    stop = {
+_STOP_WORDS = frozenset(
+    {
         "the",
         "and",
         "for",
@@ -106,15 +142,52 @@ def extract_learn_keyword(description: str) -> str | None:
         "pos",
         "usd",
         "check",
+        "ach",
+        "wire",
+        "transfer",
+        "online",
+        "mobile",
+        "deposit",
+        "withdrawal",
+        "transaction",
+        "purchase",
+        "recurring",
     }
-    words = [w for w in words if w not in stop]
+)
+
+
+def extract_vendor(description: str) -> str | None:
+    """Heuristic vendor/payee from a bank description (first stable tokens)."""
+    cleaned = clean_description(description)
+    if not cleaned:
+        return None
+    words = [w for w in cleaned.split() if len(w) >= 3 and not w.isdigit() and w not in _STOP_WORDS]
     if not words:
         return None
-    if len(words) >= 2:
-        phrase = f"{words[0]} {words[1]}"
-        if len(phrase) <= 40:
-            return phrase
+    if len(words) >= 2 and len(f"{words[0]} {words[1]}") <= 40:
+        return f"{words[0]} {words[1]}"
     return words[0][:40]
+
+
+def extract_learn_keyword(description: str) -> str | None:
+    """Pick a stable token/phrase from a cleaned description for passive learning."""
+    return extract_vendor(description)
+
+
+def _code_family(code: str) -> str:
+    if code in INCOME_CODES:
+        return "income"
+    if code.startswith("5") or code in {"5010", "5020"}:
+        return "cogs"
+    if code.startswith("6") or code == SUSPENSE_CODE:
+        return "expense"
+    if code.startswith("3"):
+        return "equity"
+    if code.startswith("2"):
+        return "liability"
+    if code.startswith("1"):
+        return "asset"
+    return "other"
 
 
 class RuleCoAClassifier:
@@ -143,6 +216,8 @@ class RuleCoAClassifier:
         accounts = {str(r["code"]): str(r["name"]) for r in (result.data or [])}
         if SUSPENSE_CODE not in accounts:
             accounts[SUSPENSE_CODE] = SUSPENSE_NAME
+        if INCOME_DEFAULT_CODE not in accounts:
+            accounts[INCOME_DEFAULT_CODE] = INCOME_DEFAULT_NAME
         self._accounts_cache[key] = accounts
         return accounts
 
@@ -211,8 +286,119 @@ class RuleCoAClassifier:
         self._rules_cache[str(tenant_id)] = rows
         return rows
 
-    def classify(self, tenant_id: uuid.UUID, description: str) -> CoAMatch:
+    def upgrade_income_seed_rules(self, tenant_id: uuid.UUID) -> dict[str, int]:
+        """
+        Fix legacy seeds that mapped customer payments / deposits to Cash 1010.
+        Safe to call repeatedly; only touches source=seed rules pointing at 1010
+        with payment/deposit keywords.
+        """
+        client = get_supabase_client()
+        accounts = self._load_accounts(tenant_id)
+        result = (
+            client.table("account_rules")
+            .select("id,keywords,account_code,source")
+            .eq("tenant_id", str(tenant_id))
+            .eq("source", "seed")
+            .eq("account_code", "1010")
+            .eq("is_active", True)
+            .execute()
+        )
+        patched = 0
+        # Any keyword that belongs on an income seed (legacy Cash 1010 mis-maps).
+        sales_markers = {
+            "payment thank",
+            "thank you",
+            "online payment",
+            "autopay",
+            "payment received",
+            "customer payment",
+            "client payment",
+            "invoice payment",
+            "stripe",
+            "square",
+            "paypal",
+            "zelle from",
+            "venmo from",
+            "sales",
+            "revenue",
+            "pos sale",
+        }
+        income_markers = sales_markers | {
+            "deposit",
+            "wire in",
+            "wire credit",
+            "ach credit",
+            "incoming wire",
+            "mobile deposit",
+            "remote deposit",
+            "interest income",
+            "dividend",
+            "interest earned",
+            "service fee income",
+            "consulting income",
+            "professional fee",
+            "retainer",
+        }
+        for row in result.data or []:
+            kws = {str(k).lower() for k in (row.get("keywords") or [])}
+            if not kws.intersection(income_markers):
+                continue
+            new_code = INCOME_DEFAULT_CODE
+            if kws.intersection(sales_markers):
+                new_code = SALES_REVENUE_CODE
+            client.table("account_rules").update(
+                {
+                    "account_code": new_code,
+                    "account_name": accounts.get(new_code, INCOME_DEFAULT_NAME),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }
+            ).eq("id", row["id"]).execute()
+            patched += 1
+
+        # Ensure new income seed rows exist (idempotent by keyword overlap check)
+        existing = (
+            client.table("account_rules")
+            .select("keywords,account_code")
+            .eq("tenant_id", str(tenant_id))
+            .eq("is_active", True)
+            .execute()
+        )
+        existing_kw: set[str] = set()
+        for row in existing.data or []:
+            for k in row.get("keywords") or []:
+                existing_kw.add(str(k).lower())
+
+        inserted = 0
+        for keywords, code, default_name in DEFAULT_SEED_RULES:
+            if code not in INCOME_CODES:
+                continue
+            if any(k.lower() in existing_kw for k in keywords):
+                continue
+            client.table("account_rules").insert(
+                {
+                    "tenant_id": str(tenant_id),
+                    "keywords": [k.lower() for k in keywords],
+                    "account_code": code,
+                    "account_name": accounts.get(code, default_name),
+                    "source": "seed",
+                    "is_active": True,
+                }
+            ).execute()
+            inserted += 1
+            existing_kw.update(k.lower() for k in keywords)
+
+        self.invalidate(tenant_id)
+        return {"patched_cash_to_income": patched, "inserted_income_rules": inserted}
+
+    def classify(
+        self,
+        tenant_id: uuid.UUID,
+        description: str,
+        *,
+        direction: Direction | None = None,
+    ) -> CoAMatch:
         cleaned = clean_description(description)
+        vendor = extract_vendor(description)
         accounts = self._load_accounts(tenant_id)
         rules = self._load_rules(tenant_id)
 
@@ -222,15 +408,32 @@ class RuleCoAClassifier:
             if isinstance(keywords, str):
                 keywords = [keywords]
             hits = [kw for kw in keywords if kw and str(kw).lower() in cleaned]
+            # Also try vendor phrase against each keyword (provider lookup)
+            if not hits and vendor:
+                hits = [kw for kw in keywords if kw and str(kw).lower() in vendor]
             if not hits:
                 continue
-            # Prefer longer keyword matches
             best_kw = max(hits, key=len)
             conf = min(0.55 + 0.08 * len(hits) + 0.02 * len(best_kw), 0.97)
-            # Learned rules slightly preferred when equal
             if rule.get("source") == "learned":
                 conf = min(conf + 0.03, 0.98)
+            # Vendor exact-ish boost
+            if vendor and best_kw and best_kw in vendor:
+                conf = min(conf + 0.04, 0.99)
+
             code = str(rule["account_code"])
+            family = _code_family(code)
+
+            # Direction filter: income credits must not land on Cash / OpEx
+            if direction == "income":
+                if code in BLOCK_FOR_INCOME or family in {"expense", "cogs"}:
+                    continue
+                if family == "income":
+                    conf = min(conf + 0.05, 0.99)
+            elif direction == "expense":
+                if family == "income":
+                    continue
+
             name = accounts.get(code) or str(rule.get("account_name") or code)
             candidate = CoAMatch(
                 code=code,
@@ -238,6 +441,7 @@ class RuleCoAClassifier:
                 confidence=conf,
                 matched_keyword=best_kw,
                 source=str(rule.get("source") or "seed"),
+                vendor=vendor,
             )
             if best is None or candidate.confidence > best.confidence:
                 best = candidate
@@ -245,12 +449,23 @@ class RuleCoAClassifier:
         if best:
             return best
 
+        if direction == "income":
+            return CoAMatch(
+                code=INCOME_DEFAULT_CODE,
+                name=accounts.get(INCOME_DEFAULT_CODE, INCOME_DEFAULT_NAME),
+                confidence=0.35,
+                matched_keyword=vendor,
+                source="income_default",
+                vendor=vendor,
+            )
+
         return CoAMatch(
             code=SUSPENSE_CODE,
             name=accounts.get(SUSPENSE_CODE, SUSPENSE_NAME),
             confidence=0.2,
             matched_keyword=None,
             source="suspense",
+            vendor=vendor,
         )
 
     def learn_from_correction(
@@ -268,7 +483,6 @@ class RuleCoAClassifier:
             return None
 
         client = get_supabase_client()
-        # Avoid duplicate keyword for same tenant+code
         existing = (
             client.table("account_rules")
             .select("id,keywords,hit_count")

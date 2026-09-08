@@ -82,16 +82,47 @@ class BankMovementRepository(AbstractRepository[BankMovement]):
         self, tenant_id: uuid.UUID, statement_month: str
     ) -> list[BankMovement]:
         """All movements for a specific statement month (YYYY-MM)."""
+        return await self.list_filtered(tenant_id, statement_month=statement_month)
+
+    async def list_filtered(
+        self,
+        tenant_id: uuid.UUID,
+        *,
+        statement_month: str | None = None,
+        bank_account_number: str | None = None,
+        bank_name: str | None = None,
+        limit: int = 5000,
+    ) -> list[BankMovement]:
+        """Movements for a tenant with optional bank / month filters.
+
+        Always paginates with .range() — PostgREST often caps a single
+        .limit() page at ~1000 rows, which silently truncates busy months.
+        """
         client = get_supabase_client()
-        result = (
-            client.table(TABLE)
-            .select("*")
-            .eq("tenant_id", str(tenant_id))
-            .eq("statement_month", statement_month)
-            .order("movement_date", desc=False)
-            .execute()
-        )
-        return [self._from_row(r) for r in result.data]
+        out: list[BankMovement] = []
+        page_size = min(1000, max(1, limit))
+        cursor = 0
+        while len(out) < limit:
+            take = min(page_size, limit - len(out))
+            q = (
+                client.table(TABLE)
+                .select("*")
+                .eq("tenant_id", str(tenant_id))
+                .order("movement_date", desc=False)
+            )
+            if statement_month:
+                q = q.eq("statement_month", statement_month)
+            if bank_account_number:
+                q = q.eq("bank_account_number", bank_account_number)
+            if bank_name:
+                q = q.eq("bank_name", bank_name)
+            result = q.range(cursor, cursor + take - 1).execute()
+            rows = result.data or []
+            out.extend(self._from_row(r) for r in rows)
+            if len(rows) < take:
+                break
+            cursor += len(rows)
+        return out
 
     async def list_unreconciled(self, tenant_id: uuid.UUID) -> list[BankMovement]:
         """All movements still in pending_review status."""

@@ -12,10 +12,12 @@ import {
 import {
   api,
   type BalanceLine,
+  type BalanceSectionGroup,
   type Period,
   type PnLLineItem,
   type PnLReport,
   type StatementsBundle,
+  type Transaction,
 } from '../../lib/api'
 import { useLocale } from '../../i18n'
 import { cn } from '../../lib/utils'
@@ -50,11 +52,13 @@ function MonthTable({
   items,
   total,
   showUncategorizedHint,
+  onRowClick,
 }: {
   title: string
   items: PnLLineItem[]
   total: number
   showUncategorizedHint?: boolean
+  onRowClick?: (row: PnLLineItem) => void
 }) {
   const { t, locale } = useLocale()
   const monthLabels =
@@ -85,10 +89,28 @@ function MonthTable({
           <tbody>
             {items.map((row) => {
               const isSuspense = row.code === '9999'
+              const clickable = Boolean(onRowClick && row.code)
               return (
                 <tr
                   key={`${row.code}-${row.name}`}
-                  className="border-t border-border transition-colors duration-200 hover:bg-[color-mix(in_srgb,var(--accent-cream)_8%,transparent)]"
+                  className={cn(
+                    'border-t border-border transition-colors duration-200 hover:bg-[color-mix(in_srgb,var(--accent-cream)_8%,transparent)]',
+                    clickable && 'cursor-pointer',
+                  )}
+                  onClick={clickable ? () => onRowClick?.(row) : undefined}
+                  onKeyDown={
+                    clickable
+                      ? (e) => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            onRowClick?.(row)
+                          }
+                        }
+                      : undefined
+                  }
+                  tabIndex={clickable ? 0 : undefined}
+                  role={clickable ? 'button' : undefined}
+                  title={clickable ? t('reports.drillHint') : undefined}
                 >
                   <td className="px-3 py-2 font-mono text-xs">{row.code ?? '—'}</td>
                   <td className="px-3 py-2">
@@ -202,6 +224,39 @@ function BalanceSection({
   )
 }
 
+function BalanceMajorGroup({
+  title,
+  sections,
+  fallbackLines,
+  fallbackTotal,
+}: {
+  title: string
+  sections?: BalanceSectionGroup[] | null
+  fallbackLines: BalanceLine[]
+  fallbackTotal: number
+}) {
+  const { t } = useLocale()
+  if (sections && sections.length > 0) {
+    return (
+      <div className="space-y-3">
+        <h4 className="font-display text-lg tracking-wide text-muted-foreground">{title}</h4>
+        {sections.map((sec) => (
+          <BalanceSection
+            key={`${title}-${sec.subcategory}`}
+            title={String(sec.subcategory || t('reports.emptySection'))}
+            lines={sec.lines || []}
+            total={Number(sec.total ?? 0)}
+          />
+        ))}
+        <p className="px-1 text-right text-sm font-semibold tabular-nums">
+          {t('reports.total')} {title} {money(fallbackTotal)}
+        </p>
+      </div>
+    )
+  }
+  return <BalanceSection title={title} lines={fallbackLines} total={fallbackTotal} />
+}
+
 const btnPrimary =
   'cursor-pointer rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition duration-200 hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50'
 const btnSecondary =
@@ -234,6 +289,10 @@ export default function Reports() {
   const [yearInput, setYearInput] = useState(() => String(new Date().getFullYear()))
   const [closingYear, setClosingYear] = useState(false)
   const [yearsReady, setYearsReady] = useState(false)
+  const [drillAccount, setDrillAccount] = useState<PnLLineItem | null>(null)
+  const [drillTxs, setDrillTxs] = useState<Transaction[]>([])
+  const [drillLoading, setDrillLoading] = useState(false)
+  const [drillError, setDrillError] = useState<string | null>(null)
 
   const loadMeta = useCallback(async () => {
     setLoading(true)
@@ -253,10 +312,13 @@ export default function Reports() {
           ? avail.verified_years
           : []
       setAvailableYears(years)
+      // CPA taxes 2025: prefer 2025 when present, else API default / newest year
       const def =
-        avail.default_year && years.includes(String(avail.default_year))
-          ? String(avail.default_year)
-          : years[0] || String(new Date().getFullYear())
+        years.includes('2025')
+          ? '2025'
+          : avail.default_year && years.includes(String(avail.default_year))
+            ? String(avail.default_year)
+            : years[0] || String(new Date().getFullYear())
       setFiscalYear((prev) => prev || String(def))
       setYearInput(String(def))
       setYearsReady(true)
@@ -373,6 +435,56 @@ export default function Reports() {
     fiscal_year: fiscalYear || undefined,
     month: month ? Number(month) : undefined,
   })
+
+  const drillDateFrom = useMemo(() => {
+    if (!fiscalYear) return undefined
+    if (month) return `${fiscalYear}-${month}-01`
+    return `${fiscalYear}-01-01`
+  }, [fiscalYear, month])
+
+  const drillDateTo = useMemo(() => {
+    if (!fiscalYear) return undefined
+    if (month) {
+      const y = Number(fiscalYear)
+      const m = Number(month)
+      const last = new Date(y, m, 0).getDate()
+      return `${fiscalYear}-${month}-${String(last).padStart(2, '0')}`
+    }
+    return `${fiscalYear}-12-31`
+  }, [fiscalYear, month])
+
+  const openPnLDrill = useCallback(
+    async (row: PnLLineItem) => {
+      if (!row.code || !workspaceId || !fiscalYear) return
+      setDrillAccount(row)
+      setDrillLoading(true)
+      setDrillError(null)
+      setDrillTxs([])
+      try {
+        const txs = await api.listTransactions({
+          tenant_id: workspaceId,
+          account_code: String(row.code),
+          date_from: drillDateFrom,
+          date_to: drillDateTo,
+          status: 'verified,closed',
+          limit: 2000,
+        })
+        const rows = Array.isArray(txs) ? txs : []
+        setDrillTxs(rows)
+      } catch (e) {
+        setDrillError(e instanceof Error ? e.message : t('common.error'))
+      } finally {
+        setDrillLoading(false)
+      }
+    },
+    [workspaceId, fiscalYear, drillDateFrom, drillDateTo, t],
+  )
+
+  function closePnLDrill() {
+    setDrillAccount(null)
+    setDrillTxs([])
+    setDrillError(null)
+  }
 
   return (
     <div>
@@ -506,17 +618,20 @@ export default function Reports() {
               title={t('reports.sectionRevenue')}
               items={pnlItems(displayPnl, 'revenueItems')}
               total={revTotal}
+              onRowClick={(row) => void openPnLDrill(row)}
             />
             <MonthTable
               title={t('reports.sectionCogs')}
               items={pnlItems(displayPnl, 'cogsItems')}
               total={cogsTotal}
+              onRowClick={(row) => void openPnLDrill(row)}
             />
             <MonthTable
               title={t('reports.sectionOpex')}
               items={pnlItems(displayPnl, 'expenseItems')}
               total={opexTotal}
               showUncategorizedHint
+              onRowClick={(row) => void openPnLDrill(row)}
             />
 
             <div className="rounded-xl border border-border bg-secondary/20 px-4 py-3 text-right">
@@ -615,20 +730,23 @@ export default function Reports() {
                 </div>
               ))}
             </div>
-            <BalanceSection
+            <BalanceMajorGroup
               title={t('reports.assets').toUpperCase()}
-              lines={bundle.balance_sheet.assets || []}
-              total={Number(bundle.balance_sheet.totalAssets ?? 0)}
+              sections={bundle.balance_sheet.sections?.assets}
+              fallbackLines={bundle.balance_sheet.assets || []}
+              fallbackTotal={Number(bundle.balance_sheet.totalAssets ?? 0)}
             />
-            <BalanceSection
+            <BalanceMajorGroup
               title={t('reports.liabilities').toUpperCase()}
-              lines={bundle.balance_sheet.liabilities || []}
-              total={Number(bundle.balance_sheet.totalLiabilities ?? 0)}
+              sections={bundle.balance_sheet.sections?.liabilities}
+              fallbackLines={bundle.balance_sheet.liabilities || []}
+              fallbackTotal={Number(bundle.balance_sheet.totalLiabilities ?? 0)}
             />
-            <BalanceSection
+            <BalanceMajorGroup
               title={t('reports.equity').toUpperCase()}
-              lines={bundle.balance_sheet.equity || []}
-              total={Number(bundle.balance_sheet.totalEquity ?? 0)}
+              sections={bundle.balance_sheet.sections?.equity}
+              fallbackLines={bundle.balance_sheet.equity || []}
+              fallbackTotal={Number(bundle.balance_sheet.totalEquity ?? 0)}
             />
           </div>
         )}
@@ -769,6 +887,89 @@ export default function Reports() {
           </div>
         )}
       </section>
+
+      {drillAccount && (
+        <div
+          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40 p-4 sm:items-center"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="pnl-drill-title"
+          onClick={closePnLDrill}
+        >
+          <div
+            className="max-h-[85vh] w-full max-w-3xl overflow-hidden rounded-xl border border-border bg-card soft-shadow-lift"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 border-b border-border px-4 py-3">
+              <div>
+                <h3 id="pnl-drill-title" className="font-display text-lg tracking-wide">
+                  {t('reports.pnlDetail')}
+                </h3>
+                <p className="mt-0.5 text-sm text-muted-foreground">
+                  <span className="font-mono text-xs">{drillAccount.code}</span> ·{' '}
+                  {drillAccount.name} · {periodLabel}
+                </p>
+              </div>
+              <button type="button" className={btnSecondary} onClick={closePnLDrill}>
+                {t('common.cancel')}
+              </button>
+            </div>
+            <div className="table-scroll max-h-[60vh] overflow-auto p-2">
+              {drillLoading && (
+                <p className="px-3 py-6 text-sm text-muted-foreground">{t('common.loading')}</p>
+              )}
+              {drillError && (
+                <p className="px-3 py-4 text-sm text-destructive">{drillError}</p>
+              )}
+              {!drillLoading && !drillError && drillTxs.length === 0 && (
+                <p className="px-3 py-6 text-sm text-muted-foreground">{t('reports.drillEmpty')}</p>
+              )}
+              {!drillLoading && drillTxs.length > 0 && (
+                <table className="w-full min-w-[520px] text-left text-sm">
+                  <thead className="bg-secondary/40 text-muted-foreground">
+                    <tr>
+                      <th className="px-3 py-2 font-medium">{t('transactions.date')}</th>
+                      <th className="px-3 py-2 font-medium">{t('transactions.description')}</th>
+                      <th className="px-3 py-2 font-medium">{t('transactions.vendor')}</th>
+                      <th className="px-3 py-2 text-right font-medium">{t('transactions.amount')}</th>
+                      <th className="px-3 py-2 font-medium">{t('transactions.status')}</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {drillTxs.map((tx) => (
+                      <tr key={tx.id} className="border-t border-border">
+                        <td className="px-3 py-2 whitespace-nowrap text-xs">
+                          {String(tx.date ?? tx.transaction_date ?? '—').slice(0, 10)}
+                        </td>
+                        <td className="px-3 py-2">{tx.description ?? '—'}</td>
+                        <td className="px-3 py-2 text-muted-foreground">
+                          {tx.vendor ?? tx.vendor_name ?? '—'}
+                        </td>
+                        <td className="px-3 py-2 text-right tabular-nums">
+                          {money(Number(tx.amount ?? 0))}
+                        </td>
+                        <td className="px-3 py-2 text-xs capitalize">{tx.status ?? '—'}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 border-t border-border px-4 py-3">
+              <p className="text-xs text-muted-foreground">
+                {drillTxs.length} {t('reports.txCount')}
+              </p>
+              <Link
+                to={`/app/${workspaceId}/transactions`}
+                className={cn(btnPrimary, 'text-center')}
+                onClick={closePnLDrill}
+              >
+                {t('reports.viewInTransactions')}
+              </Link>
+            </div>
+          </div>
+        </div>
+      )}
 
       <section className="mb-8">
         <h2 className="mb-3 font-display text-xl tracking-wide">{t('reports.yearClose')}</h2>

@@ -16,7 +16,7 @@ from src.domain.models.bank_movement import BankMovement
 from src.domain.models.enums import DocumentSource, TransactionType
 from src.domain.models.transaction import ExtractionMetadata, FinancialTransaction
 from src.infrastructure.classification.cash_flow import infer_cash_flow_type
-from src.infrastructure.classification.rule_coa import RuleCoAClassifier
+from src.infrastructure.classification.rule_coa import RuleCoAClassifier, extract_vendor
 from src.infrastructure.ocr.local_pdf_client import LocalPdfClient
 from src.infrastructure.reconciliation.statement_chain import (
     StatementPeriodRepository,
@@ -148,7 +148,10 @@ class ProcessStatementUseCase:
         categorised: list[BankMovement] = []
         for movement in movements:
             try:
-                match = self._coa.classify(tenant_id, movement.description)
+                direction = "expense" if movement.debit_amount > 0 else "income"
+                match = self._coa.classify(
+                    tenant_id, movement.description, direction=direction
+                )
                 movement = movement.model_copy(
                     update={
                         "chart_of_accounts_code": match.code,
@@ -204,7 +207,9 @@ class ProcessStatementUseCase:
         )
         acct_type = self._coa_type(movement.tenant_id, code)
         cf = infer_cash_flow_type(account_code=code, account_type=acct_type)
-        vendor = movement.description.split("  ")[0][:128]
+        vendor = (extract_vendor(movement.description) or movement.description.split("  ")[0])[
+            :128
+        ]
         meta = ExtractionMetadata(
             source=DocumentSource.BANK_STATEMENT,
             raw_file_path=str(file_path),

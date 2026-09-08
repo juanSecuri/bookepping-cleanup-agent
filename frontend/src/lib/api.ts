@@ -139,12 +139,26 @@ export type Movement = {
   amount?: number
   debit?: number
   credit?: number
+  debit_amount?: number | string
+  credit_amount?: number | string
   date?: string
   bank?: string
   bank_name?: string
+  bank_account_number?: string
+  statement_month?: string
+  chart_of_accounts_code?: string | null
+  chart_of_accounts_name?: string | null
+  category_confidence?: number | null
   matched?: boolean
   transaction_id?: string | null
   [key: string]: unknown
+}
+
+export type ReconciliationBank = {
+  bank_name: string
+  bank_account_number: string
+  months: string[]
+  movement_count: number
 }
 
 export type Period = {
@@ -197,6 +211,14 @@ export type BalanceLine = {
   credits?: number
   opening?: number
   closing?: number
+  subcategory?: string
+  byMonth?: Record<string, number>
+}
+
+export type BalanceSectionGroup = {
+  subcategory?: string
+  lines?: BalanceLine[]
+  total?: number
 }
 
 export type StatementsBundle = {
@@ -212,6 +234,11 @@ export type StatementsBundle = {
     assets?: BalanceLine[]
     liabilities?: BalanceLine[]
     equity?: BalanceLine[]
+    sections?: {
+      assets?: BalanceSectionGroup[]
+      liabilities?: BalanceSectionGroup[]
+      equity?: BalanceSectionGroup[]
+    }
     totalAssets?: number
     totalLiabilities?: number
     totalEquity?: number
@@ -294,10 +321,26 @@ export const api = {
     })
   },
 
-  listTransactions: (params: { tenant_id: string; status?: string; suspense?: boolean }) => {
+  listTransactions: (params: {
+    tenant_id: string
+    status?: string
+    suspense?: boolean
+    account_code?: string
+    date_from?: string
+    date_to?: string
+    transaction_type?: string
+    limit?: number
+    offset?: number
+  }) => {
     const q = new URLSearchParams({ tenant_id: params.tenant_id })
     if (params.status) q.set('status', params.status)
     if (params.suspense) q.set('suspense', 'true')
+    if (params.account_code) q.set('account_code', params.account_code)
+    if (params.date_from) q.set('date_from', params.date_from)
+    if (params.date_to) q.set('date_to', params.date_to)
+    if (params.transaction_type) q.set('transaction_type', params.transaction_type)
+    if (params.limit != null) q.set('limit', String(params.limit))
+    if (params.offset != null) q.set('offset', String(params.offset))
     return request<Transaction[]>(`/api/transactions?${q}`)
   },
   transactionCounts: (tenant_id: string) =>
@@ -333,6 +376,14 @@ export const api = {
       method: 'POST',
       body: JSON.stringify({ ids, reason }),
     }),
+  recategorizeTransactions: (workspace_id: string, only_suspense = true) =>
+    request<{ updated?: number; income?: number; expense?: number }>(
+      '/api/transactions/recategorize',
+      {
+        method: 'POST',
+        body: JSON.stringify({ workspace_id, only_suspense, limit: 500 }),
+      },
+    ),
 
   chartOfAccounts: (workspace_id: string) =>
     request<ChartAccount[]>(`/api/chart-of-accounts?workspace_id=${encodeURIComponent(workspace_id)}`),
@@ -342,13 +393,30 @@ export const api = {
       body: JSON.stringify({ workspace_id }),
     }),
 
-  listMovements: (params?: { workspace_id?: string; tenant_id?: string }) => {
+  listMovements: (params?: {
+    workspace_id?: string
+    tenant_id?: string
+    statement_month?: string
+    bank_account_number?: string
+    bank_name?: string
+    status?: string
+    limit?: number
+  }) => {
     const q = new URLSearchParams()
     if (params?.workspace_id) q.set('workspace_id', params.workspace_id)
     if (params?.tenant_id) q.set('tenant_id', params.tenant_id)
+    if (params?.statement_month) q.set('statement_month', params.statement_month)
+    if (params?.bank_account_number) q.set('bank_account_number', params.bank_account_number)
+    if (params?.bank_name) q.set('bank_name', params.bank_name)
+    if (params?.status) q.set('status', params.status)
+    if (params?.limit != null) q.set('limit', String(params.limit))
     const qs = q.toString()
     return request<Movement[]>(`/api/movements${qs ? `?${qs}` : ''}`)
   },
+  listReconciliationBanks: (workspace_id: string) =>
+    request<{ banks: ReconciliationBank[] }>(
+      `/api/reconciliation/banks?workspace_id=${encodeURIComponent(workspace_id)}`,
+    ),
   matchMovement: (id: string, transaction_id: string) =>
     request<Movement>(`/api/movements/${id}/match`, {
       method: 'POST',
