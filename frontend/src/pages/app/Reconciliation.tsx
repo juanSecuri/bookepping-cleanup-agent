@@ -320,12 +320,28 @@ export default function Reconciliation() {
     )
   }
 
+  const pageTitle = t('reconciliation.title')
+
   return (
     <div>
       <div className="mb-6 animate-fade-up">
-        <h1 className="page-title">{t('reconciliation.title')}</h1>
+        <h1 className="page-title">
+          {pageTitle === 'reconciliation.title' ? t('nav.reconciliation') : pageTitle}
+        </h1>
         <p className="mt-1.5 text-muted-foreground">{t('reconciliation.subtitle')}</p>
       </div>
+
+      {error && (
+        <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+          {error}
+        </div>
+      )}
+
+      {!loadingBanks && banks.length === 0 && (
+        <div className="mb-4 rounded-lg border border-border bg-card px-4 py-3 text-sm text-muted-foreground">
+          {t('reconciliation.noBanks')} {t('reconciliation.emptyHint')}
+        </div>
+      )}
 
       <div className="mb-6 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
         <label className="w-full text-sm sm:w-auto sm:min-w-[220px]">
@@ -346,19 +362,23 @@ export default function Reconciliation() {
             {banks.length === 0 && (
               <option value="">{t('reconciliation.selectBank')}</option>
             )}
-            {banks.map((b) => (
-              <option key={bankKey(b)} value={bankKey(b)}>
-                {b.bank_name} · …{b.bank_account_number.slice(-4)} ({b.movement_count})
-              </option>
-            ))}
+            {banks.map((b) => {
+              const acct = String(b.bank_account_number || '')
+              const tail = acct.length >= 4 ? acct.slice(-4) : acct || '????'
+              return (
+                <option key={bankKey(b)} value={bankKey(b)}>
+                  {b.bank_name} · …{tail} ({b.movement_count})
+                </option>
+              )
+            })}
           </select>
         </label>
         <label className="w-full text-sm sm:w-auto">
           {t('reconciliation.year')}
           <select
             className="mt-1 block w-full rounded-lg border border-border bg-background px-3 py-2 sm:w-32"
-            value={year}
-            disabled={!selectedBank}
+            value={year || ''}
+            disabled={banks.length === 0}
             onChange={(e) => setYear(e.target.value)}
           >
             <option value="">{t('reconciliation.yearAll')}</option>
@@ -457,12 +477,6 @@ export default function Reconciliation() {
         </label>
         <p className="max-w-md text-sm text-muted-foreground">{t('reconciliation.uploadNote')}</p>
       </div>
-
-      {error && (
-        <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          {error}
-        </div>
-      )}
 
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="text-lg font-semibold tracking-tight">{t('reconciliation.movements')}</h2>
