@@ -289,6 +289,7 @@ Env: `EXTRACTION_MODE=local`, `LEDGERAI_UPLOAD_DIR=/var/data/ledgerai_uploads`.
 | **2026-09-24** | **Empresa (vía Juan)** | P&L + Balance Sheet **formato QuickBooks** (Excel plantilla: mensual columnas + anual Total). Datos reales = Drive/LedgerAI, no números del Excel. Infra: **Render Free** (ya no Starter) + Supabase Free despertando. | **Sprint 15 QB Reports** |
 | **2026-09-24 (PM)** | **Empresa (vía Juan)** | Reportes más “original” QB (jerarquía); CoA CSV TPC; Cash Flow estilo QB; reglas bank stmt: meals, gas&oil, social media, insurance, parking, CC interest, spa→distributions equity; MVP + decálogo GitHub | **Sprint 16 CoA+QB+MVP** |
 | **2026-09-24 (PM+)** | **Empresa (vía Juan)** | Autonomía del agente: clasificar por descripción compra/pago → CoA; ingresos/gastos por perfil de cliente; conciliaciones bancarias; elaborar Balance + P&L (y CF) | **Mandato autonomía** |
+| **2026-09-24 (EOD)** | **Juan** | Reportes: datos Drive (no Excel como fuente); Social Media y 6xxx **gastos** no ingresos; no duplicar en INGRESOS/GASTOS; revisar Balance pasivos/patrimonio; cierre día | **Sprint 17 / cierre 09-24** |
 
 ---
 
@@ -347,24 +348,25 @@ Split-screen extracto/OCR en Documentos | TanStack Table en Transacciones | Expo
 
 ## 11. Sprint activo
 
-### Sprint 16 — CoA TPC + reglas bank stmt + QB UI + MVP decálogo (2026-09-24 PM)
+### Sprint 17 — P&L por familia CoA + cierre día 2026-09-24
 
-**Objetivo:** clasificación fiel a extractos (meals≠ingreso, gas&oil, social media, parking, distributions) + reportes más “original” QuickBooks + Cash Flow statement + README/decálogo GitHub. Datos = Drive; Excel/CSV = plantilla CoA/formato.
+**Cierre 2026-09-24:** reportes mensuales **desde datos Drive/cliente**, no desde Excel/QB como fuente de números. Excel/CSV = solo formato/referencia CoA.
 
 | Orden | Tarea | Estado |
 |------:|-------|--------|
-| T1 | CoA + `account_rules`: Meals, Gas&Oil, Social Media, Parking, CC interest, spa→3030 | **DONE** |
-| T2 | Heurística: merchants de gasto no caen en 4040 Other Income | **DONE** |
-| T3 | Balance Sheet UI jerárquico estilo QB | **DONE** |
-| T4 | Cash Flow statement layout O/I/F tipo QB | **DONE** |
-| T5 | Limpieza dead code + README decálogo MVP + descripción GitHub | **DONE** |
+| T1 | P&L: INGRESOS = solo 4xxx; 5xxx/6xxx (Social Media, Meals, Marketing…) **nunca** en ingresos aunque el banco marque income | **DONE** |
+| T2 | Balance: pagos tarjeta/thank-you (2010 clearing) no inflan AP; pasivo cargo vs pago con signo correcto | **DONE** |
+| T3 | MyXcell: suspense 0; deposits-only income; perfil carpetas Drive; flip txs 6xxx mal tipadas | **DONE** |
+| T4 | CoA faltante 6055/6065/6160/6170 en workspace | **DONE** |
+
+**Regla fija:** Social Media Ads = **gasto** (6065). Nunca ingreso. No duplicar líneas en INGRESOS y GASTOS.
 
 | Sprint | Estado |
 |--------|--------|
-| **15** | **DONE** |
-| **16** | **DONE** (código; redeploy + seed CoA en workspace) |
+| **15–16** | **DONE** |
+| **17** | **DONE** — cierre día 2026-09-24 |
 
-**Live:** https://ledgerai-0wyy.onrender.com
+**Live:** https://ledgerai-0wyy.onrender.com — redeploy tras push; luego Emitir estados / refrescar Reportes.
 
 ---
 

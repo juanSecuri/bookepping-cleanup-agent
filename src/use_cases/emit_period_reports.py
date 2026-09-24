@@ -24,8 +24,78 @@ from src.use_cases.close_fiscal_year import FiscalYearCloseRepository
 # Equity accounts that must never hit P&L
 EQUITY_CODES = frozenset({"3010", "3020", "3030"})
 OWNER_DRAWS_CODE = "3030"
-COGS_CODES = frozenset({"5010", "5000", "5100"})
+COGS_CODES = frozenset({"5010", "5000", "5100", "5020"})
+# 2010 is often used as CC payment / "thank you" clearing — not true vendor AP
+TRANSFER_CLEARING_CODES = frozenset({"2010"})
 MONTH_KEYS = [f"{m:02d}" for m in range(1, 13)]
+
+
+def resolve_account_type(code: str, coa_type: str | None, tx_type: TransactionType) -> str:
+    """Prefer CoA / code family over bank transaction_type (OCR often flips income/expense)."""
+    code = (code or "").strip()
+    declared = (coa_type or "").strip().lower()
+    if declared in {"asset", "liability", "equity", "income", "cogs", "expense"}:
+        # Still override when code family contradicts (orphan / mis-seeded CoA)
+        if code.startswith("4") and declared != "income":
+            return "income"
+        if code.startswith("5") and declared != "cogs":
+            return "cogs"
+        if (code.startswith("6") or code == "9999") and declared not in {"expense", "cogs"}:
+            return "expense"
+        if code.startswith("3") and declared != "equity":
+            return "equity"
+        if code.startswith("2") and declared != "liability":
+            return "liability"
+        if code.startswith("1") and declared != "asset":
+            return "asset"
+        return declared
+    if code.startswith("4") or code in {"4010", "4020", "4030", "4040"}:
+        return "income"
+    if code.startswith("5") or code in COGS_CODES:
+        return "cogs"
+    if code.startswith("6") or code == "9999":
+        return "expense"
+    if code.startswith("3") or code in EQUITY_CODES:
+        return "equity"
+    if code.startswith("2"):
+        return "liability"
+    if code.startswith("1"):
+        return "asset"
+    return "income" if tx_type == TransactionType.INCOME else "expense"
+
+
+def is_transfer_memo(description: str | None) -> bool:
+    d = (description or "").lower()
+    return any(
+        m in d
+        for m in (
+            "thank you",
+            "credit card pmt",
+            "credit card payment",
+            "automatic payment",
+            "online credit card",
+            "mobile to ****",
+            "online to ****",
+            "payment to ****",
+            "account close out",
+            "balance transfer",
+        )
+    )
+
+
+def effective_cash_direction(
+    acct_type: str,
+    tx_type: TransactionType,
+    *,
+    description: str | None = None,
+) -> TransactionType:
+    """Bank feeds mis-tag expense merchants as income — trust account family for OpEx/COGS."""
+    if acct_type in {"expense", "cogs"} and tx_type == TransactionType.INCOME:
+        if not is_transfer_memo(description):
+            return TransactionType.EXPENSE
+    if acct_type == "income" and tx_type == TransactionType.EXPENSE:
+        return TransactionType.INCOME
+    return tx_type
 
 # QuickBooks-like subcategory order within Balance Sheet major groups
 ASSET_SUBCATEGORY_ORDER = ("Current Assets", "Fixed Assets")
@@ -313,7 +383,6 @@ class EmitPeriodReportsUseCase:
         pending_count = len(pending_in_period)
 
         coa = self._coa_accounts(str(workspace_id))
-        coa_types = {k: str(v.get("account_type") or "") for k, v in coa.items()}
         as_of_year = self._as_of_year(period, date_to, date_from)
         prior_re = self._prior_retained_earnings(str(workspace_id), as_of_year)
 
@@ -354,10 +423,15 @@ class EmitPeriodReportsUseCase:
         for t in verified:
             code = t.chart_of_accounts_code or "9999"
             name = t.chart_of_accounts_name or "Uncategorized"
-            acct_type = coa_types.get(code) or self._infer_type(t.transaction_type)
             coa_meta = coa.get(code) or {}
+            acct_type = resolve_account_type(
+                code, str(coa_meta.get("account_type") or ""), t.transaction_type
+            )
             sub = str(coa_meta.get("subcategory") or "").strip() or _default_subcategory(
                 acct_type if acct_type in BS_ACCOUNT_TYPES else ""
+            )
+            direction = effective_cash_direction(
+                acct_type, t.transaction_type, description=getattr(t, "description", None)
             )
             cf = t.cash_flow_type or infer_cash_flow_type(
                 account_code=code, account_type=acct_type
@@ -366,6 +440,9 @@ class EmitPeriodReportsUseCase:
             year_key = str(t.transaction_date)[:4]
             is_equity = acct_type == "equity" or code in EQUITY_CODES
             is_cogs = acct_type == "cogs" or code in COGS_CODES
+            transfer_clearing = code in TRANSFER_CLEARING_CODES or (
+                acct_type == "liability" and is_transfer_memo(getattr(t, "description", None))
+            )
 
             if "1010" not in asset_map:
                 cash0 = _acct_bucket()
@@ -379,7 +456,7 @@ class EmitPeriodReportsUseCase:
             cash = asset_map["1010"]
 
             if is_equity:
-                if t.transaction_type == TransactionType.INCOME:
+                if direction == TransactionType.INCOME:
                     cash["amount"] += t.amount
                     cash["txCount"] += 1
                     cash["debits"] += t.amount
@@ -417,16 +494,39 @@ class EmitPeriodReportsUseCase:
                     _bump(cf_fin_map, code, name, -t.amount, month_key, as_debit=True)
                 continue
 
+            # CC thank-you / card payments: financing cash only — never P&L, never fake AP
+            if transfer_clearing:
+                if direction == TransactionType.INCOME:
+                    cash["amount"] += t.amount
+                    cash["txCount"] += 1
+                    cash["debits"] += t.amount
+                    cash["byMonth"][month_key[5:7]] += t.amount
+                    financing_in += t.amount
+                    monthly[month_key]["financing_in"] += t.amount
+                    annual[year_key]["financing_in"] += t.amount
+                    _bump(cf_fin_map, code, name, t.amount, month_key, as_debit=False)
+                else:
+                    cash["amount"] -= t.amount
+                    cash["txCount"] += 1
+                    cash["credits"] += t.amount
+                    cash["byMonth"][month_key[5:7]] -= t.amount
+                    financing_out += t.amount
+                    monthly[month_key]["financing_out"] += t.amount
+                    annual[year_key]["financing_out"] += t.amount
+                    _bump(cf_fin_map, code, name, -t.amount, month_key, as_debit=True)
+                continue
+
             if acct_type == "liability" or cf == "financing":
-                if t.transaction_type == TransactionType.INCOME:
+                # CC/loan: charges increase liability; payments (credits) decrease it
+                if direction == TransactionType.INCOME:
                     if acct_type == "liability":
                         _bump(
                             liability_map,
                             code,
                             name,
-                            t.amount,
+                            -t.amount,
                             month_key,
-                            as_debit=False,
+                            as_debit=True,
                             subcategory=sub,
                         )
                     cash["amount"] += t.amount
@@ -443,9 +543,9 @@ class EmitPeriodReportsUseCase:
                             liability_map,
                             code,
                             name,
-                            -t.amount,
+                            t.amount,
                             month_key,
-                            as_debit=True,
+                            as_debit=False,
                             subcategory=sub,
                         )
                     cash["amount"] -= t.amount
@@ -458,13 +558,12 @@ class EmitPeriodReportsUseCase:
                     _bump(cf_fin_map, code, name, -t.amount, month_key, as_debit=True)
                 continue
 
-            if cf == "investing":
-                if t.transaction_type == TransactionType.INCOME:
+            if cf == "investing" or (acct_type == "asset" and code != "1010"):
+                if direction == TransactionType.INCOME:
                     cash["amount"] += t.amount
                     cash["debits"] += t.amount
                     investing_in += t.amount
                     _bump(cf_inv_map, code, name, t.amount, month_key, as_debit=False)
-                    # Sale of non-cash asset → reduce that asset (cash still rolls via 1010)
                     if acct_type == "asset" and code != "1010":
                         _bump(
                             asset_map,
@@ -480,7 +579,6 @@ class EmitPeriodReportsUseCase:
                     cash["credits"] += t.amount
                     investing_out += t.amount
                     _bump(cf_inv_map, code, name, -t.amount, month_key, as_debit=True)
-                    # Purchase of non-cash asset → increase that asset
                     if acct_type == "asset" and code != "1010":
                         _bump(
                             asset_map,
@@ -493,11 +591,13 @@ class EmitPeriodReportsUseCase:
                         )
                 cash["txCount"] += 1
                 cash["byMonth"][month_key[5:7]] += (
-                    t.amount if t.transaction_type == TransactionType.INCOME else -t.amount
+                    t.amount if direction == TransactionType.INCOME else -t.amount
                 )
                 continue
 
-            if t.transaction_type == TransactionType.INCOME:
+            # P&L: route ONLY by account family (4xxx income / 5xxx COGS / 6xxx expense)
+            # Never put Social Media / OpEx into INGRESOS because bank flipped the sign.
+            if acct_type == "income":
                 _bump(revenue_map, code, name, t.amount, month_key, as_debit=False)
                 operating_in += t.amount
                 monthly[month_key]["inflows"] += t.amount
@@ -683,8 +783,10 @@ class EmitPeriodReportsUseCase:
             "months": MONTH_KEYS,
             "granularity": granularity,
             "note": (
-                "P&L excluye Owner's Draws / aportes a patrimonio "
-                f"({OWNER_DRAWS_CODE} y cuentas equity)."
+                "P&L desde movimientos verificados del cliente (Drive/bancos). "
+                "INGRESOS = solo cuentas 4xxx; gastos 5xxx/6xxx nunca van a ingresos "
+                "(aunque el banco marque mal el signo). "
+                f"Excluye Owner's Draws / aportes ({OWNER_DRAWS_CODE} y equity)."
             ),
         }
 
@@ -704,12 +806,11 @@ class EmitPeriodReportsUseCase:
                 f"A = P + E  ({total_assets:,.2f} = {total_liabilities:,.2f} + {equity_for_equation:,.2f})"
             ),
             "note": (
-                "Balance desde txs verificadas/cerradas: cash proxy del periodo; "
+                "Balance desde txs verificadas del cliente (carpetas Drive / extractos). "
+                "No usa Excel de referencia como fuente de números. "
+                "Pagos tarjeta / thank-you (2010 clearing) no inflan Cuentas por pagar. "
                 "Owner's Draws reducen Patrimonio; utilidad del periodo en 3020; "
-                "RE de años cerrados en 3020-PY (no entra al cuadre del periodo); "
-                "secciones CoA (Current/Fixed Assets, Current/LT Liabilities, Equity) "
-                "incluyen cuentas en cero; columnas byMonth = saldos acumulados YTD "
-                "(cierre mensual estilo QuickBooks), no movimiento del mes."
+                "columnas byMonth = saldos acumulados YTD del periodo."
             ),
         }
 
@@ -784,9 +885,7 @@ class EmitPeriodReportsUseCase:
         return out
 
     def _infer_type(self, tx_type: TransactionType) -> str:
-        if tx_type == TransactionType.INCOME:
-            return "income"
-        return "expense"
+        return "income" if tx_type == TransactionType.INCOME else "expense"
 
     @staticmethod
     def _as_of_year(
