@@ -197,6 +197,12 @@ class WorkspaceCreate(BaseModel):
     industry: str | None = None
     timezone: str = "UTC"
     description: str | None = None
+    max_fiscal_year: int | None = None
+
+
+class WorkspacePatch(BaseModel):
+    max_fiscal_year: int | None = None
+    clear_max_fiscal_year: bool = False
 
 
 @api.get("/workspaces")
@@ -207,6 +213,8 @@ async def list_workspaces() -> list[dict]:
 
 @api.post("/workspaces")
 async def create_workspace(body: WorkspaceCreate) -> dict:
+    from src.infrastructure.drive.year_policy import parse_max_fiscal_year
+
     ws = Workspace(
         name=body.name,
         legal_name=body.legal_name or body.description,
@@ -214,6 +222,7 @@ async def create_workspace(body: WorkspaceCreate) -> dict:
         fiscal_year_start=body.fiscal_year_start,
         industry=body.industry,
         timezone=body.timezone,
+        max_fiscal_year=parse_max_fiscal_year(body.max_fiscal_year),
     )
     saved = await WorkspaceRepository().save(ws)
     # Clean workspace: no auto-seed CoA/rules — user seeds when ready
@@ -226,6 +235,61 @@ async def get_workspace(workspace_id: str) -> dict:
     if not ws:
         raise HTTPException(404, "Workspace not found")
     return ws.model_dump(mode="json")
+
+
+@api.patch("/workspaces/{workspace_id}")
+async def patch_workspace(
+    workspace_id: str,
+    body: WorkspacePatch,
+    user: AuthUser = Depends(get_current_user),
+) -> dict:
+    """Update workspace options (e.g. max_fiscal_year cutoff for Drive/CPA scope)."""
+    from src.infrastructure.drive.year_policy import parse_max_fiscal_year
+
+    wid = uuid.UUID(workspace_id)
+    assert_workspace_access(user, wid)
+    repo = WorkspaceRepository()
+    ws = await repo.get(wid)
+    if not ws:
+        raise HTTPException(404, "Workspace not found")
+    if body.clear_max_fiscal_year:
+        ceiling: int | None = None
+    elif "max_fiscal_year" in body.model_fields_set:
+        ceiling = parse_max_fiscal_year(body.max_fiscal_year)
+        if body.max_fiscal_year is not None and ceiling is None:
+            raise HTTPException(400, "max_fiscal_year must be YYYY between 2000–2100")
+    else:
+        return ws.model_dump(mode="json")
+    updated = await repo.update_max_fiscal_year(wid, ceiling)
+    if not updated:
+        raise HTTPException(404, "Workspace not found")
+    return updated.model_dump(mode="json")
+
+
+class PurgeBeyondYearBody(BaseModel):
+    max_year: int | None = None
+    persist_ceiling: bool = True
+
+
+@api.post("/workspaces/{workspace_id}/purge-beyond-year")
+async def purge_beyond_year(
+    workspace_id: str,
+    body: PurgeBeyondYearBody = PurgeBeyondYearBody(),
+    user: AuthUser = Depends(get_current_user),
+) -> dict:
+    """Delete txs/docs/movements after max_year; keeps ≤ year. Does not recreate workspace."""
+    from src.use_cases.purge_beyond_year import PurgeBeyondYearUseCase
+
+    wid = uuid.UUID(workspace_id)
+    assert_workspace_access(user, wid)
+    try:
+        return await PurgeBeyondYearUseCase().execute(
+            wid,
+            max_year=body.max_year,
+            persist_ceiling=body.persist_ceiling,
+        )
+    except ValueError as exc:
+        raise HTTPException(400, str(exc)) from exc
 
 
 @api.delete("/workspaces/{workspace_id}")
@@ -1768,6 +1832,7 @@ async def drive_import_files(
     """Download selected Drive files, enqueue as pending, process 1-at-a-time."""
     from src.infrastructure.drive.classify import classify_drive_file
     from src.infrastructure.drive.google_drive_client import GoogleDriveClient, credentials_available
+    from src.infrastructure.drive.year_policy import is_beyond_max_year, parse_max_fiscal_year
     from src.use_cases.sync_drive import _file_type
 
     assert_workspace_access(user, body.workspace_id)
@@ -1777,6 +1842,8 @@ async def drive_import_files(
         raise HTTPException(400, "No files selected")
 
     wid = uuid.UUID(body.workspace_id)
+    ws = await WorkspaceRepository().get(wid)
+    ceiling = parse_max_fiscal_year(ws.max_fiscal_year if ws else None)
     docs = DocumentRepository()
     existing = await docs.list_by_workspace(wid, limit=5000)
     known = {d.drive_file_id for d in existing if d.drive_file_id}
@@ -1785,6 +1852,7 @@ async def drive_import_files(
 
     imported = 0
     skipped = 0
+    skipped_beyond_year = 0
     failed: list[dict] = []
     queued: list[dict] = []
     plans: list[dict] = []
@@ -1803,6 +1871,10 @@ async def drive_import_files(
         plans.append({"file": name, "path": path, "kind": plan.kind, "note": plan.note})
         if plan.kind == "skip":
             skipped += 1
+            continue
+        if is_beyond_max_year(path, name, fiscal_year=plan.fiscal_year, max_year=ceiling):
+            skipped += 1
+            skipped_beyond_year += 1
             continue
         try:
             content = drive.download_bytes(fid)
@@ -1866,6 +1938,8 @@ async def drive_import_files(
     return {
         "imported": imported,
         "skipped": skipped,
+        "skipped_beyond_year": skipped_beyond_year,
+        "max_fiscal_year": ceiling,
         "failed": failed,
         "queued_for_ingest": len(queued) if body.ingest else 0,
         "classification": {"statements": statements, "invoices": invoices, "spreadsheets": sheets},

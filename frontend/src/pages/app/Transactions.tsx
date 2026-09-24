@@ -64,35 +64,94 @@ export default function Transactions() {
   const [error, setError] = useState<string | null>(null)
   const [info, setInfo] = useState<string | null>(null)
   const [sorting, setSorting] = useState<SortingState>([{ id: 'date', desc: true }])
+  const [yearFilter, setYearFilter] = useState('')
+  const [availableYears, setAvailableYears] = useState<string[]>([])
+  const [maxFiscalYear, setMaxFiscalYear] = useState<number | null>(null)
+  const [purging, setPurging] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [list, c, coa] = await Promise.all([
+      const dateFrom = yearFilter ? `${yearFilter}-01-01` : undefined
+      const dateTo = yearFilter ? `${yearFilter}-12-31` : undefined
+      const [list, c, coa, yearsRes, ws] = await Promise.all([
         api.listTransactions({
           tenant_id: workspaceId,
           status: tab === 'all' || tab === 'suspense' ? undefined : tab,
           suspense: tab === 'suspense',
+          date_from: dateFrom,
+          date_to: dateTo,
+          limit: 5000,
         }),
         api.transactionCounts(workspaceId),
         api.chartOfAccounts(workspaceId).catch(() => []),
+        api.availableYears(workspaceId).catch(() => ({ years: [] as string[] })),
+        api.getWorkspace(workspaceId).catch(() => null),
       ])
       setRows(Array.isArray(list) ? list : [])
       setCounts(c || {})
       setAccounts(Array.isArray(coa) ? coa : [])
+      const years = (yearsRes?.years || []).map(String).sort()
+      setAvailableYears(years)
+      const ceiling =
+        ws?.max_fiscal_year != null && !Number.isNaN(Number(ws.max_fiscal_year))
+          ? Number(ws.max_fiscal_year)
+          : null
+      setMaxFiscalYear(ceiling)
       setSelected(new Set())
+      // Prefer workspace ceiling, else 2025 if present in data, else newest ≤ ceiling
+      setYearFilter((prev) => {
+        if (prev) return prev
+        if (ceiling && years.includes(String(ceiling))) return String(ceiling)
+        if (years.includes('2025')) return '2025'
+        const capped = ceiling
+          ? years.filter((y) => Number(y) <= ceiling)
+          : years
+        return capped.length ? capped[capped.length - 1] : ''
+      })
     } catch (e) {
       setError(e instanceof Error ? e.message : t('common.error'))
       setRows([])
     } finally {
       setLoading(false)
     }
-  }, [workspaceId, tab, t])
+  }, [workspaceId, tab, yearFilter, t])
 
   useEffect(() => {
     void load()
   }, [load])
+
+  async function purgeBeyond() {
+    const year = maxFiscalYear ?? (yearFilter ? Number(yearFilter) : 2025)
+    if (!year || Number.isNaN(year)) return
+    const ok = window.confirm(
+      t('transactions.purgeBeyondConfirm').replaceAll('{year}', String(year)),
+    )
+    if (!ok) return
+    setPurging(true)
+    setError(null)
+    try {
+      const res = await api.purgeBeyondYear(workspaceId, {
+        max_year: year,
+        persist_ceiling: true,
+      })
+      setMaxFiscalYear(res.max_year ?? year)
+      setInfo(
+        t('transactions.purgeBeyondDone')
+          .replace('{tx}', String(res.deleted_transactions ?? 0))
+          .replace('{mv}', String(res.deleted_movements ?? 0))
+          .replace('{doc}', String(res.deleted_documents ?? 0))
+          .replace('{year}', String(res.kept_through ?? year)),
+      )
+      if (yearFilter && Number(yearFilter) > year) setYearFilter(String(year))
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('common.error'))
+    } finally {
+      setPurging(false)
+    }
+  }
 
   async function approve(id: string) {
     await api.approveTransaction(id)
@@ -349,9 +408,29 @@ export default function Transactions() {
         {tab === 'suspense' && (
           <p className="mt-2 text-xs text-primary">{t('transactions.suspenseHint')}</p>
         )}
+        {maxFiscalYear != null && (
+          <p className="mt-2 text-xs text-muted-foreground">
+            {t('transactions.maxYearHint').replace('{year}', String(maxFiscalYear))}
+          </p>
+        )}
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
+        <label className="flex items-center gap-2 text-sm text-muted-foreground">
+          <span>{t('transactions.year')}</span>
+          <select
+            className="rounded-lg border border-border bg-card px-2 py-1.5 text-sm text-foreground"
+            value={yearFilter}
+            onChange={(e) => setYearFilter(e.target.value)}
+          >
+            <option value="">{t('transactions.yearAll')}</option>
+            {availableYears.map((y) => (
+              <option key={y} value={y}>
+                {y}
+              </option>
+            ))}
+          </select>
+        </label>
         {tabs.map((item) => (
           <button
             key={item.id}
@@ -379,6 +458,17 @@ export default function Transactions() {
             {t('transactions.recategorize')}
           </button>
         )}
+        <button
+          type="button"
+          disabled={purging}
+          onClick={() => void purgeBeyond()}
+          className="cursor-pointer rounded-lg border border-destructive/40 px-3 py-1.5 text-sm font-medium text-destructive hover:bg-destructive/5 disabled:opacity-50"
+        >
+          {t('transactions.purgeBeyond').replace(
+            '{year}',
+            String(maxFiscalYear ?? yearFilter || 2025),
+          )}
+        </button>
       </div>
 
       {selected.size > 0 && (

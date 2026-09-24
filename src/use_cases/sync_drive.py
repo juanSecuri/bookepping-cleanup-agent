@@ -104,10 +104,13 @@ class SyncDriveUseCase:
 
         from src.container import get_container
         from src.infrastructure.drive.classify import classify_drive_file
+        from src.infrastructure.drive.year_policy import is_beyond_max_year, parse_max_fiscal_year
 
         container = get_container()
         upload_dir = Path(tempfile.gettempdir()) / "ledgerai_drive"
         upload_dir.mkdir(parents=True, exist_ok=True)
+        skipped_beyond_year = 0
+        ceiling = parse_max_fiscal_year(getattr(ws, "max_fiscal_year", None))
 
         for node in drive.walk_ingestible(root_id, max_files=max_files):
             discovered += 1
@@ -115,12 +118,18 @@ class SyncDriveUseCase:
                 skipped += 1
                 continue
             try:
+                plan = classify_drive_file(node.name, node.path, node.mime_type)
+                if is_beyond_max_year(
+                    node.path, node.name, fiscal_year=plan.fiscal_year, max_year=ceiling
+                ):
+                    skipped += 1
+                    skipped_beyond_year += 1
+                    continue
+
                 content = drive.download_bytes(node.id)
                 suffix = Path(node.name).suffix or ".bin"
                 tmp = upload_dir / f"{node.id}{suffix}"
                 tmp.write_bytes(content)
-
-                plan = classify_drive_file(node.name, node.path, node.mime_type)
                 doc = DocumentRecord(
                     workspace_id=workspace_id,
                     file_name=node.name,
@@ -194,6 +203,8 @@ class SyncDriveUseCase:
             "discovered": discovered,
             "imported": imported,
             "skipped": skipped,
+            "skipped_beyond_year": skipped_beyond_year,
+            "max_fiscal_year": ceiling,
             "failed": failed,
             "documents": imported_docs,
         }

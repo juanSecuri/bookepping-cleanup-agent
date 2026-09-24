@@ -34,6 +34,9 @@ export type Workspace = {
   name: string
   description?: string | null
   legal_name?: string | null
+  max_fiscal_year?: number | null
+  drive_folder_id?: string | null
+  drive_folder_name?: string | null
   created_at?: string
 }
 
@@ -291,6 +294,26 @@ export const api = {
       method: 'DELETE',
     }),
   getWorkspace: (id: string) => request<Workspace>(`/api/workspaces/${id}`),
+  patchWorkspace: (
+    id: string,
+    body: { max_fiscal_year?: number | null; clear_max_fiscal_year?: boolean },
+  ) =>
+    request<Workspace>(`/api/workspaces/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  purgeBeyondYear: (id: string, body?: { max_year?: number; persist_ceiling?: boolean }) =>
+    request<{
+      max_year?: number
+      deleted_transactions?: number
+      deleted_movements?: number
+      deleted_documents?: number
+      deleted_statement_periods?: number
+      kept_through?: string
+    }>(`/api/workspaces/${id}/purge-beyond-year`, {
+      method: 'POST',
+      body: JSON.stringify(body || {}),
+    }),
   getWorkspaceStats: (id: string, params?: { fiscal_year?: string }) => {
     const q = new URLSearchParams()
     if (params?.fiscal_year) q.set('fiscal_year', params.fiscal_year)

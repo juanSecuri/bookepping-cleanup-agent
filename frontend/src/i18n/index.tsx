@@ -237,6 +237,14 @@ const es: Dict = {
   'transactions.recategorize': 'Re-categorizar con reglas',
   'transactions.recategorizeDone': 'Actualizadas {n} (ingresos {i}, gastos {e})',
   'transactions.confidence': 'Confianza',
+  'transactions.year': 'Año',
+  'transactions.yearAll': 'Todos',
+  'transactions.purgeBeyond': 'Quitar años posteriores a {year}',
+  'transactions.purgeBeyondConfirm':
+    '¿Eliminar documentos, movimientos y transacciones posteriores a {year}? No borra el workspace ni los datos ≤ {year}.',
+  'transactions.purgeBeyondDone':
+    'Eliminados: {tx} txs, {mv} movimientos, {doc} docs (hasta {year})',
+  'transactions.maxYearHint': 'Tope del workspace: solo hasta {year} (Drive ignora carpetas posteriores).',
   'transactions.assign': 'Asignar cuenta',
   'transactions.learned': 'Regla aprendida',
   'coa.rules': 'Reglas de clasificación',
@@ -597,6 +605,14 @@ const en: Dict = {
   'transactions.recategorize': 'Re-categorize with rules',
   'transactions.recategorizeDone': 'Updated {n} (income {i}, expenses {e})',
   'transactions.confidence': 'Confidence',
+  'transactions.year': 'Year',
+  'transactions.yearAll': 'All',
+  'transactions.purgeBeyond': 'Remove years after {year}',
+  'transactions.purgeBeyondConfirm':
+    'Delete documents, movements, and transactions after {year}? Keeps the workspace and data ≤ {year}.',
+  'transactions.purgeBeyondDone':
+    'Removed: {tx} txs, {mv} movements, {doc} docs (through {year})',
+  'transactions.maxYearHint': 'Workspace ceiling: through {year} only (Drive skips later folders).',
   'transactions.assign': 'Assign account',
   'transactions.learned': 'Rule learned',
   'coa.rules': 'Classification rules',
