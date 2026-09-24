@@ -38,6 +38,38 @@ def _empty_months() -> dict[str, float]:
     return {k: 0.0 for k in MONTH_KEYS}
 
 
+def cumulative_by_month(activity: dict[str, float]) -> dict[str, float]:
+    """Running sum over MONTH_KEYS (QuickBooks-style YTD closing per month column)."""
+    out = _empty_months()
+    running = 0.0
+    for mk in MONTH_KEYS:
+        running += float(activity.get(mk) or 0)
+        out[mk] = running
+    return out
+
+
+def _sum_stores_by_month(*stores: dict[str, dict]) -> dict[str, float]:
+    out = _empty_months()
+    for store in stores:
+        for bucket in store.values():
+            for mk, val in (bucket.get("byMonth") or {}).items():
+                key = str(mk)[-2:] if len(str(mk)) >= 2 else str(mk)
+                if key in out:
+                    out[key] += float(val)
+    return out
+
+
+def _apply_cumulative_bs_line(line: dict) -> None:
+    cum = cumulative_by_month(line.get("byMonth") or {})
+    line["byMonth"] = cum
+    line["closing"] = float(line.get("amount") or 0)
+
+
+def _apply_cumulative_bs_lines(lines: list[dict]) -> None:
+    for line in lines:
+        _apply_cumulative_bs_line(line)
+
+
 def _default_subcategory(account_type: str) -> str:
     if account_type == "asset":
         return "Current Assets"
@@ -526,6 +558,28 @@ class EmitPeriodReportsUseCase:
                     "subcategory": equity_sub,
                 }
             )
+        monthly_revenue = _sum_stores_by_month(revenue_map)
+        monthly_cogs = _sum_stores_by_month(cogs_map)
+        monthly_opex = _sum_stores_by_month(expense_map)
+        gross_profit_by_month = {
+            mk: monthly_revenue[mk] - monthly_cogs[mk] for mk in MONTH_KEYS
+        }
+        monthly_net_income = {
+            mk: monthly_revenue[mk] - monthly_cogs[mk] - monthly_opex[mk]
+            for mk in MONTH_KEYS
+        }
+        cumulative_ni = cumulative_by_month(monthly_net_income)
+        re3020_activity = _empty_months()
+        if prior_re_row:
+            for mk, val in (prior_re_row.get("byMonth") or {}).items():
+                key = str(mk)[-2:] if len(str(mk)) >= 2 else str(mk)
+                if key in re3020_activity:
+                    re3020_activity[key] += float(val)
+        cumulative_re3020 = cumulative_by_month(re3020_activity)
+        ni_by_month = _empty_months()
+        for mk in MONTH_KEYS:
+            ni_by_month[mk] = cumulative_ni[mk] + cumulative_re3020[mk]
+
         equity_lines.append(
             {
                 "code": "3020",
@@ -536,10 +590,23 @@ class EmitPeriodReportsUseCase:
                 "credits": 0.0,
                 "opening": 0.0,
                 "closing": net_income + re_tx_amount,
-                "byMonth": _empty_months(),
+                "byMonth": ni_by_month,
                 "subcategory": equity_sub,
             }
         )
+
+        _apply_cumulative_bs_lines(assets)
+        _apply_cumulative_bs_lines(liabilities)
+        for line in equity_lines:
+            if line["code"] == "3020-PY":
+                flat = float(line.get("amount") or 0)
+                line["byMonth"] = {mk: flat for mk in MONTH_KEYS}
+                line["closing"] = flat
+            elif line["code"] == "3020":
+                line["closing"] = float(line.get("amount") or 0)
+            else:
+                _apply_cumulative_bs_line(line)
+
         total_assets = sum(a["amount"] for a in assets)
         total_liabilities = sum(a["amount"] for a in liabilities)
         total_equity = sum(a["amount"] for a in equity_lines)
@@ -608,6 +675,8 @@ class EmitPeriodReportsUseCase:
             "totalExpenses": total_expenses,
             "totalCogs": total_cogs,
             "netIncome": net_income,
+            "grossProfit": total_revenue - total_cogs,
+            "grossProfitByMonth": gross_profit_by_month,
             "revenueItems": _lines_sorted(revenue_map),
             "cogsItems": _lines_sorted(cogs_map),
             "expenseItems": _lines_sorted(expense_map),
@@ -639,7 +708,8 @@ class EmitPeriodReportsUseCase:
                 "Owner's Draws reducen Patrimonio; utilidad del periodo en 3020; "
                 "RE de años cerrados en 3020-PY (no entra al cuadre del periodo); "
                 "secciones CoA (Current/Fixed Assets, Current/LT Liabilities, Equity) "
-                "incluyen cuentas en cero."
+                "incluyen cuentas en cero; columnas byMonth = saldos acumulados YTD "
+                "(cierre mensual estilo QuickBooks), no movimiento del mes."
             ),
         }
 

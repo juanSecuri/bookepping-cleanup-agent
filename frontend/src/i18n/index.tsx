@@ -70,6 +70,12 @@ const es: Dict = {
   'reports.sectionCogs': 'COSTO DE VENTAS',
   'reports.sectionOpex': 'GASTOS OPERATIVOS',
   'reports.netIncomeLine': 'UTILIDAD NETA',
+  'reports.grossProfit': 'UTILIDAD BRUTA',
+  'reports.layoutMonthly': 'Mensual (columnas)',
+  'reports.layoutAnnual': 'Anual (Total)',
+  'reports.layoutHint':
+    'Formato QuickBooks: mensual = Jan–Dic + Total; anual = solo Total. Datos = Drive/txs verificadas (no Excel de referencia).',
+  'reports.totalFor': 'Total',
   'reports.balanceOk': 'Balance cuadrado: A = P + E',
   'reports.assets': 'Activos',
   'reports.liabilities': 'Pasivos',
@@ -338,10 +344,10 @@ const es: Dict = {
   'common.selected': 'seleccionadas',
   'coldStart.title': 'Despertando LedgerAI…',
   'coldStart.body':
-    'El servidor en Render estaba dormido (Starter). Responde en unos segundos — deja esta pestaña abierta.',
+    'El servidor en Render Free estaba dormido (y a veces Supabase Free también). Responde en unos segundos — deja esta pestaña abierta.',
   'coldStart.dismiss': 'Ocultar',
   'documents.queueHint':
-    'Importás todos de una vez; la extracción corre en segundo plano (1 PDF a la vez, pdfplumber local $0). Render Starter + disco persistente.',
+    'Importás todos de una vez; la extracción corre en segundo plano (1 PDF a la vez, pdfplumber local $0). Render Free: cold start posible.',
   'documents.queueBulkHint':
     'Tip: «Sincronizar desde Drive» encola toda la carpeta. Cada PDF tarda ~30s–2min — no hay magia instantánea sin API de pago.',
   'documents.statusPending': 'En cola',
@@ -410,6 +416,12 @@ const en: Dict = {
   'reports.sectionCogs': 'COST OF GOODS SOLD',
   'reports.sectionOpex': 'OPERATING EXPENSES',
   'reports.netIncomeLine': 'NET INCOME',
+  'reports.grossProfit': 'GROSS PROFIT',
+  'reports.layoutMonthly': 'Monthly (columns)',
+  'reports.layoutAnnual': 'Annual (Total)',
+  'reports.layoutHint':
+    'QuickBooks layout: monthly = Jan–Dec + Total; annual = Total only. Data = Drive/verified txs (not reference Excel).',
+  'reports.totalFor': 'Total',
   'reports.balanceOk': 'Balance sheet balances: A = L + E',
   'reports.assets': 'Assets',
   'reports.liabilities': 'Liabilities',
@@ -678,10 +690,10 @@ const en: Dict = {
   'common.selected': 'selected',
   'coldStart.title': 'Waking LedgerAI…',
   'coldStart.body':
-    'The Render server was asleep (Starter). It should respond in a few seconds — keep this tab open.',
+    'The Render Free server was asleep (Supabase Free may also be waking). It should respond in a few seconds — keep this tab open.',
   'coldStart.dismiss': 'Dismiss',
   'documents.queueHint':
-    'Import all at once; extraction runs in the background (1 PDF at a time, local pdfplumber $0). Render Starter + persistent disk.',
+    'Import all at once; extraction runs in the background (1 PDF at a time, local pdfplumber $0). Render Free: cold starts possible.',
   'documents.queueBulkHint':
     'Tip: “Sync from Drive” queues the whole folder. No instant magic API — each PDF takes ~30s–2min to read.',
   'documents.statusPending': 'Queued',

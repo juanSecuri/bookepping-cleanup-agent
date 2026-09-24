@@ -60,6 +60,57 @@ def _append_pnl_section(ws, title: str, items: list, months: list[str], start_ro
     return r + 2
 
 
+def _append_bs_section(
+    ws,
+    title: str,
+    items: list,
+    months: list[str],
+    start_row: int,
+    section_total: float,
+) -> int:
+    r = start_row
+    ws.cell(row=r, column=1, value=title).font = Font(bold=True, size=12)
+    r += 1
+    headers = ["Código", "Cuenta", *[m for m in months], "Total"]
+    for i, h in enumerate(headers, 1):
+        ws.cell(row=r, column=i, value=h)
+    _style_header_row(ws, r, len(headers))
+    r += 1
+    for item in items:
+        by_m = item.get("byMonth") or {}
+        ws.cell(row=r, column=1, value=item.get("code"))
+        ws.cell(row=r, column=2, value=item.get("name"))
+        for i, mk in enumerate(months, 3):
+            _money_cell(ws, r, i, float(by_m.get(mk) or 0))
+        amt = float(item.get("closing") or item.get("amount") or 0)
+        _money_cell(ws, r, 2 + len(months) + 1, amt)
+        r += 1
+    ws.cell(row=r, column=2, value=f"TOTAL {title}").font = TOTAL_FONT
+    total_col = 2 + len(months) + 1
+    _money_cell(ws, r, total_col, section_total)
+    ws.cell(row=r, column=total_col).font = TOTAL_FONT
+    return r + 2
+
+
+def _append_pnl_subtotal_row(
+    ws,
+    label: str,
+    months: list[str],
+    row: int,
+    total: float,
+    by_month: dict | None,
+) -> int:
+    ws.cell(row=row, column=2, value=label).font = TOTAL_FONT
+    by_m = by_month or {}
+    for i, mk in enumerate(months, 3):
+        _money_cell(ws, row, i, float(by_m.get(mk) or 0))
+        ws.cell(row=row, column=i).font = TOTAL_FONT
+    total_col = 2 + len(months) + 1
+    _money_cell(ws, row, total_col, total)
+    ws.cell(row=row, column=total_col).font = TOTAL_FONT
+    return row + 2
+
+
 def bundle_to_xlsx_bytes(
     bundle: PeriodFinancialBundle,
     transactions: list[Any] | None = None,
@@ -77,6 +128,9 @@ def bundle_to_xlsx_bytes(
     r = 4
     r = _append_pnl_section(ws, "INGRESOS", bundle.pnl.get("revenueItems") or [], months, r)
     r = _append_pnl_section(ws, "COSTO DE VENTAS", bundle.pnl.get("cogsItems") or [], months, r)
+    gp = float(bundle.pnl.get("grossProfit") or 0)
+    gp_by_m = bundle.pnl.get("grossProfitByMonth") or {}
+    r = _append_pnl_subtotal_row(ws, "UTILIDAD BRUTA (GROSS PROFIT)", months, r, gp, gp_by_m)
     r = _append_pnl_section(ws, "GASTOS OPERATIVOS", bundle.pnl.get("expenseItems") or [], months, r)
     ws.cell(row=r, column=2, value="UTILIDAD NETA").font = TOTAL_FONT
     net = float(bundle.pnl.get("netIncome") or bundle.pnl.get("net_income") or 0)
@@ -90,30 +144,23 @@ def bundle_to_xlsx_bytes(
     bs.append(["LedgerAI — Balance general", bundle.period_label])
     bs["A1"].font = TITLE_FONT
     bs.append(["Cuadra", bal.get("balanced"), "Ecuación", bal.get("equation")])
+    bs.append([bal.get("note") or ""])
     bs.append([])
-    headers_b = ["Sección", "Código", "Cuenta", "Saldo Inicial", "Débitos", "Créditos", "Saldo Final"]
-    bs.append(headers_b)
-    _style_header_row(bs, 4, len(headers_b))
     row_i = 5
     for section, key in (("ACTIVOS", "assets"), ("PASIVOS", "liabilities"), ("PATRIMONIO", "equity")):
-        for item in bal.get(key) or []:
-            bs.cell(row=row_i, column=1, value=section)
-            bs.cell(row=row_i, column=2, value=item.get("code"))
-            bs.cell(row=row_i, column=3, value=item.get("name"))
-            _money_cell(bs, row_i, 4, float(item.get("opening") or 0))
-            _money_cell(bs, row_i, 5, float(item.get("debits") or 0))
-            _money_cell(bs, row_i, 6, float(item.get("credits") or 0))
-            _money_cell(bs, row_i, 7, float(item.get("closing") or item.get("amount") or 0))
-            row_i += 1
         total_key = {
             "assets": "totalAssets",
             "liabilities": "totalLiabilities",
             "equity": "totalEquity",
         }[key]
-        bs.cell(row=row_i, column=3, value=f"TOTAL {section}").font = TOTAL_FONT
-        _money_cell(bs, row_i, 7, float(bal.get(total_key) or 0))
-        bs.cell(row=row_i, column=7).font = TOTAL_FONT
-        row_i += 2
+        row_i = _append_bs_section(
+            bs,
+            section,
+            bal.get(key) or [],
+            months,
+            row_i,
+            float(bal.get(total_key) or 0),
+        )
     bs.cell(row=row_i, column=1, value="Verificación A = P + E")
     bs.cell(row=row_i, column=2, value=bool(bal.get("balanced")))
     bs.cell(row=row_i, column=3, value=bal.get("equation"))
@@ -196,7 +243,7 @@ def bundle_to_xlsx_bytes(
         tx.cell(row=4, column=1, value="(Sin txs verificadas en el periodo)")
 
     for sheet in wb.worksheets:
-        for col in range(1, 14):
+        for col in range(1, 3 + len(months) + 2):
             sheet.column_dimensions[get_column_letter(col)].width = 14
         sheet.column_dimensions["B"].width = 28
         sheet.column_dimensions["C"].width = 28

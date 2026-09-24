@@ -53,18 +53,22 @@ function MonthTable({
   total,
   showUncategorizedHint,
   onRowClick,
+  layout = 'monthly',
 }: {
   title: string
   items: PnLLineItem[]
   total: number
   showUncategorizedHint?: boolean
   onRowClick?: (row: PnLLineItem) => void
+  layout?: 'monthly' | 'annual'
 }) {
   const { t, locale } = useLocale()
   const monthLabels =
     locale === 'en'
       ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
       : MONTH_LABELS
+  const showMonths = layout === 'monthly'
+  const colSpan = showMonths ? 14 : 3
   return (
     <div className="table-scroll animate-fade-up rounded-xl border border-border bg-card soft-shadow-lift">
       <div className="border-b border-border px-4 py-3">
@@ -73,16 +77,17 @@ function MonthTable({
       {items.length === 0 ? (
         <p className="px-4 py-6 text-sm text-muted-foreground">—</p>
       ) : (
-        <table className="w-full min-w-[720px] text-left text-sm">
+        <table className="w-full min-w-[320px] text-left text-sm">
           <thead className="bg-secondary/40 text-muted-foreground">
             <tr>
               <th className="px-3 py-2 font-medium">{t('reports.code')}</th>
               <th className="px-3 py-2 font-medium">{t('reports.account')}</th>
-              {monthLabels.map((m) => (
-                <th key={m} className="px-2 py-2 text-right font-medium">
-                  {m}
-                </th>
-              ))}
+              {showMonths &&
+                monthLabels.map((m) => (
+                  <th key={m} className="px-2 py-2 text-right font-medium">
+                    {m}
+                  </th>
+                ))}
               <th className="px-3 py-2 text-right font-medium">{t('reports.total')}</th>
             </tr>
           </thead>
@@ -124,11 +129,12 @@ function MonthTable({
                       </span>
                     )}
                   </td>
-                  {MONTH_KEYS.map((mk) => (
-                    <td key={mk} className="px-2 py-2 text-right tabular-nums text-xs">
-                      {money(Number(row.byMonth?.[mk] ?? 0))}
-                    </td>
-                  ))}
+                  {showMonths &&
+                    MONTH_KEYS.map((mk) => (
+                      <td key={mk} className="px-2 py-2 text-right tabular-nums text-xs">
+                        {money(Number(row.byMonth?.[mk] ?? 0))}
+                      </td>
+                    ))}
                   <td className="px-3 py-2 text-right tabular-nums font-medium">
                     {money(Number(row.amount ?? 0))}
                   </td>
@@ -136,8 +142,8 @@ function MonthTable({
               )
             })}
             <tr className="border-t-2 border-border bg-secondary/30">
-              <td colSpan={14} className="px-3 py-2 text-right font-semibold">
-                {t('reports.total')} {title} {money(total)}
+              <td colSpan={colSpan} className="px-3 py-2 text-right font-semibold">
+                {t('reports.totalFor')} {title} {money(total)}
               </td>
             </tr>
           </tbody>
@@ -152,14 +158,21 @@ function BalanceSection({
   lines,
   total,
   defaultOpen = true,
+  layout = 'monthly',
 }: {
   title: string
   lines: BalanceLine[]
   total: number
   defaultOpen?: boolean
+  layout?: 'monthly' | 'annual'
 }) {
-  const { t } = useLocale()
+  const { t, locale } = useLocale()
   const [open, setOpen] = useState(defaultOpen)
+  const monthLabels =
+    locale === 'en'
+      ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+      : MONTH_LABELS
+  const showMonths = layout === 'monthly'
   return (
     <div className="animate-fade-up rounded-xl border border-border bg-card soft-shadow-lift">
       <button
@@ -177,15 +190,23 @@ function BalanceSection({
           {lines.length === 0 ? (
             <p className="px-4 py-4 text-sm text-muted-foreground">{t('reports.emptySection')}</p>
           ) : (
-            <table className="w-full min-w-[560px] text-left text-sm">
+            <table className="w-full min-w-[320px] text-left text-sm">
               <thead className="bg-secondary/40 text-muted-foreground">
                 <tr>
                   <th className="px-3 py-2 font-medium">{t('reports.code')}</th>
                   <th className="px-3 py-2 font-medium">{t('reports.account')}</th>
-                  <th className="px-3 py-2 text-right font-medium">{t('reports.opening')}</th>
-                  <th className="px-3 py-2 text-right font-medium">{t('reports.debits')}</th>
-                  <th className="px-3 py-2 text-right font-medium">{t('reports.credits')}</th>
-                  <th className="px-3 py-2 text-right font-medium">{t('reports.closing')}</th>
+                  {showMonths ? (
+                    <>
+                      {monthLabels.map((m) => (
+                        <th key={m} className="px-2 py-2 text-right font-medium">
+                          {m}
+                        </th>
+                      ))}
+                      <th className="px-3 py-2 text-right font-medium">{t('reports.total')}</th>
+                    </>
+                  ) : (
+                    <th className="px-3 py-2 text-right font-medium">{t('reports.total')}</th>
+                  )}
                 </tr>
               </thead>
               <tbody>
@@ -196,23 +217,30 @@ function BalanceSection({
                   >
                     <td className="px-3 py-2 font-mono text-xs">{row.code ?? '—'}</td>
                     <td className="px-3 py-2">{row.name ?? '—'}</td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {money(Number(row.opening ?? 0))}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {money(Number(row.debits ?? 0))}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums">
-                      {money(Number(row.credits ?? 0))}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums font-medium">
-                      {money(Number(row.closing ?? row.amount ?? 0))}
-                    </td>
+                    {showMonths ? (
+                      <>
+                        {MONTH_KEYS.map((mk) => (
+                          <td key={mk} className="px-2 py-2 text-right tabular-nums text-xs">
+                            {money(Number(row.byMonth?.[mk] ?? 0))}
+                          </td>
+                        ))}
+                        <td className="px-3 py-2 text-right tabular-nums font-medium">
+                          {money(Number(row.closing ?? row.amount ?? 0))}
+                        </td>
+                      </>
+                    ) : (
+                      <td className="px-3 py-2 text-right tabular-nums font-medium">
+                        {money(Number(row.closing ?? row.amount ?? 0))}
+                      </td>
+                    )}
                   </tr>
                 ))}
                 <tr className="border-t-2 border-border bg-secondary/30">
-                  <td colSpan={6} className="px-3 py-2 text-right font-semibold">
-                    {t('reports.total')} {title} {money(total)}
+                  <td
+                    colSpan={showMonths ? 14 : 3}
+                    className="px-3 py-2 text-right font-semibold"
+                  >
+                    {t('reports.totalFor')} {title} {money(total)}
                   </td>
                 </tr>
               </tbody>
@@ -229,11 +257,13 @@ function BalanceMajorGroup({
   sections,
   fallbackLines,
   fallbackTotal,
+  layout = 'monthly',
 }: {
   title: string
   sections?: BalanceSectionGroup[] | null
   fallbackLines: BalanceLine[]
   fallbackTotal: number
+  layout?: 'monthly' | 'annual'
 }) {
   const { t } = useLocale()
   if (sections && sections.length > 0) {
@@ -246,15 +276,18 @@ function BalanceMajorGroup({
             title={String(sec.subcategory || t('reports.emptySection'))}
             lines={sec.lines || []}
             total={Number(sec.total ?? 0)}
+            layout={layout}
           />
         ))}
         <p className="px-1 text-right text-sm font-semibold tabular-nums">
-          {t('reports.total')} {title} {money(fallbackTotal)}
+          {t('reports.totalFor')} {title} {money(fallbackTotal)}
         </p>
       </div>
     )
   }
-  return <BalanceSection title={title} lines={fallbackLines} total={fallbackTotal} />
+  return (
+    <BalanceSection title={title} lines={fallbackLines} total={fallbackTotal} layout={layout} />
+  )
 }
 
 const btnPrimary =
@@ -274,6 +307,7 @@ export default function Reports() {
   const [availableYears, setAvailableYears] = useState<string[]>([])
   const [fiscalYear, setFiscalYear] = useState('')
   const [month, setMonth] = useState<string>('') // '' = whole year
+  const [reportLayout, setReportLayout] = useState<'monthly' | 'annual'>('monthly')
   const [loading, setLoading] = useState(true)
   const [loadingStmt, setLoadingStmt] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -417,6 +451,9 @@ export default function Reports() {
     displayPnl?.operatingExpenses ??
       pnlItems(displayPnl, 'expenseItems').reduce((s, r) => s + Number(r.amount ?? 0), 0),
   )
+  const grossProfit = Number(
+    displayPnl?.grossProfit ?? revTotal - cogsTotal,
+  )
   const net = Number(displayPnl?.net_income ?? displayPnl?.netIncome ?? revTotal - expTotal)
 
   const cfMonthly = useMemo(() => {
@@ -538,6 +575,28 @@ export default function Reports() {
               ))}
             </select>
           </label>
+          <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:items-end">
+            <button
+              type="button"
+              className={cn(
+                reportLayout === 'monthly' ? btnPrimary : btnSecondary,
+                'flex-1 sm:flex-none',
+              )}
+              onClick={() => setReportLayout('monthly')}
+            >
+              {t('reports.layoutMonthly')}
+            </button>
+            <button
+              type="button"
+              className={cn(
+                reportLayout === 'annual' ? btnPrimary : btnSecondary,
+                'flex-1 sm:flex-none',
+              )}
+              onClick={() => setReportLayout('annual')}
+            >
+              {t('reports.layoutAnnual')}
+            </button>
+          </div>
           <div className="flex w-full flex-wrap gap-2 sm:w-auto">
             <button
               type="button"
@@ -556,6 +615,7 @@ export default function Reports() {
           </div>
         </div>
 
+        <p className="mb-4 text-xs text-muted-foreground">{t('reports.layoutHint')}</p>
         {bundle && (
           <p className="mb-4 text-xs text-muted-foreground">
             {bundle.period_label} · {bundle.transaction_count ?? 0} {t('reports.verifiedTxs')}
@@ -618,19 +678,27 @@ export default function Reports() {
               title={t('reports.sectionRevenue')}
               items={pnlItems(displayPnl, 'revenueItems')}
               total={revTotal}
+              layout={reportLayout}
               onRowClick={(row) => void openPnLDrill(row)}
             />
             <MonthTable
               title={t('reports.sectionCogs')}
               items={pnlItems(displayPnl, 'cogsItems')}
               total={cogsTotal}
+              layout={reportLayout}
               onRowClick={(row) => void openPnLDrill(row)}
             />
+            <div className="rounded-xl border border-border bg-secondary/20 px-4 py-3 text-right">
+              <span className="font-display text-lg font-semibold tracking-wide">
+                {t('reports.grossProfit')} {money(grossProfit)}
+              </span>
+            </div>
             <MonthTable
               title={t('reports.sectionOpex')}
               items={pnlItems(displayPnl, 'expenseItems')}
               total={opexTotal}
               showUncategorizedHint
+              layout={reportLayout}
               onRowClick={(row) => void openPnLDrill(row)}
             />
 
@@ -735,18 +803,21 @@ export default function Reports() {
               sections={bundle.balance_sheet.sections?.assets}
               fallbackLines={bundle.balance_sheet.assets || []}
               fallbackTotal={Number(bundle.balance_sheet.totalAssets ?? 0)}
+              layout={reportLayout}
             />
             <BalanceMajorGroup
               title={t('reports.liabilities').toUpperCase()}
               sections={bundle.balance_sheet.sections?.liabilities}
               fallbackLines={bundle.balance_sheet.liabilities || []}
               fallbackTotal={Number(bundle.balance_sheet.totalLiabilities ?? 0)}
+              layout={reportLayout}
             />
             <BalanceMajorGroup
               title={t('reports.equity').toUpperCase()}
               sections={bundle.balance_sheet.sections?.equity}
               fallbackLines={bundle.balance_sheet.equity || []}
               fallbackTotal={Number(bundle.balance_sheet.totalEquity ?? 0)}
+              layout={reportLayout}
             />
           </div>
         )}

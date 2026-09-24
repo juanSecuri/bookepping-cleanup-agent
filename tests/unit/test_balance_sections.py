@@ -12,10 +12,22 @@ from src.domain.models.enums import DocumentSource, TransactionStatus, Transacti
 from src.domain.models.transaction import ExtractionMetadata, FinancialTransaction
 from src.use_cases.emit_period_reports import (
     EmitPeriodReportsUseCase,
+    MONTH_KEYS,
     _acct_bucket,
     build_balance_sections,
+    cumulative_by_month,
     merge_coa_zero_balances,
 )
+
+
+def test_cumulative_by_month_running_sum() -> None:
+    activity = {"01": 10.0, "02": 5.0, "03": -3.0}
+    cum = cumulative_by_month(activity)
+    assert cum["01"] == 10.0
+    assert cum["02"] == 15.0
+    assert cum["03"] == 12.0
+    assert cum["04"] == 12.0
+    assert list(cum.keys()) == MONTH_KEYS
 
 
 def test_merge_coa_zero_balances_adds_missing_accounts() -> None:
@@ -114,6 +126,13 @@ async def test_emit_investing_bumps_non_cash_asset_and_sections(
             name="Sales",
         ),
         _tx(
+            day=date(2025, 4, 15),
+            amount="50.00",
+            tx_type=TransactionType.EXPENSE,
+            code="5010",
+            name="COGS",
+        ),
+        _tx(
             day=date(2025, 5, 10),
             amount="80.00",
             tx_type=TransactionType.EXPENSE,
@@ -146,6 +165,7 @@ async def test_emit_investing_bumps_non_cash_asset_and_sections(
         "3010": {"name": "Owner's Equity", "account_type": "equity", "subcategory": "Equity"},
         "3020": {"name": "Retained Earnings", "account_type": "equity", "subcategory": "Equity"},
         "4010": {"name": "Sales Revenue", "account_type": "income", "subcategory": "Operating Revenue"},
+        "5010": {"name": "Cost of Goods Sold", "account_type": "cogs", "subcategory": "COGS"},
     }
 
     uc = EmitPeriodReportsUseCase(transaction_repo=repo)
@@ -153,13 +173,17 @@ async def test_emit_investing_bumps_non_cash_asset_and_sections(
     monkeypatch.setattr(uc, "_prior_retained_earnings", lambda *_a, **_k: Decimal("0"))
 
     bundle = await uc.execute(wid, fiscal_year="2025")
+    assert float(bundle.pnl["grossProfit"]) == 150.0  # 200 revenue - 50 cogs
+    assert float(bundle.pnl["grossProfitByMonth"]["04"]) == 150.0
     bs = bundle.balance_sheet
     asset_by_code = {a["code"]: a for a in bs["assets"]}
 
     assert "1020" in asset_by_code
     assert float(asset_by_code["1020"]["amount"]) == 0.0
     assert float(asset_by_code["1510"]["amount"]) == 80.0
-    assert float(asset_by_code["1010"]["amount"]) == 120.0  # 200 income - 80 equipment
+    assert float(asset_by_code["1010"]["amount"]) == 70.0  # 200 - 50 cogs - 80 equipment
+    assert float(asset_by_code["1010"]["byMonth"]["04"]) == 150.0  # YTD Apr after revenue-cogs
+    assert float(asset_by_code["1010"]["byMonth"]["05"]) == 70.0
 
     sections = bs["sections"]
     assert sections is not None

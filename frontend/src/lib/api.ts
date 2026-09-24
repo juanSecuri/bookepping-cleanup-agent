@@ -193,6 +193,8 @@ export type PnLReport = {
   totalExpenses?: number
   totalCogs?: number
   netIncome?: number
+  grossProfit?: number
+  grossProfitByMonth?: Record<string, number>
   revenueItems?: PnLLineItem[]
   cogsItems?: PnLLineItem[]
   expenseItems?: PnLLineItem[]

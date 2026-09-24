@@ -6,6 +6,7 @@ const API_BASE = import.meta.env.VITE_API_URL || ''
 
 /**
  * Render Free cold-start banner: pings /health until the instance is awake.
+ * Supabase Free may also be waking — keep the tab open.
  */
 export default function ColdStartBanner() {
   const { t } = useLocale()
