@@ -365,6 +365,8 @@ const es: Dict = {
   'coa.credit': 'Crédito',
   'coa.summary': 'Resumen del plan',
   'coa.total': 'Total cuentas',
+  'coa.summaryHint':
+    'El total es la suma de todos los tipos (Activo, Pasivo, Patrimonio, Ingreso, COGS, Gasto). Antes solo se mostraban 4 tarjetas.',
   'coa.count': 'cuentas',
   'common.save': 'Guardar',
   'common.cancel': 'Cancelar',
@@ -745,6 +747,8 @@ const en: Dict = {
   'coa.credit': 'Credit',
   'coa.summary': 'Chart summary',
   'coa.total': 'Total accounts',
+  'coa.summaryHint':
+    'Total is the sum of every type (Asset, Liability, Equity, Income, COGS, Expense). Previously only 4 cards were shown.',
   'coa.count': 'accounts',
   'common.save': 'Save',
   'common.cancel': 'Cancel',
