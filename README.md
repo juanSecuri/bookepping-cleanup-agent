@@ -4,7 +4,7 @@
 **Demo:** https://ledgerai-0wyy.onrender.com  
 **Repositorio:** https://github.com/juanSecuri/bookepping-cleanup-agent
 
-LedgerAI ayuda a empresas y profesionales a **limpiar años de movimientos bancarios**, clasificarlos en un plan de cuentas y generar reportes listos para revisión contable o impuestos (Balance, Pérdidas y Ganancias, Flujo de efectivo), sin depender de un “agente de IA” de pago como pieza central.
+LedgerAI ayuda a los **clientes de TPC** a **limpiar años de movimientos bancarios**, clasificarlos en un plan de cuentas y generar reportes listos para su CPA o para impuestos (Balance, Pérdidas y Ganancias, Flujo de efectivo), sin depender de un “agente de IA” de pago como pieza central.
 
 ---
 
@@ -12,11 +12,12 @@ LedgerAI ayuda a empresas y profesionales a **limpiar años de movimientos banca
 *(Formulación y gestión de proyectos — componentes del mercado aplicados a LedgerAI)*
 
 ### 1. Compradores (demanda)
-Pequeñas y medianas empresas, dueños de negocio y equipos de apoyo contable (bookkeepers / asesores) que tienen **años de extractos sin ordenar** y necesitan entregar información clara a su CPA o para taxes.  
-Tienen una necesidad concreta: tiempo y claridad. El presupuesto se valida con un modelo SaaS accesible (suscripción), no con software de escritorio caro ni horas manuales infinitas.
+**Clientes de The Profit Catalyst (TPC):** dueños de negocio y empresas que ya trabajan con TPC y tienen **años de extractos sin ordenar**.  
+Necesitan entregar información clara a su CPA o para taxes. Tienen la necesidad (tiempo y claridad) y el presupuesto se canaliza con una **suscripción mensual** sencilla, no con un ERP caro ni con horas manuales interminables.
 
 ### 2. Vendedores (oferta)
-**The Profit Catalyst** ofrece LedgerAI como servicio en la nube: la plataforma “vende” **orden contable + reportes**, no hardware. El valor se entrega de forma continua (actualizaciones, reglas de clasificación, reportes por periodo).
+El producto lo comercializa un **freelancer** (desarrollo y operación del SaaS) hacia los clientes de TPC.  
+TPC / LedgerAI pone a disposición un **servicio digital continuo**: orden contable, reglas de clasificación y reportes por periodo — no se vende un programa de escritorio ni hardware.
 
 ### 3. Bienes y servicios (objeto)
 Un **servicio digital (SaaS)**:
@@ -28,15 +29,16 @@ Un **servicio digital (SaaS)**:
 El “producto” intangible es **confianza en los libros** y velocidad frente al caos de carpetas y extractos.
 
 ### 4. Precio
-Modelo propuesto **SaaS por suscripción** (mensual o anual por empresa / workspace), con posible capa gratuita o piloto interno TPC mientras se valida el mercado.  
-El precio debe equilibrar: costo de hosting, valor frente a horas de bookkeeping manual, y lo que el cliente ya paga a su CPA.  
-*(Cifras finales de lista de precios: por definir con el negocio.)*
+Modelo **SaaS por mes** (suscripción mensual por cliente / empresa), vendido por el freelancer a clientes TPC.  
+El precio equilibra: costo de hosting, valor frente a bookkeeping manual, y lo que el cliente ya paga por apoyo contable.  
+*(Monto exacto de lista: se define en la negociación comercial con cada cliente TPC.)*
 
 ### 5. Canales de distribución
 - **Canal digital principal:** aplicación web en el navegador (PC y celular)  
 - Acceso por enlace / login  
 - Entrada de datos vía Google Drive y carga de archivos  
 - Entrega de resultados en pantalla + Excel para el CPA  
+- **Canal comercial:** venta directa del freelancer a clientes TPC  
 
 No requiere instalar un ERP completo ni comprar licencias de escritorio.
 
@@ -45,8 +47,8 @@ Compite con: QuickBooks (completo pero pesado), Excel manual, servicios de bookk
 LedgerAI se diferencia por: **enfoque en limpieza atrasada**, reportes entendibles, y **bajo costo operativo** (sin depender de APIs de IA de pago para el día a día).
 
 ### 7. Entorno geográfico o digital
-Mercado **digital / global en alcance técnico**, con foco inicial en clientes de TPC (p. ej. negocios en EE. UU. que reportan en inglés/español y entregan a CPA).  
-Opera en la nube; el “lugar” del trato es la plataforma web.
+El trato ocurre en la **plataforma web** (nube).  
+El alcance geográfico lo define el **mercado de los clientes TPC**: donde ellos operen y reporten (local, nacional o internacional). No hay un país fijo de “lanzamiento”; se sigue la cartera de TPC.
 
 ### 8. Información de mercado
 El cliente ve: estado de documentos, transacciones por clasificar, bancos y meses conciliados, y reportes por año/mes.  
@@ -59,8 +61,8 @@ Eso reduce incertidumbre (“¿cuánto gasté en meals?”, “¿cuadramos el ba
 - Cumplimiento alineado a buenas prácticas de privacidad y contratos de servicio SaaS  
 
 ### 10. Capacidad de pago (flujo de dinero)
-En el PMV actual el foco es el **flujo de valor contable** (clasificar → reportar → exportar).  
-El cobro al cliente final (suscripción, factura, tarjeta) es la siguiente capa comercial del SaaS: medios de pago online que cierren la suscripción mensual/anual.
+El cliente TPC paga la **suscripción mensual** al freelancer (medios de pago acordados: transferencia, tarjeta, factura, etc.).  
+Dentro del producto, el “flujo de dinero” que importa al negocio es el contable: clasificar → conciliar → reportar → exportar para el CPA.
 
 ---
 
@@ -72,4 +74,4 @@ Documentación de producto (equipo técnico): [`docs/PROJECT_PARAMETERS.md`](doc
 ---
 
 ## Marca
-**The Profit Catalyst** · Producto: **LedgerAI**
+**The Profit Catalyst** · Producto: **LedgerAI** · Comercialización: **freelancer → clientes TPC** (SaaS mensual)
