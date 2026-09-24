@@ -1,89 +1,75 @@
-# LedgerAI — Bookkeeping Cleanup Agent
+# LedgerAI
 
-**The Profit Catalyst (TPC)** · Producto mínimo viable (PMV) para limpieza contable  
-**Live:** https://ledgerai-0wyy.onrender.com  
-**Repo:** https://github.com/juanSecuri/bookepping-cleanup-agent
+**The Profit Catalyst (TPC)** · Software en la nube (SaaS) para ordenar la contabilidad atrasada  
+**Demo:** https://ledgerai-0wyy.onrender.com  
+**Repositorio:** https://github.com/juanSecuri/bookepping-cleanup-agent
 
-Organiza años de contabilidad atrasada: ingesta (Drive / web / foto / audio) → lectura local → clasificación por plan de cuentas (reglas, **$0 APIs IA**) → conciliación banco×mes → emisión de **Balance Sheet**, **P&L** y **Cash Flow** (mensual / anual, estilo QuickBooks).
-
-> Fuente de verdad = datos del workspace (Drive / extractos). Los Excel/CSV de QuickBooks son **plantilla de formato / CoA de referencia**, no se importan como saldos.
+LedgerAI ayuda a empresas y profesionales a **limpiar años de movimientos bancarios**, clasificarlos en un plan de cuentas y generar reportes listos para revisión contable o impuestos (Balance, Pérdidas y Ganancias, Flujo de efectivo), sin depender de un “agente de IA” de pago como pieza central.
 
 ---
 
-## Decálogo — componentes del mercado (PMV)
+## Decálogo del mercado  
+*(Formulación y gestión de proyectos — componentes del mercado aplicados a LedgerAI)*
 
-| # | Componente | Qué es en LedgerAI | Estado PMV |
-|---|------------|--------------------|------------|
-| 1 | **Ingesta multi-canal** | Google Drive jerárquico, upload web PC/móvil, Excel/CSV, PDF, imagen OCR, audio | ✅ |
-| 2 | **Extracción local ($0)** | pdfplumber → Tesseract; openpyxl/csv; sin LlamaParse/OpenAI obligatorios | ✅ |
-| 3 | **Cola 1-archivo** | Worker secuencial (Render Free 512MB / OOM-safe) | ✅ |
-| 4 | **Plan de cuentas (CoA)** | Seed TPC + reglas keywords; Suspense 9999; aprendizaje pasivo al corregir | ✅ |
-| 5 | **Clasificación bank stmt** | Meals, Gas & Oil, Social Media Ads, Parking & Tolls, Insurance, Bank charges, Owner’s Distributions | ✅ (Sprint 16) |
-| 6 | **Conciliación** | Banco × mes; match movimientos; cadenazo de saldos | ✅ |
-| 7 | **Estados financieros** | P&L + Balance (columnas mes / Total anual) + Cash Flow O/I/F | ✅ |
-| 8 | **Export CPA** | Excel 4 pestañas (P&L, Balance, Cash Flow, Transacciones) | ✅ |
-| 9 | **Web responsive** | Navegador PC/móvil; cold-start banner (Render Free + Supabase Free) | ✅ |
-| 10 | **Auth / multi-usuario** | Supabase JWT + membership (scaffold); invites/roles = backlog v2.1 | 🟡 parcial |
+### 1. Compradores (demanda)
+Pequeñas y medianas empresas, dueños de negocio y equipos de apoyo contable (bookkeepers / asesores) que tienen **años de extractos sin ordenar** y necesitan entregar información clara a su CPA o para taxes.  
+Tienen una necesidad concreta: tiempo y claridad. El presupuesto se valida con un modelo SaaS accesible (suscripción), no con software de escritorio caro ni horas manuales infinitas.
 
-### Fuera de alcance PMV (backlog consciente)
+### 2. Vendedores (oferta)
+**The Profit Catalyst** ofrece LedgerAI como servicio en la nube: la plataforma “vende” **orden contable + reportes**, no hardware. El valor se entrega de forma continua (actualizaciones, reglas de clasificación, reportes por periodo).
 
-- Formularios IRS / tax packs  
-- Contabilidad de doble partida completa (hoy: cash-proxy + CoA)  
-- PWA / app store  
-- Embeddings / LLM de pago como dependencia  
+### 3. Bienes y servicios (objeto)
+Un **servicio digital (SaaS)**:
+- Carga de documentos (Drive, PDF, Excel, foto, etc.)
+- Clasificación de gastos e ingresos según plan de cuentas
+- Conciliación por banco y por mes
+- Reportes tipo QuickBooks (mensual / anual) y export para el contador  
 
----
+El “producto” intangible es **confianza en los libros** y velocidad frente al caos de carpetas y extractos.
 
-## Stack
+### 4. Precio
+Modelo propuesto **SaaS por suscripción** (mensual o anual por empresa / workspace), con posible capa gratuita o piloto interno TPC mientras se valida el mercado.  
+El precio debe equilibrar: costo de hosting, valor frente a horas de bookkeeping manual, y lo que el cliente ya paga a su CPA.  
+*(Cifras finales de lista de precios: por definir con el negocio.)*
 
-| Capa | Tecnología |
-|------|------------|
-| API | FastAPI + Docker en Render Free |
-| UI | React + Vite (served desde el mismo servicio) |
-| DB / Auth / Storage | Supabase Free |
-| OCR | Tesseract eng+spa |
-| Clasificación | `account_rules` deterministas (`rule_coa.py`) |
+### 5. Canales de distribución
+- **Canal digital principal:** aplicación web en el navegador (PC y celular)  
+- Acceso por enlace / login  
+- Entrada de datos vía Google Drive y carga de archivos  
+- Entrega de resultados en pantalla + Excel para el CPA  
 
-Parámetros vivos del producto: [`docs/PROJECT_PARAMETERS.md`](docs/PROJECT_PARAMETERS.md)  
-Handoff CPA 2025: [`docs/HANDOFF_SPRINT_14_CPA_2025.md`](docs/HANDOFF_SPRINT_14_CPA_2025.md)  
-Auth: [`docs/AUTH.md`](docs/AUTH.md)
+No requiere instalar un ERP completo ni comprar licencias de escritorio.
 
----
+### 6. Competencia
+Compite con: QuickBooks (completo pero pesado), Excel manual, servicios de bookkeeping 100 % humanos, y herramientas “AI bookkeeping” caras.  
+LedgerAI se diferencia por: **enfoque en limpieza atrasada**, reportes entendibles, y **bajo costo operativo** (sin depender de APIs de IA de pago para el día a día).
 
-## Arranque local
+### 7. Entorno geográfico o digital
+Mercado **digital / global en alcance técnico**, con foco inicial en clientes de TPC (p. ej. negocios en EE. UU. que reportan en inglés/español y entregan a CPA).  
+Opera en la nube; el “lugar” del trato es la plataforma web.
 
-```bash
-# Python
-uv sync --extra dev
-cp .env.example .env   # SUPABASE_URL + SERVICE_ROLE_KEY
+### 8. Información de mercado
+El cliente ve: estado de documentos, transacciones por clasificar, bancos y meses conciliados, y reportes por año/mes.  
+Eso reduce incertidumbre (“¿cuánto gasté en meals?”, “¿cuadramos el banco?”) y apoya decisiones con el contador.
 
-# API
-uv run python run.py
+### 9. Marco institucional (reglas)
+- Uso responsable de datos financieros del cliente  
+- Control de acceso (login / espacios de trabajo)  
+- Los reportes **apoyan** la declaración de impuestos; no sustituyen el criterio del CPA ni asesoría fiscal legal  
+- Cumplimiento alineado a buenas prácticas de privacidad y contratos de servicio SaaS  
 
-# Frontend (dev)
-cd frontend && npm ci && npm run dev
-```
-
-Seed CoA + reglas ($0):
-
-```bash
-uv run python -m apps.cli.seed_coa --tenant <workspace-uuid>
-# o desde UI: Plan de cuentas → Sembrar + Sembrar reglas
-```
-
-Tras reglas nuevas: **Transacciones → Re-categorizar con reglas**.
+### 10. Capacidad de pago (flujo de dinero)
+En el PMV actual el foco es el **flujo de valor contable** (clasificar → reportar → exportar).  
+El cobro al cliente final (suscripción, factura, tarjeta) es la siguiente capa comercial del SaaS: medios de pago online que cierren la suscripción mensual/anual.
 
 ---
 
-## Pipeline
+## Qué ya entrega el PMV (en una frase)
+Subes o sincronizas extractos → el sistema clasifica y concilia → obtienes Balance, P&L y Cash flow por periodo → exportas para tu CPA.
 
-```
-Drive/Upload → cola → extracción local → classify(CoA)
-  → conciliación banco×mes → Reportes (P&L / Balance / Cash flow) → Export Excel
-```
+Documentación de producto (equipo técnico): [`docs/PROJECT_PARAMETERS.md`](docs/PROJECT_PARAMETERS.md)
 
 ---
 
-## Licencia / marca
-
-Producto de **The Profit Catalyst**. Nombre de producto: **LedgerAI**.
+## Marca
+**The Profit Catalyst** · Producto: **LedgerAI**
