@@ -243,8 +243,14 @@ const es: Dict = {
   'transactions.selectAllFiltered': 'Seleccionar todas ({n})',
   'transactions.clearSelection': 'Limpiar selección',
   'transactions.searchEmpty': 'Ninguna transacción coincide con la búsqueda',
+  'transactions.bookkeeperPass': 'Pasada bookkeeper (auto)',
+  'transactions.bookkeeperPassConfirm':
+    'El agente categorizará todas las pendientes/suspense hasta el tope del workspace y aprobará las de alta confianza. Tú solo revisas lo que quede. ¿Continuar?',
+  'transactions.bookkeeperPassDone':
+    'Bookkeeper: {cat} categorizadas, {ok} auto-aprobadas, {sus} siguen en suspense (≤{year})',
   'transactions.year': 'Año',
   'transactions.yearAll': 'Todos',
+  'transactions.yearAllThrough': 'Todos ≤ {year}',
   'transactions.purgeBeyond': 'Quitar años posteriores a {year}',
   'transactions.purgeBeyondConfirm':
     '¿Eliminar documentos, movimientos y transacciones posteriores a {year}? No borra el workspace ni los datos ≤ {year}.',
@@ -617,8 +623,14 @@ const en: Dict = {
   'transactions.selectAllFiltered': 'Select all ({n})',
   'transactions.clearSelection': 'Clear selection',
   'transactions.searchEmpty': 'No transactions match this search',
+  'transactions.bookkeeperPass': 'Bookkeeper pass (auto)',
+  'transactions.bookkeeperPassConfirm':
+    'The agent will categorize all pending/suspense rows through the workspace year cap and auto-approve high-confidence ones. You only review leftovers. Continue?',
+  'transactions.bookkeeperPassDone':
+    'Bookkeeper: {cat} categorized, {ok} auto-approved, {sus} still in suspense (≤{year})',
   'transactions.year': 'Year',
   'transactions.yearAll': 'All',
+  'transactions.yearAllThrough': 'All ≤ {year}',
   'transactions.purgeBeyond': 'Remove years after {year}',
   'transactions.purgeBeyondConfirm':
     'Delete documents, movements, and transactions after {year}? Keeps the workspace and data ≤ {year}.',

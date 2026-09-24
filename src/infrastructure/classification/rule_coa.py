@@ -2,7 +2,8 @@
 Rule-based Chart of Accounts classifier — $0, no OpenAI embeddings.
 
 Flow: clean description → match account_rules (DB) → else builtin seeds → Suspense 9999
-(or income default 4040 when direction=income).
+(or income default 4020 Services when direction=income — never vague Other Income for deposits).
+Personal / non-business merchants → Owner's Distributions 3030 (client profile).
 
 Passive learning: when user assigns a real CoA, persist a keyword rule.
 Direction-aware: credits/income prefer revenue accounts; debits/expenses prefer expense/COGS.
@@ -19,10 +20,12 @@ from src.infrastructure.repositories.supabase_client import get_supabase_client
 
 SUSPENSE_CODE = "9999"
 SUSPENSE_NAME = "Gastos No Categorizados (Suspense)"
-INCOME_DEFAULT_CODE = "4040"
-INCOME_DEFAULT_NAME = "Other Income"
+# Deposits / unknown credits → operating revenue (Services), never vague Other Income
+INCOME_DEFAULT_CODE = "4020"
+INCOME_DEFAULT_NAME = "Coaching & Consulting Services"
 SALES_REVENUE_CODE = "4010"
 SERVICE_REVENUE_CODE = "4020"
+OTHER_INCOME_CODE = "4040"
 
 Direction = Literal["income", "expense"]
 
@@ -93,17 +96,51 @@ _EXPENSE_MERCHANT_HINTS: tuple[str, ...] = (
     "kit.com",
 )
 
+_PERSONAL_MERCHANT_HINTS: tuple[str, ...] = (
+    "forever 21",
+    "nail lounge",
+    "nail ",
+    "salon",
+    "sephora",
+    "ulta",
+    "fresh market",
+    "publix",
+    "whole foods",
+    "trader joe",
+    "grocery",
+    "netflix",
+    "spotify",
+    "disney+",
+    "disney plus",
+    "hulu",
+    "roblox",
+    "steam games",
+    "playstation",
+    "xbox",
+    "clothing",
+    "boutique",
+)
+
 
 def looks_like_expense_merchant(cleaned: str) -> bool:
-    """True when description looks like OpEx/COGS vendor, not operating revenue."""
+    """True when description looks like OpEx/COGS/personal vendor, not operating revenue."""
     if not cleaned:
         return False
     if any(hint in cleaned for hint in _EXPENSE_MERCHANT_HINTS):
         return True
-    # Toast / Square POS food vendors often look like "tst*name" or "sq *name"
+    if looks_like_personal_merchant(cleaned):
+        return True
+    # Toast / Square POS food vendors often look like "tst*name"
     if cleaned.startswith("tst") or " tst " in f" {cleaned} ":
         return True
     return False
+
+
+def looks_like_personal_merchant(cleaned: str) -> bool:
+    """Non-business spend for a consulting/bookkeeping firm → Owner's Distributions."""
+    if not cleaned:
+        return False
+    return any(hint in cleaned for hint in _PERSONAL_MERCHANT_HINTS)
 
 
 # Bootstrap seeds when tenant has no account_rules yet
@@ -145,6 +182,9 @@ DEFAULT_SEED_RULES: list[tuple[list[str], str, str]] = [
             "diner",
             "bistro",
             "cantina",
+            "dunkin",
+            "donut",
+            "coffee",
         ],
         "6050",
         "Meals Expense",
@@ -246,14 +286,22 @@ DEFAULT_SEED_RULES: list[tuple[list[str], str, str]] = [
         "Sales",
     ),
     (
-        ["service fee income", "consulting income", "professional fee", "retainer", "coaching"],
+        [
+            "service fee income",
+            "consulting income",
+            "professional fee",
+            "retainer",
+            "coaching",
+            "deposit",
+            "wire in",
+            "wire credit",
+            "ach credit",
+            "incoming wire",
+            "mobile deposit",
+            "remote deposit",
+        ],
         "4020",
         "Coaching & Consulting Services",
-    ),
-    (
-        ["deposit", "wire in", "wire credit", "ach credit", "incoming wire", "mobile deposit", "remote deposit"],
-        "4040",
-        "Other Ordinary Income",
     ),
     (["costco", "walmart", "target", "amazon"], "5010", "Cost of Goods Sold"),
     (
@@ -271,6 +319,21 @@ DEFAULT_SEED_RULES: list[tuple[list[str], str, str]] = [
             "cvs",
             "walgreens",
             "serenity spa",
+            "forever 21",
+            "nail lounge",
+            "nail",
+            "salon",
+            "sephora",
+            "ulta",
+            "fresh market",
+            "publix",
+            "whole foods",
+            "trader joe",
+            "grocery",
+            "netflix",
+            "spotify",
+            "disney",
+            "hulu",
         ],
         "3030",
         "Owner's Distributions",
@@ -578,6 +641,41 @@ class RuleCoAClassifier:
             ).eq("id", row["id"]).execute()
             patched += 1
 
+        # Legacy deposits parked on Other Income 4040 → Services 4020
+        deposit_markers = {
+            "deposit",
+            "wire in",
+            "wire credit",
+            "ach credit",
+            "incoming wire",
+            "mobile deposit",
+            "remote deposit",
+        }
+        rows_4040 = (
+            client.table("account_rules")
+            .select("id,keywords,account_code,source")
+            .eq("tenant_id", str(tenant_id))
+            .eq("source", "seed")
+            .eq("account_code", OTHER_INCOME_CODE)
+            .eq("is_active", True)
+            .execute()
+        )
+        patched_4040 = 0
+        for row in rows_4040.data or []:
+            kws = {str(k).lower() for k in (row.get("keywords") or [])}
+            if not kws.intersection(deposit_markers):
+                continue
+            client.table("account_rules").update(
+                {
+                    "account_code": SERVICE_REVENUE_CODE,
+                    "account_name": accounts.get(
+                        SERVICE_REVENUE_CODE, INCOME_DEFAULT_NAME
+                    ),
+                    "updated_at": datetime.now(timezone.utc).isoformat(),
+                }
+            ).eq("id", row["id"]).execute()
+            patched_4040 += 1
+
         # Ensure new income seed rows exist (idempotent by keyword overlap check)
         existing = (
             client.table("account_rules")
@@ -609,6 +707,7 @@ class RuleCoAClassifier:
             "patched_cash_to_income": patched,
             "inserted_income_rules": inserted,
             "merged_income_keywords": merged,
+            "patched_4040_deposits_to_services": patched_4040,
         }
 
     def _collect_existing_keywords(self, tenant_id: uuid.UUID) -> set[str]:
@@ -953,6 +1052,9 @@ class RuleCoAClassifier:
             if effective_direction == "income":
                 if code in BLOCK_FOR_INCOME or family in {"expense", "cogs"}:
                     continue
+                # Prefer Services/Sales over vague Other Income
+                if code == OTHER_INCOME_CODE:
+                    conf = max(conf - 0.15, 0.4)
                 if family == "income":
                     conf = min(conf + 0.05, 0.99)
             elif effective_direction == "expense":
@@ -980,13 +1082,28 @@ class RuleCoAClassifier:
                 best = candidate
 
         if best:
-            return best
+            # Never leave expense merchants on Other Income
+            if best.code == OTHER_INCOME_CODE and looks_like_expense_merchant(cleaned):
+                best = None
+            else:
+                return best
+
+        # Personal / non-business spend → equity distributions (client profile)
+        if effective_direction != "income" and looks_like_personal_merchant(cleaned):
+            return CoAMatch(
+                code="3030",
+                name=accounts.get("3030", "Owner's Distributions"),
+                confidence=0.72,
+                matched_keyword=vendor,
+                source="personal_profile",
+                vendor=vendor,
+            )
 
         if effective_direction == "income":
             return CoAMatch(
                 code=INCOME_DEFAULT_CODE,
                 name=accounts.get(INCOME_DEFAULT_CODE, INCOME_DEFAULT_NAME),
-                confidence=0.35,
+                confidence=0.45,
                 matched_keyword=vendor,
                 source="income_default",
                 vendor=vendor,

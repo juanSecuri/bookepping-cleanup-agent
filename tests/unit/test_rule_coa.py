@@ -15,6 +15,7 @@ from src.infrastructure.classification.rule_coa import (
     extract_learn_keyword,
     extract_vendor,
     looks_like_expense_merchant,
+    looks_like_personal_merchant,
 )
 
 
@@ -62,7 +63,7 @@ def test_code_family() -> None:
 
 
 def test_income_default_constants() -> None:
-    assert INCOME_DEFAULT_CODE == "4040"
+    assert INCOME_DEFAULT_CODE == "4020"
     assert SALES_REVENUE_CODE == "4010"
 
 
@@ -190,3 +191,15 @@ def test_facebk_description_is_expense_merchant() -> None:
     assert looks_like_expense_merchant(cleaned)
     assert looks_like_expense_merchant(clean_description("TST* LA DIOSA TAQUERIA MIAMI"))
     assert looks_like_expense_merchant(clean_description("HIS*HISCOX INC"))
+
+
+def test_personal_merchants_map_to_distributions_profile() -> None:
+    assert looks_like_personal_merchant(clean_description("FOREVER 21 NAIL LOUNGE"))
+    assert looks_like_personal_merchant(clean_description("THE FRESH MARKET 221 DORAL"))
+    assert not looks_like_personal_merchant(clean_description("GOOGLE *ADS"))
+
+
+def test_deposits_seed_to_services_not_other_income() -> None:
+    for keywords, code, _name in DEFAULT_SEED_RULES:
+        if any(k.lower() == "deposit" for k in keywords):
+            assert code == "4020", f"deposits must be Services 4020, got {code}"

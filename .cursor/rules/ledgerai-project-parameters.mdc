@@ -24,11 +24,14 @@ Antes de implementar features, deploys o “mejoras”, alinear con:
 
 El agente actúa con autonomía (código + reglas por workspace; sin LLM de pago obligatorio):
 
-1. **Clasificar por descripción:** según qué se compró / pagó (extracto, vendor, memo) → cuenta contable correcta.
-2. **Ingresos y gastos por perfil de cliente:** cada workspace/cliente tiene su CoA y reglas; no un plan único genérico.
-3. **Conciliaciones bancarias:** banco × mes / cuenta, cadenazo y pendientes.
-4. **Reportes:** elaborar Balance general y Estado de resultados (P&L) — y Cash flow — por periodo (mensual/anual).
+1. **Clasificar por descripción:** según qué se compró / pagó → cuenta contable correcta.
+2. **Perfil de cliente:** ingresos/gastos según CoA del workspace; no-negocio → Owner's Distributions; depósitos → Sales/Services (no Other Income); gastos mal puestos en Other Income → reclasificar.
+3. **Conciliaciones bancarias:** banco × mes / cuenta.
+4. **Reportes:** Balance + P&L (+ Cash flow) por periodo.
+5. **Ejecuta todo;** el humano solo verifica y aprueba proceder. Usar **Pasada bookkeeper** para masivo ≤ tope de año.
 
-No dejar al usuario clasificar línea a línea como flujo principal. Mejorar reglas, recategorizar, conciliar y reportes hasta *full verificado*.
+**n8n:** no requerido para el core contable; solo eventual orquestación de canales. Reforzar reglas/pasada en LedgerAI primero.
+
+No dejar al usuario clasificar línea a línea como flujo principal.
 
 Si el usuario pide algo fuera de orden, avisar el trade-off y ofrecer meterlo al backlog del `PROJECT_PARAMETERS.md`.

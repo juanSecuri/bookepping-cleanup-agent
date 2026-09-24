@@ -831,7 +831,13 @@ async def recategorize_transactions(
     user: AuthUser = Depends(get_current_user),
 ) -> dict:
     """Re-run rule CoA on pending/suspense txs (direction-aware). Does not auto-verify."""
-    from src.infrastructure.classification.rule_coa import SUSPENSE_CODE, RuleCoAClassifier
+    from src.infrastructure.classification.rule_coa import (
+        OTHER_INCOME_CODE,
+        SUSPENSE_CODE,
+        RuleCoAClassifier,
+        clean_description,
+        looks_like_expense_merchant,
+    )
 
     tid = uuid.UUID(body.workspace_id)
     assert_workspace_access(user, tid)
@@ -848,7 +854,9 @@ async def recategorize_transactions(
             break
         code = tx.chart_of_accounts_code or tx.ai_suggested_account_code or ""
         low_conf = tx.category_confidence is not None and float(tx.category_confidence) < 0.4
-        is_suspense = code == SUSPENSE_CODE or low_conf
+        cleaned = clean_description(tx.description or "")
+        bad_other_income = code == OTHER_INCOME_CODE and looks_like_expense_merchant(cleaned)
+        is_suspense = code == SUSPENSE_CODE or low_conf or bad_other_income
         if body.only_suspense and not is_suspense:
             # Also fix income wrongly parked on Cash 1010
             if not (
@@ -860,6 +868,8 @@ async def recategorize_transactions(
         direction = (
             "income" if tx.transaction_type == TransactionType.INCOME else "expense"
         )
+        if bad_other_income:
+            direction = "expense"
         match = coa.classify(tid, tx.description or "", direction=direction)
         if match.code == code and abs(float(match.confidence) - float(tx.category_confidence or 0)) < 0.01:
             continue
@@ -884,6 +894,29 @@ async def recategorize_transactions(
         "expense": expense_n,
         "engine": "local_rules+direction",
     }
+
+
+class BookkeeperPassBody(BaseModel):
+    workspace_id: str
+    auto_approve_min_confidence: float = 0.72
+    limit: int = 8000
+
+
+@api.post("/transactions/bookkeeper-pass")
+async def bookkeeper_pass(
+    body: BookkeeperPassBody,
+    user: AuthUser = Depends(get_current_user),
+) -> dict:
+    """Autonomous bookkeeper: categorize ≤ workspace max year and auto-verify high confidence."""
+    from src.use_cases.bookkeeper_pass import BookkeeperPassUseCase
+
+    tid = uuid.UUID(body.workspace_id)
+    assert_workspace_access(user, tid)
+    return await BookkeeperPassUseCase().execute(
+        tid,
+        auto_approve_min_confidence=body.auto_approve_min_confidence,
+        limit=min(body.limit, 15000),
+    )
 
 
 # Legacy PATCH for compatibility

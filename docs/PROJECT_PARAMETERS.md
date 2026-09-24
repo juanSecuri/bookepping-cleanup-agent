@@ -89,13 +89,25 @@ El agente **no espera** que el usuario clasifique a mano cada línea. Tiene auto
    A partir de lo que se compró o se pagó (texto del extracto / vendor / memo), inferir la **cuenta contable correcta** del plan de cuentas (reglas + aprendizaje; sin depender de APIs de IA de pago).
 
 2. **Ingresos y gastos según perfil del cliente**  
-   Cada workspace/cliente tiene su propio CoA, reglas y tope de año si aplica. Clasificar **ingresos vs gastos** acorde al perfil de ese cliente (no un plan genérico único para todos).
+   Cada workspace/cliente tiene su propio CoA, reglas y tope de año si aplica. Clasificar **ingresos vs gastos** acorde al perfil de ese cliente (no un plan genérico único para todos).  
+   - Gastos **no relacionados con el negocio** → **Owner's Distributions** (equity).  
+   - **Depósitos / créditos de cliente** → ingresos operativos (**Sales / Services**), **no** Other Income.  
+   - Lo que está en Other Income pero es gasto (por descripción) → reclasificar a gasto correcto.
 
 3. **Conciliaciones bancarias**  
    Cuadrar movimientos banco × mes / cuenta (cadenazo de saldos, pendientes, detalle), no solo listar transacciones.
 
 4. **Reportes financieros**  
    Elaborar y emitir **Balance general** y **Estado de resultados (P&L)** (y Cash flow) por periodo — mensual y anual — listos para revisión CPA.
+
+5. **Rol operativo**  
+   El agente **ejecuta** el ciclo contable del cliente (organizar registros → contabilizar → estados). Juan/CPA **verifica** y dice “procede”; no hace el trabajo línea a línea como en QuickBooks manual.
+
+**Pasada bookkeeper:** endpoint/UI `bookkeeper-pass` — categoriza ≤ `max_fiscal_year` del workspace y auto-aprueba alta confianza; lo restante queda para validación humana.
+
+### ¿n8n u otra herramienta aparte?
+
+**No es necesario ahora.** El pipeline (cola DB → reglas CoA → conciliación → reportes) vive en LedgerAI. n8n/Zapier serían opcionales después solo para orquestar canales externos (email → Drive), no para reemplazar la contabilidad. Si el código local no alcanza un caso, se refuerza reglas/pasada bookkeeper o un fallback LLM opcional documentado en costos — no se mueve el core a n8n.
 
 Si una capacidad de las cuatro no está *full verificada*, el sprint activo debe cerrarla antes de abrir frentes cosméticos.
 

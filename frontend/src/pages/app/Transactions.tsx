@@ -92,14 +92,27 @@ export default function Transactions() {
   const [maxFiscalYear, setMaxFiscalYear] = useState<number | null>(null)
   const [purging, setPurging] = useState(false)
   const [search, setSearch] = useState('')
+  const [bookkeeping, setBookkeeping] = useState(false)
 
   const load = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
+      const ws = await api.getWorkspace(workspaceId).catch(() => null)
+      const ceiling =
+        ws?.max_fiscal_year != null && !Number.isNaN(Number(ws.max_fiscal_year))
+          ? Number(ws.max_fiscal_year)
+          : null
+      setMaxFiscalYear(ceiling)
+
+      // Empty yearFilter = all years up to workspace ceiling (e.g. ≤2025)
       const dateFrom = yearFilter ? `${yearFilter}-01-01` : undefined
-      const dateTo = yearFilter ? `${yearFilter}-12-31` : undefined
-      const [list, c, coa, yearsRes, ws] = await Promise.all([
+      const dateTo = yearFilter
+        ? `${yearFilter}-12-31`
+        : ceiling != null
+          ? `${ceiling}-12-31`
+          : undefined
+      const [list, c, coa, yearsRes] = await Promise.all([
         api.listTransactions({
           tenant_id: workspaceId,
           status: tab === 'all' || tab === 'suspense' ? undefined : tab,
@@ -111,29 +124,15 @@ export default function Transactions() {
         api.transactionCounts(workspaceId),
         api.chartOfAccounts(workspaceId).catch(() => []),
         api.availableYears(workspaceId).catch(() => ({ years: [] as string[] })),
-        api.getWorkspace(workspaceId).catch(() => null),
       ])
       setRows(Array.isArray(list) ? list : [])
       setCounts(c || {})
       setAccounts(Array.isArray(coa) ? coa : [])
       const years = (yearsRes?.years || []).map(String).sort()
-      setAvailableYears(years)
-      const ceiling =
-        ws?.max_fiscal_year != null && !Number.isNaN(Number(ws.max_fiscal_year))
-          ? Number(ws.max_fiscal_year)
-          : null
-      setMaxFiscalYear(ceiling)
+      setAvailableYears(
+        ceiling != null ? years.filter((y) => Number(y) <= ceiling) : years,
+      )
       setSelected(new Set())
-      // Prefer workspace ceiling, else 2025 if present in data, else newest ≤ ceiling
-      setYearFilter((prev) => {
-        if (prev) return prev
-        if (ceiling && years.includes(String(ceiling))) return String(ceiling)
-        if (years.includes('2025')) return '2025'
-        const capped = ceiling
-          ? years.filter((y) => Number(y) <= ceiling)
-          : years
-        return capped.length ? capped[capped.length - 1] : ''
-      })
     } catch (e) {
       setError(e instanceof Error ? e.message : t('common.error'))
       setRows([])
@@ -230,6 +229,29 @@ export default function Transactions() {
       await load()
     } catch (e) {
       setError(e instanceof Error ? e.message : t('common.error'))
+    }
+  }
+
+  async function runBookkeeperPass() {
+    const ok = window.confirm(t('transactions.bookkeeperPassConfirm'))
+    if (!ok) return
+    setBookkeeping(true)
+    setError(null)
+    setInfo(null)
+    try {
+      const res = await api.bookkeeperPass(workspaceId)
+      setInfo(
+        t('transactions.bookkeeperPassDone')
+          .replace('{cat}', String(res.categorized ?? 0))
+          .replace('{ok}', String(res.auto_approved ?? 0))
+          .replace('{sus}', String(res.left_suspense ?? 0))
+          .replace('{year}', String(res.max_year ?? maxFiscalYear ?? 2025)),
+      )
+      await load()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('common.error'))
+    } finally {
+      setBookkeeping(false)
     }
   }
 
@@ -470,7 +492,11 @@ export default function Transactions() {
             value={yearFilter}
             onChange={(e) => setYearFilter(e.target.value)}
           >
-            <option value="">{t('transactions.yearAll')}</option>
+            <option value="">
+              {maxFiscalYear != null
+                ? t('transactions.yearAllThrough').replace('{year}', String(maxFiscalYear))
+                : t('transactions.yearAll')}
+            </option>
             {availableYears.map((y) => (
               <option key={y} value={y}>
                 {y}
@@ -505,6 +531,14 @@ export default function Transactions() {
             {t('transactions.recategorize')}
           </button>
         )}
+        <button
+          type="button"
+          disabled={bookkeeping}
+          onClick={() => void runBookkeeperPass()}
+          className="cursor-pointer rounded-lg bg-primary px-3 py-1.5 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-50"
+        >
+          {bookkeeping ? t('common.loading') : t('transactions.bookkeeperPass')}
+        </button>
         <button
           type="button"
           disabled={purging}

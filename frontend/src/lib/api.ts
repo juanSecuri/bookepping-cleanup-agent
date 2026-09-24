@@ -409,6 +409,25 @@ export const api = {
         body: JSON.stringify({ workspace_id, only_suspense, limit: 5000 }),
       },
     ),
+  bookkeeperPass: (
+    workspace_id: string,
+    opts?: { auto_approve_min_confidence?: number; limit?: number },
+  ) =>
+    request<{
+      categorized?: number
+      auto_approved?: number
+      left_suspense?: number
+      fixed_other_income?: number
+      max_year?: number
+      scanned?: number
+    }>('/api/transactions/bookkeeper-pass', {
+      method: 'POST',
+      body: JSON.stringify({
+        workspace_id,
+        auto_approve_min_confidence: opts?.auto_approve_min_confidence ?? 0.72,
+        limit: opts?.limit ?? 8000,
+      }),
+    }),
 
   chartOfAccounts: (workspace_id: string) =>
     request<ChartAccount[]>(`/api/chart-of-accounts?workspace_id=${encodeURIComponent(workspace_id)}`),
