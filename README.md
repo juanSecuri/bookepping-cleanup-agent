@@ -48,7 +48,8 @@ LedgerAI se diferencia por: **enfoque en limpieza atrasada**, reportes entendibl
 
 ### 7. Entorno geográfico o digital
 El trato ocurre en la **plataforma web** (nube).  
-El alcance geográfico lo define el **mercado de los clientes TPC**: donde ellos operen y reporten (local, nacional o internacional). No hay un país fijo de “lanzamiento”; se sigue la cartera de TPC.
+**Mercado inicial (mientras tanto):** Estados Unidos · Florida · Miami — clientes TPC en esa zona (negocios locales y de la región).  
+A futuro el alcance puede ampliarse según donde operen más clientes de la cartera TPC.
 
 ### 8. Información de mercado
 El cliente ve: estado de documentos, transacciones por clasificar, bancos y meses conciliados, y reportes por año/mes.  
