@@ -81,6 +81,24 @@ El agente debe entonces:
 
 Sigue siendo un **agente de bookkeeping cleanup**, pero la inteligencia debe ser **mayormente determinística** (código + reglas + OCR open source). Un LLM de pago solo como **fallback opcional** y documentado en costos — no como requisito para que el producto funcione.
 
+### Autonomía del agente (mandato empresa — 2026-09-24)
+
+El agente **no espera** que el usuario clasifique a mano cada línea. Tiene autonomía para:
+
+1. **Clasificar por descripción**  
+   A partir de lo que se compró o se pagó (texto del extracto / vendor / memo), inferir la **cuenta contable correcta** del plan de cuentas (reglas + aprendizaje; sin depender de APIs de IA de pago).
+
+2. **Ingresos y gastos según perfil del cliente**  
+   Cada workspace/cliente tiene su propio CoA, reglas y tope de año si aplica. Clasificar **ingresos vs gastos** acorde al perfil de ese cliente (no un plan genérico único para todos).
+
+3. **Conciliaciones bancarias**  
+   Cuadrar movimientos banco × mes / cuenta (cadenazo de saldos, pendientes, detalle), no solo listar transacciones.
+
+4. **Reportes financieros**  
+   Elaborar y emitir **Balance general** y **Estado de resultados (P&L)** (y Cash flow) por periodo — mensual y anual — listos para revisión CPA.
+
+Si una capacidad de las cuatro no está *full verificada*, el sprint activo debe cerrarla antes de abrir frentes cosméticos.
+
 ---
 
 ## 2. Canales de entrada (multi-herramienta)
@@ -258,6 +276,7 @@ Env: `EXTRACTION_MODE=local`, `LEDGERAI_UPLOAD_DIR=/var/data/ledgerai_uploads`.
 | **2026-09-08** | **Empresa (vía Juan)** | Gastos sin categoría → buscar proveedor y categorizar; pagos/ingresos → cuenta ingresos; Balance con todas las cuentas; P&L drill detalle; conciliación banco×mes; reportes año/mes estilo QuickBooks para **CPA/SPA taxes 2025** | **Sprint 14 CPA Taxes** |
 | **2026-09-24** | **Empresa (vía Juan)** | P&L + Balance Sheet **formato QuickBooks** (Excel plantilla: mensual columnas + anual Total). Datos reales = Drive/LedgerAI, no números del Excel. Infra: **Render Free** (ya no Starter) + Supabase Free despertando. | **Sprint 15 QB Reports** |
 | **2026-09-24 (PM)** | **Empresa (vía Juan)** | Reportes más “original” QB (jerarquía); CoA CSV TPC; Cash Flow estilo QB; reglas bank stmt: meals, gas&oil, social media, insurance, parking, CC interest, spa→distributions equity; MVP + decálogo GitHub | **Sprint 16 CoA+QB+MVP** |
+| **2026-09-24 (PM+)** | **Empresa (vía Juan)** | Autonomía del agente: clasificar por descripción compra/pago → CoA; ingresos/gastos por perfil de cliente; conciliaciones bancarias; elaborar Balance + P&L (y CF) | **Mandato autonomía** |
 
 ---
 

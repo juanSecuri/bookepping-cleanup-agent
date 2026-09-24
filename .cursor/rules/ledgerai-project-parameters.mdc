@@ -1,5 +1,5 @@
 ---
-description: LedgerAI project parameters — sprints, verification, costs, multi-channel ingest
+description: LedgerAI project parameters — sprints, agent autonomy, verification, costs
 alwaysApply: true
 ---
 
@@ -19,5 +19,16 @@ Antes de implementar features, deploys o “mejoras”, alinear con:
 6. **Deploy:** Render free es viable (con sleep/cold start/512MB); **procesar 1 archivo a la vez** vía cola en DB; no improvisar sin checklist del doc.
 7. No volverse loco: priorizar y cerrar una tarea bien antes de la siguiente.
 8. Feedback 2026-08-26 (arquitectura/contable): cola async → `account_rules`/suspense → cadenazo/Owner's Draws → vistas SQL Balance/Cash flow. Split-screen/TanStack/exceljs = backlog.
+
+## Autonomía del agente (empresa 2026-09-24) — no negociable
+
+El agente actúa con autonomía (código + reglas por workspace; sin LLM de pago obligatorio):
+
+1. **Clasificar por descripción:** según qué se compró / pagó (extracto, vendor, memo) → cuenta contable correcta.
+2. **Ingresos y gastos por perfil de cliente:** cada workspace/cliente tiene su CoA y reglas; no un plan único genérico.
+3. **Conciliaciones bancarias:** banco × mes / cuenta, cadenazo y pendientes.
+4. **Reportes:** elaborar Balance general y Estado de resultados (P&L) — y Cash flow — por periodo (mensual/anual).
+
+No dejar al usuario clasificar línea a línea como flujo principal. Mejorar reglas, recategorizar, conciliar y reportes hasta *full verificado*.
 
 Si el usuario pide algo fuera de orden, avisar el trade-off y ofrecer meterlo al backlog del `PROJECT_PARAMETERS.md`.
