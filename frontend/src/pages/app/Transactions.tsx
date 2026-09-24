@@ -466,7 +466,7 @@ export default function Transactions() {
         >
           {t('transactions.purgeBeyond').replace(
             '{year}',
-            String(maxFiscalYear ?? yearFilter || 2025),
+            String(maxFiscalYear ?? (yearFilter || 2025)),
           )}
         </button>
       </div>
