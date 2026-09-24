@@ -94,6 +94,21 @@ _EXPENSE_MERCHANT_HINTS: tuple[str, ...] = (
     "interest charge",
     "finance charge",
     "kit.com",
+    "costco",
+    "walmart",
+    "target",
+    "amazon",
+    "liquidat",
+    "toastmasters",
+    "fogo",
+    "tocas",
+    "twitter",
+    " x.com",
+    "x.com/",
+    "parson",
+    "esquire",
+    "nuceria",
+    "ahpnl",
 )
 
 _PERSONAL_MERCHANT_HINTS: tuple[str, ...] = (
@@ -252,6 +267,8 @@ DEFAULT_SEED_RULES: list[tuple[list[str], str, str]] = [
             "tiktok",
             "social media",
             "linkedin",
+            "twitter",
+            "x.com",
         ],
         "6065",
         "Social Media Ads",
@@ -439,6 +456,9 @@ SOCIAL_ADS_MARKERS = frozenset(
         "tiktok ads",
         "tiktok",
         "social media",
+        "linkedin",
+        "twitter",
+        "x.com",
     }
 )
 TRAVEL_MARKERS = frozenset(
@@ -1103,8 +1123,24 @@ class RuleCoAClassifier:
         accounts = self._load_accounts(tenant_id)
         rules = self._load_rules(tenant_id)
 
-        effective_direction = direction
-        if direction == "income" and looks_like_expense_merchant(cleaned):
+        # If any expense/COGS/distributions keyword hits the description, force expense
+        # (bank feeds often flip sign and mark Costco/restaurants as "income").
+        expense_kw_hit = False
+        for rule in rules:
+            code = str(rule.get("account_code") or "")
+            family = _code_family(code)
+            if family not in {"expense", "cogs"} and code != "3030":
+                continue
+            for kw in rule.get("keywords") or []:
+                k = str(kw).lower()
+                if k and (k in cleaned or (vendor and k in vendor)):
+                    expense_kw_hit = True
+                    break
+            if expense_kw_hit:
+                break
+
+        effective_direction: Direction | None = direction
+        if expense_kw_hit or looks_like_expense_merchant(cleaned) or looks_like_personal_merchant(cleaned):
             effective_direction = "expense"
 
         best: CoAMatch | None = None
@@ -1113,7 +1149,6 @@ class RuleCoAClassifier:
             if isinstance(keywords, str):
                 keywords = [keywords]
             hits = [kw for kw in keywords if kw and str(kw).lower() in cleaned]
-            # Also try vendor phrase against each keyword (provider lookup)
             if not hits and vendor:
                 hits = [kw for kw in keywords if kw and str(kw).lower() in vendor]
             if not hits:
@@ -1122,18 +1157,15 @@ class RuleCoAClassifier:
             conf = min(0.55 + 0.08 * len(hits) + 0.02 * len(best_kw), 0.97)
             if rule.get("source") == "learned":
                 conf = min(conf + 0.03, 0.98)
-            # Vendor exact-ish boost
             if vendor and best_kw and best_kw in vendor:
                 conf = min(conf + 0.04, 0.99)
 
             code = str(rule["account_code"])
             family = _code_family(code)
 
-            # Direction filter: income credits must not land on Cash / OpEx
             if effective_direction == "income":
-                if code in BLOCK_FOR_INCOME or family in {"expense", "cogs"}:
+                if code in BLOCK_FOR_INCOME or family in {"expense", "cogs", "equity"}:
                     continue
-                # Prefer Services/Sales over vague Other Income
                 if code == OTHER_INCOME_CODE:
                     conf = max(conf - 0.15, 0.4)
                 if family == "income":
@@ -1159,17 +1191,18 @@ class RuleCoAClassifier:
                 and (candidate.matched_keyword or "")
                 and len(candidate.matched_keyword or "") > len(best.matched_keyword or "")
             ):
-                # Prefer longer keyword (e.g. "google ads" over "google" on Marketing)
                 best = candidate
 
-        if best:
-            # Never leave expense merchants on Other Income
-            if best.code == OTHER_INCOME_CODE and looks_like_expense_merchant(cleaned):
-                best = None
-            else:
-                return best
+        if best and best.code in INCOME_CODES and effective_direction == "expense":
+            best = None
+        if best and best.code in {OTHER_INCOME_CODE, INCOME_DEFAULT_CODE} and (
+            expense_kw_hit or looks_like_expense_merchant(cleaned)
+        ):
+            best = None
 
-        # Personal / non-business spend → equity distributions (client profile)
+        if best:
+            return best
+
         if effective_direction != "income" and looks_like_personal_merchant(cleaned):
             return CoAMatch(
                 code="3030",
@@ -1180,7 +1213,8 @@ class RuleCoAClassifier:
                 vendor=vendor,
             )
 
-        if effective_direction == "income":
+        # Never invent "Services" income for unknown lines — only real income keywords
+        if effective_direction == "income" and not expense_kw_hit:
             return CoAMatch(
                 code=INCOME_DEFAULT_CODE,
                 name=accounts.get(INCOME_DEFAULT_CODE, INCOME_DEFAULT_NAME),
