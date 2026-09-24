@@ -173,7 +173,12 @@ class IngestDocumentUseCase:
         for movement in movements:
             direction = "expense" if movement.debit_amount > 0 else "income"
             match = self._coa.classify(
-                tenant_id, movement.description, direction=direction
+                tenant_id,
+                movement.description,
+                direction=direction,
+                bank_account_number=bank_account_number
+                or movement.bank_account_number,
+                drive_path=str(file_path),
             )
             movement = movement.model_copy(
                 update={

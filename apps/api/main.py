@@ -832,12 +832,14 @@ async def recategorize_transactions(
 ) -> dict:
     """Re-run rule CoA on pending/suspense txs (direction-aware). Does not auto-verify."""
     from src.infrastructure.classification.rule_coa import (
+        INCOME_CODES,
         OTHER_INCOME_CODE,
         SUSPENSE_CODE,
         RuleCoAClassifier,
         clean_description,
         looks_like_expense_merchant,
     )
+    from src.use_cases.bookkeeper_pass import _bank_context_map
 
     tid = uuid.UUID(body.workspace_id)
     assert_workspace_access(user, tid)
@@ -846,6 +848,9 @@ async def recategorize_transactions(
     coa.upgrade_income_seed_rules(tid)
     coa.upgrade_expense_seed_rules(tid)
     items = await c.transactions.list_by_tenant(tid, limit=max(body.limit, 5000))
+    bank_ctx = _bank_context_map(
+        tid, [str(tx.bank_movement_id) for tx in items if tx.bank_movement_id]
+    )
     updated = 0
     income_n = 0
     expense_n = 0
@@ -856,7 +861,10 @@ async def recategorize_transactions(
         low_conf = tx.category_confidence is not None and float(tx.category_confidence) < 0.4
         cleaned = clean_description(tx.description or "")
         bad_other_income = code == OTHER_INCOME_CODE and looks_like_expense_merchant(cleaned)
-        is_suspense = code == SUSPENSE_CODE or low_conf or bad_other_income
+        fake_income = code in INCOME_CODES and (
+            looks_like_expense_merchant(cleaned) or (tx.category_confidence or 0) <= 0.45
+        )
+        is_suspense = code == SUSPENSE_CODE or low_conf or bad_other_income or fake_income
         if body.only_suspense and not is_suspense:
             # Also fix income wrongly parked on Cash 1010
             if not (
@@ -868,9 +876,17 @@ async def recategorize_transactions(
         direction = (
             "income" if tx.transaction_type == TransactionType.INCOME else "expense"
         )
-        if bad_other_income:
+        if bad_other_income or fake_income:
             direction = "expense"
-        match = coa.classify(tid, tx.description or "", direction=direction)
+        ctx = bank_ctx.get(str(tx.bank_movement_id or ""), {})
+        match = coa.classify(
+            tid,
+            tx.description or "",
+            direction=direction,
+            bank_account_number=ctx.get("bank_account_number"),
+            drive_path=ctx.get("drive_path")
+            or (tx.metadata.raw_file_path if tx.metadata else None),
+        )
         if match.code == code and abs(float(match.confidence) - float(tx.category_confidence or 0)) < 0.01:
             continue
         updates = {
@@ -892,7 +908,7 @@ async def recategorize_transactions(
         "updated": updated,
         "income": income_n,
         "expense": expense_n,
-        "engine": "local_rules+direction",
+        "engine": "local_rules+direction+bank_profile",
     }
 
 

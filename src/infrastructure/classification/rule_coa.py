@@ -1,9 +1,10 @@
 """
 Rule-based Chart of Accounts classifier — $0, no OpenAI embeddings.
 
-Flow: clean description → match account_rules (DB) → else builtin seeds → Suspense 9999
-(or income default 4020 Services when direction=income — never vague Other Income for deposits).
-Personal / non-business merchants → Owner's Distributions 3030 (client profile).
+Flow: clean description → match account_rules (DB) → else builtin seeds → Suspense 9999.
+Income ONLY for real bank deposits / explicit sales keywords — never invent 4020 for
+unknown merchants. Personal Drive folders (e.g. Truist 5611) → Owner's Distributions 3030.
+CC "PAYMENT - THANK YOU" → liability transfer 2010 (not P&L).
 
 Passive learning: when user assigns a real CoA, persist a keyword rule.
 Direction-aware: credits/income prefer revenue accounts; debits/expenses prefer expense/COGS.
@@ -16,16 +17,27 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any, Literal
 
+from src.infrastructure.classification.client_bank_profile import (
+    allows_income_classification,
+    is_cc_payment_or_transfer,
+    is_deposit_description,
+    is_owner_contribution,
+    profile_for_account,
+)
 from src.infrastructure.repositories.supabase_client import get_supabase_client
 
 SUSPENSE_CODE = "9999"
 SUSPENSE_NAME = "Gastos No Categorizados (Suspense)"
-# Deposits / unknown credits → operating revenue (Services), never vague Other Income
+# Legacy constant retained for tests / upgrade helpers — classify() no longer invents 4020
 INCOME_DEFAULT_CODE = "4020"
 INCOME_DEFAULT_NAME = "Coaching & Consulting Services"
 SALES_REVENUE_CODE = "4010"
 SERVICE_REVENUE_CODE = "4020"
 OTHER_INCOME_CODE = "4040"
+TRANSFER_CODE = "2010"
+TRANSFER_NAME = "Accounts Payable"
+OWNER_EQUITY_CODE = "3010"
+OWNER_DISTRIBUTIONS_CODE = "3030"
 
 Direction = Literal["income", "expense"]
 
@@ -109,6 +121,24 @@ _EXPENSE_MERCHANT_HINTS: tuple[str, ...] = (
     "esquire",
     "nuceria",
     "ahpnl",
+    "canva",
+    "chevron",
+    "florsheim",
+    "men's designers",
+    "mens designers",
+    "saman",
+    "florida profess",
+    "floridaprofes",
+    "fpa*",
+    "fpa ",
+    "southwes",
+    "southwest",
+    "nori tori",
+    "hat trick",
+    "ups store",
+    "shisho",
+    "perry",
+    "steakhouse",
 )
 
 _PERSONAL_MERCHANT_HINTS: tuple[str, ...] = (
@@ -315,6 +345,7 @@ DEFAULT_SEED_RULES: list[tuple[list[str], str, str]] = [
             "name-cheap",
             "pipdecks",
             "ai innovision",
+            "canva",
         ],
         "6100",
         "Dues & Subscriptions",
@@ -360,8 +391,6 @@ DEFAULT_SEED_RULES: list[tuple[list[str], str, str]] = [
             "customer payment",
             "client payment",
             "invoice payment",
-            "payment thank",
-            "thank you",
             "stripe",
             "square",
             "paypal",
@@ -382,6 +411,8 @@ DEFAULT_SEED_RULES: list[tuple[list[str], str, str]] = [
             "retainer",
             "coaching",
             "deposit",
+            "check deposit",
+            "atm check deposit",
             "wire in",
             "wire credit",
             "ach credit",
@@ -391,6 +422,47 @@ DEFAULT_SEED_RULES: list[tuple[list[str], str, str]] = [
         ],
         "4020",
         "Coaching & Consulting Services",
+    ),
+    (
+        ["owner contribution", "owners contribution", "capital contribution", "aporte socio"],
+        OWNER_EQUITY_CODE,
+        "Owner's Equity",
+    ),
+    (
+        [
+            "payment - thank you",
+            "payments - thank you",
+            "online payment thank",
+            "automatic payment",
+            "thank you",
+            "branch payment",
+            "account close out",
+            "payment reversal",
+            "balance transfer",
+        ],
+        TRANSFER_CODE,
+        TRANSFER_NAME,
+    ),
+    (
+        [
+            "florsheim",
+            "men's designers",
+            "mens designers",
+            "saman",
+        ],
+        OWNER_DISTRIBUTIONS_CODE,
+        "Owner's Distributions",
+    ),
+    (
+        [
+            "florida profess",
+            "floridaprofes",
+            "toastmasters",
+            "parson institute",
+            "esquire",
+        ],
+        "6070",
+        "Legal & Professional Fees",
     ),
     (["costco", "walmart", "target", "amazon"], "5010", "Cost of Goods Sold"),
     (
@@ -497,7 +569,7 @@ class CoAMatch:
     name: str
     confidence: float
     matched_keyword: str | None = None
-    source: str = "none"  # seed | learned | manual | builtin | suspense | income_default
+    source: str = "none"  # seed | learned | manual | builtin | suspense | transfer | personal_profile | deposit
     vendor: str | None = None
 
 
@@ -693,10 +765,6 @@ class RuleCoAClassifier:
         patched = 0
         # Any keyword that belongs on an income seed (legacy Cash 1010 mis-maps).
         sales_markers = {
-            "payment thank",
-            "thank you",
-            "online payment",
-            "autopay",
             "payment received",
             "customer payment",
             "client payment",
@@ -712,6 +780,8 @@ class RuleCoAClassifier:
         }
         income_markers = sales_markers | {
             "deposit",
+            "check deposit",
+            "atm check deposit",
             "wire in",
             "wire credit",
             "ach credit",
@@ -1117,11 +1187,52 @@ class RuleCoAClassifier:
         description: str,
         *,
         direction: Direction | None = None,
+        bank_account_number: str | None = None,
+        folder_group: str | None = None,
+        drive_path: str | None = None,
     ) -> CoAMatch:
         cleaned = clean_description(description)
         vendor = extract_vendor(description)
         accounts = self._load_accounts(tenant_id)
         rules = self._load_rules(tenant_id)
+        bank_profile = profile_for_account(
+            bank_account_number=bank_account_number,
+            folder_group=folder_group,
+            drive_path=drive_path,
+        )
+
+        # Owner capital in → equity (before deposit/income heuristics)
+        if is_owner_contribution(cleaned):
+            return CoAMatch(
+                code=OWNER_EQUITY_CODE,
+                name=accounts.get(OWNER_EQUITY_CODE, "Owner's Equity"),
+                confidence=0.9,
+                matched_keyword="contribution",
+                source="owner_contribution",
+                vendor=vendor,
+            )
+
+        # CC bill payments / transfers — balance sheet, never P&L sales/expense
+        if is_cc_payment_or_transfer(cleaned):
+            return CoAMatch(
+                code=TRANSFER_CODE,
+                name=accounts.get(TRANSFER_CODE, TRANSFER_NAME),
+                confidence=0.88,
+                matched_keyword="thank you",
+                source="transfer",
+                vendor=vendor,
+            )
+
+        # Personal card folder (e.g. Truist 5611): non-deposit spend → distributions
+        if bank_profile == "personal" and not is_deposit_description(cleaned):
+            return CoAMatch(
+                code=OWNER_DISTRIBUTIONS_CODE,
+                name=accounts.get(OWNER_DISTRIBUTIONS_CODE, "Owner's Distributions"),
+                confidence=0.86,
+                matched_keyword=vendor,
+                source="personal_profile",
+                vendor=vendor,
+            )
 
         # If any expense/COGS/distributions keyword hits the description, force expense
         # (bank feeds often flip sign and mark Costco/restaurants as "income").
@@ -1129,7 +1240,7 @@ class RuleCoAClassifier:
         for rule in rules:
             code = str(rule.get("account_code") or "")
             family = _code_family(code)
-            if family not in {"expense", "cogs"} and code != "3030":
+            if family not in {"expense", "cogs"} and code != OWNER_DISTRIBUTIONS_CODE:
                 continue
             for kw in rule.get("keywords") or []:
                 k = str(kw).lower()
@@ -1139,8 +1250,21 @@ class RuleCoAClassifier:
             if expense_kw_hit:
                 break
 
+        is_expense_like = (
+            expense_kw_hit
+            or looks_like_expense_merchant(cleaned)
+            or looks_like_personal_merchant(cleaned)
+        )
+
+        # Deposit-only / explicit-sales income: never invent Services for unknown merchants
+        real_income = allows_income_classification(cleaned)
         effective_direction: Direction | None = direction
-        if expense_kw_hit or looks_like_expense_merchant(cleaned) or looks_like_personal_merchant(cleaned):
+        if is_expense_like:
+            effective_direction = "expense"
+        elif real_income:
+            effective_direction = "income"
+        elif direction == "income" and not real_income:
+            # Bank credit that is not a deposit/sales keyword → expense/suspense path
             effective_direction = "expense"
 
         best: CoAMatch | None = None
@@ -1162,6 +1286,10 @@ class RuleCoAClassifier:
 
             code = str(rule["account_code"])
             family = _code_family(code)
+
+            # Prefer Social Media Ads 6065 over generic Advertising 6060
+            if code == "6060" and any(m in cleaned for m in SOCIAL_ADS_MARKERS):
+                continue
 
             if effective_direction == "income":
                 if code in BLOCK_FOR_INCOME or family in {"expense", "cogs", "equity"}:
@@ -1195,35 +1323,47 @@ class RuleCoAClassifier:
 
         if best and best.code in INCOME_CODES and effective_direction == "expense":
             best = None
-        if best and best.code in {OTHER_INCOME_CODE, INCOME_DEFAULT_CODE} and (
-            expense_kw_hit or looks_like_expense_merchant(cleaned)
+        if best and best.code in INCOME_CODES and (
+            is_expense_like or not real_income
         ):
+            # Never leave expense merchants / non-deposits on revenue codes
             best = None
 
         if best:
+            # Fuel must stay Gas 6160 even if a stale COGS rule still matches
+            if best.code == "5010" and any(m in cleaned for m in FUEL_COGS_MARKERS):
+                return CoAMatch(
+                    code="6160",
+                    name=accounts.get("6160", "Gas & Oil"),
+                    confidence=max(best.confidence, 0.85),
+                    matched_keyword=best.matched_keyword,
+                    source="fuel_override",
+                    vendor=vendor,
+                )
             return best
 
         if effective_direction != "income" and looks_like_personal_merchant(cleaned):
             return CoAMatch(
-                code="3030",
-                name=accounts.get("3030", "Owner's Distributions"),
+                code=OWNER_DISTRIBUTIONS_CODE,
+                name=accounts.get(OWNER_DISTRIBUTIONS_CODE, "Owner's Distributions"),
                 confidence=0.72,
                 matched_keyword=vendor,
                 source="personal_profile",
                 vendor=vendor,
             )
 
-        # Never invent "Services" income for unknown lines — only real income keywords
-        if effective_direction == "income" and not expense_kw_hit:
+        # Real deposit with no keyword hit → Services (operating revenue)
+        if is_deposit_description(cleaned) and not is_expense_like:
             return CoAMatch(
-                code=INCOME_DEFAULT_CODE,
-                name=accounts.get(INCOME_DEFAULT_CODE, INCOME_DEFAULT_NAME),
-                confidence=0.45,
-                matched_keyword=vendor,
-                source="income_default",
+                code=SERVICE_REVENUE_CODE,
+                name=accounts.get(SERVICE_REVENUE_CODE, INCOME_DEFAULT_NAME),
+                confidence=0.7,
+                matched_keyword="deposit",
+                source="deposit",
                 vendor=vendor,
             )
 
+        # Never invent income_default 4020 for unknown lines
         return CoAMatch(
             code=SUSPENSE_CODE,
             name=accounts.get(SUSPENSE_CODE, SUSPENSE_NAME),

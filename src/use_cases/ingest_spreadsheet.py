@@ -146,7 +146,12 @@ class SpreadsheetIngestUseCase:
                 continue
 
             direction = "income" if tx_type == TransactionType.INCOME else "expense"
-            match = self._coa.classify(tenant_id, description, direction=direction)
+            match = self._coa.classify(
+                tenant_id,
+                description,
+                direction=direction,
+                drive_path=str(file_path),
+            )
             acct_type = coa_types.get(match.code)
             cf = infer_cash_flow_type(account_code=match.code, account_type=acct_type)
             meta = ExtractionMetadata(

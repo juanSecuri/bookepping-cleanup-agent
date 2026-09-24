@@ -43,7 +43,6 @@ def test_income_seeds_not_cash() -> None:
         "deposit",
         "wire in",
         "ach credit",
-        "payment thank",
         "stripe",
         "paypal",
     )
@@ -52,6 +51,41 @@ def test_income_seeds_not_cash() -> None:
         if any(k.lower() in income_markers for k in keywords):
             assert code in INCOME_CODES, f"{keywords} must map to income, got {code}"
             assert code != "1010"
+
+
+def test_thank_you_not_in_income_seeds() -> None:
+    for keywords, code, _name in DEFAULT_SEED_RULES:
+        if code not in INCOME_CODES:
+            continue
+        for kw in keywords:
+            assert "thank" not in kw.lower(), f"thank-you must not be income seed: {kw}"
+
+
+def test_canva_maps_to_software_subscription() -> None:
+    for keywords, code, _name in DEFAULT_SEED_RULES:
+        if any(k.lower() == "canva" for k in keywords):
+            assert code == "6100"
+
+
+def test_chevron_maps_to_gas_not_cogs() -> None:
+    for keywords, code, _name in DEFAULT_SEED_RULES:
+        if any(k.lower() == "chevron" for k in keywords):
+            assert code == "6160"
+
+
+def test_owner_contribution_seed() -> None:
+    found = False
+    for keywords, code, _name in DEFAULT_SEED_RULES:
+        if any("contribution" in k.lower() for k in keywords) and code == "3010":
+            found = True
+    assert found
+
+
+def test_cc_thank_you_seed_is_transfer() -> None:
+    for keywords, code, _name in DEFAULT_SEED_RULES:
+        if any("thank you" in k.lower() for k in keywords):
+            assert code == "2010"
+
 
 
 def test_code_family() -> None:
@@ -70,10 +104,6 @@ def test_income_default_constants() -> None:
 def test_upgrade_markers_cover_income_seed_keywords() -> None:
     """Regression: legacy Cash→income patch must recognize stripe/paypal/etc."""
     sales_markers = {
-        "payment thank",
-        "thank you",
-        "online payment",
-        "autopay",
         "payment received",
         "customer payment",
         "client payment",
@@ -110,6 +140,8 @@ def test_upgrade_markers_cover_income_seed_keywords() -> None:
             "consulting income",
             "professional fee",
             "retainer",
+            "check deposit",
+            "atm check deposit",
         } | sales_markers
 
 
