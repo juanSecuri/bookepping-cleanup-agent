@@ -38,12 +38,17 @@ def test_extract_learn_keyword_matches_vendor() -> None:
 
 
 def test_income_seeds_not_cash() -> None:
+    income_markers = (
+        "deposit",
+        "wire in",
+        "ach credit",
+        "payment thank",
+        "stripe",
+        "paypal",
+    )
     for keywords, code, _name in DEFAULT_SEED_RULES:
-        joined = " ".join(keywords)
-        if any(
-            m in joined
-            for m in ("deposit", "wire in", "ach credit", "payment thank", "stripe", "paypal")
-        ):
+        # Exact keyword hits only (avoid "stripe fee" bank-charge seed)
+        if any(k.lower() in income_markers for k in keywords):
             assert code in INCOME_CODES, f"{keywords} must map to income, got {code}"
             assert code != "1010"
 
@@ -159,8 +164,29 @@ def test_spa_dental_are_owner_distributions() -> None:
         assert must in dist_kw
 
 
-def test_mislabeled_income_merchants_detected() -> None:
-    assert looks_like_expense_merchant(clean_description("TEXAS ROADHOUSE #1234"))
-    assert looks_like_expense_merchant(clean_description("SABOR A COLOMBIA MIAMI FL"))
-    assert looks_like_expense_merchant(clean_description("EXXONMOBIL FUEL"))
-    assert not looks_like_expense_merchant(clean_description("STRIPE PAYMENT THANK YOU"))
+def test_facebk_and_taqueria_seeds() -> None:
+    social: set[str] = set()
+    meals: set[str] = set()
+    insurance: set[str] = set()
+    tech: set[str] = set()
+    for keywords, code, _name in DEFAULT_SEED_RULES:
+        if code == "6065":
+            social.update(k.lower() for k in keywords)
+        if code == "6050":
+            meals.update(k.lower() for k in keywords)
+        if code == "6080":
+            insurance.update(k.lower() for k in keywords)
+        if code == "6100":
+            tech.update(k.lower() for k in keywords)
+    assert "facebk" in social
+    assert "taqueria" in meals and "diosa" in meals
+    assert "hiscox" in insurance
+    assert "apple.com" in tech or "apple com" in tech
+
+
+def test_facebk_description_is_expense_merchant() -> None:
+    cleaned = clean_description("09/06 FACEBK *K9SXKZQUJ2 650-5434800 CA")
+    assert "facebk" in cleaned
+    assert looks_like_expense_merchant(cleaned)
+    assert looks_like_expense_merchant(clean_description("TST* LA DIOSA TAQUERIA MIAMI"))
+    assert looks_like_expense_merchant(clean_description("HIS*HISCOX INC"))

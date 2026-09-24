@@ -50,6 +50,29 @@ function confidenceClass(pct: number): string {
   return 'bg-destructive/15 text-destructive'
 }
 
+/** Lightweight search: all tokens must match description/vendor/account (e.g. "hix" → HISCOX). */
+function matchesSmartSearch(tx: Transaction, query: string): boolean {
+  const needle = query.trim().toLowerCase()
+  if (!needle) return true
+  const hay = [
+    tx.description,
+    tx.vendor,
+    tx.vendor_name,
+    tx.account_code,
+    tx.chart_of_accounts_code,
+    tx.account_name,
+    tx.category,
+  ]
+    .filter(Boolean)
+    .join(' ')
+    .toLowerCase()
+  return needle.split(/\s+/).every((tok) => {
+    if (!tok) return true
+    if (hay.includes(tok)) return true
+    return hay.split(/[^a-z0-9]+/).some((w) => w.startsWith(tok) || (tok.length >= 3 && w.includes(tok)))
+  })
+}
+
 export default function Transactions() {
   const { workspaceId = '' } = useParams()
   const { t } = useLocale()
@@ -68,6 +91,7 @@ export default function Transactions() {
   const [availableYears, setAvailableYears] = useState<string[]>([])
   const [maxFiscalYear, setMaxFiscalYear] = useState<number | null>(null)
   const [purging, setPurging] = useState(false)
+  const [search, setSearch] = useState('')
 
   const load = useCallback(async () => {
     setLoading(true)
@@ -216,6 +240,19 @@ export default function Transactions() {
       else next.add(id)
       return next
     })
+  }
+
+  const filteredRows = useMemo(
+    () => rows.filter((tx) => matchesSmartSearch(tx, search)),
+    [rows, search],
+  )
+
+  function selectAllFiltered() {
+    setSelected(new Set(filteredRows.map((tx) => tx.id)))
+  }
+
+  function clearSelection() {
+    setSelected(new Set())
   }
 
   const tabs: { id: Tab; label: string }[] = [
@@ -392,7 +429,7 @@ export default function Transactions() {
   )
 
   const table = useReactTable({
-    data: rows,
+    data: filteredRows,
     columns,
     state: { sorting },
     onSortingChange: setSorting,
@@ -416,6 +453,16 @@ export default function Transactions() {
       </div>
 
       <div className="mb-4 flex flex-wrap items-center gap-2">
+        <label className="flex min-w-[220px] flex-1 items-center gap-2 text-sm text-muted-foreground sm:max-w-md">
+          <span className="shrink-0">{t('transactions.search')}</span>
+          <input
+            type="search"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={t('transactions.searchPlaceholder')}
+            className="w-full rounded-lg border border-border bg-card px-3 py-1.5 text-sm text-foreground placeholder:text-muted-foreground"
+          />
+        </label>
         <label className="flex items-center gap-2 text-sm text-muted-foreground">
           <span>{t('transactions.year')}</span>
           <select
@@ -471,6 +518,14 @@ export default function Transactions() {
         </button>
       </div>
 
+      {(search.trim() || filteredRows.length !== rows.length) && (
+        <p className="mb-2 text-xs text-muted-foreground">
+          {t('transactions.searchHits')
+            .replace('{n}', String(filteredRows.length))
+            .replace('{total}', String(rows.length))}
+        </p>
+      )}
+
       {selected.size > 0 && (
         <div className="mb-4 flex flex-wrap gap-2">
           <button
@@ -487,6 +542,25 @@ export default function Transactions() {
           >
             {t('transactions.bulkReject')}
           </button>
+          <button
+            type="button"
+            onClick={clearSelection}
+            className="cursor-pointer rounded-lg border border-border px-3 py-2 text-sm font-medium"
+          >
+            {t('transactions.clearSelection')}
+          </button>
+        </div>
+      )}
+
+      {filteredRows.length > 0 && (
+        <div className="mb-4 flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={selectAllFiltered}
+            className="cursor-pointer rounded-lg border border-border bg-card px-3 py-1.5 text-sm font-medium hover:border-primary/50"
+          >
+            {t('transactions.selectAllFiltered').replace('{n}', String(filteredRows.length))}
+          </button>
         </div>
       )}
 
@@ -501,16 +575,18 @@ export default function Transactions() {
         </div>
       )}
       {loading && <p className="text-muted-foreground">{t('common.loading')}</p>}
-      {!loading && rows.length === 0 && (
+      {!loading && filteredRows.length === 0 && (
         <div className="soft-shadow rounded-xl border border-border bg-card px-6 py-10 text-center">
-          <p className="text-muted-foreground">{t('transactions.empty')}</p>
+          <p className="text-muted-foreground">
+            {rows.length === 0 ? t('transactions.empty') : t('transactions.searchEmpty')}
+          </p>
         </div>
       )}
 
-      {rows.length > 0 && (
+      {filteredRows.length > 0 && (
         <>
           <div className="space-y-3 md:hidden">
-            {rows.map((tx) => {
+            {filteredRows.map((tx) => {
               const pct = confidencePct(tx)
               return (
                 <article

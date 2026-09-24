@@ -45,6 +45,13 @@ _EXPENSE_MERCHANT_HINTS: tuple[str, ...] = (
     "cafeteria",
     "meals",
     "food",
+    "taqueria",
+    "diosa",
+    "bbq",
+    "grill",
+    "churrasc",
+    "tst*",
+    "tst ",
     "exxon",
     "shell",
     "chevron",
@@ -60,11 +67,14 @@ _EXPENSE_MERCHANT_HINTS: tuple[str, ...] = (
     "google ads",
     "google *ads",
     "facebook ads",
+    "facebook",
+    "facebk",
     "meta ads",
-    "instagram ads",
-    "tiktok ads",
+    "instagram",
+    "tiktok",
     "social media",
     "insurance",
+    "hiscox",
     "geico",
     "state farm",
     "spa",
@@ -76,6 +86,11 @@ _EXPENSE_MERCHANT_HINTS: tuple[str, ...] = (
     "serenity spa",
     "barnes",
     "chamber",
+    "apple.com",
+    "apple com",
+    "interest charge",
+    "finance charge",
+    "kit.com",
 )
 
 
@@ -83,20 +98,27 @@ def looks_like_expense_merchant(cleaned: str) -> bool:
     """True when description looks like OpEx/COGS vendor, not operating revenue."""
     if not cleaned:
         return False
-    return any(hint in cleaned for hint in _EXPENSE_MERCHANT_HINTS)
+    if any(hint in cleaned for hint in _EXPENSE_MERCHANT_HINTS):
+        return True
+    # Toast / Square POS food vendors often look like "tst*name" or "sq *name"
+    if cleaned.startswith("tst") or " tst " in f" {cleaned} ":
+        return True
+    return False
 
 
 # Bootstrap seeds when tenant has no account_rules yet
+# Names aligned to TPC QuickBooks CoA (Meals Expense, Social Media Ads, Insurance, …)
 DEFAULT_SEED_RULES: list[tuple[list[str], str, str]] = [
-    (["rent", "lease", "landlord"], "6020", "Rent Expense"),
-    (["electric", "utility", "utilities", "water", "fpl"], "6030", "Utilities"),
-    (["office depot", "staples", "supplies"], "6040", "Office Supplies"),
+    (["rent", "lease", "landlord"], "6020", "Rent or Lease"),
+    (["electric", "utility", "utilities", "water", "fpl", "internet", "comcast", "att"], "6030", "Utilities"),
+    (["office depot", "staples", "supplies", "barnes"], "6040", "Office Expenses"),
     (
         [
             "restaurant",
             "starbucks",
             "doordash",
             "grubhub",
+            "uber eats",
             "texas roadhouse",
             "roadhouse",
             "sabor",
@@ -106,16 +128,33 @@ DEFAULT_SEED_RULES: list[tuple[list[str], str, str]] = [
             "cafeteria",
             "meals",
             "food",
+            "taqueria",
+            "diosa",
+            "bbq",
+            "grill",
+            "churrasc",
+            "churrascaso",
+            "apocalypse",
+            "mcdonald",
+            "chipotle",
+            "panera",
+            "subway",
+            "wingstop",
+            "pollo",
+            "sushi",
+            "diner",
+            "bistro",
+            "cantina",
         ],
         "6050",
         "Meals Expense",
     ),
     (
-        ["uber", "lyft", "airline", "hotel", "marriott", "airbnb"],
+        ["uber", "lyft", "airline", "hotel", "marriott", "airbnb", "airfare", "lodging"],
         "6055",
         "Travel",
     ),
-    (["marketing", "highlevel", "advertis"], "6060", "Marketing & Advertising"),
+    (["marketing", "highlevel", "advertis", "branding", "promotional"], "6060", "Advertising"),
     (
         [
             "google ads",
@@ -123,25 +162,44 @@ DEFAULT_SEED_RULES: list[tuple[list[str], str, str]] = [
             "google",
             "facebook ads",
             "facebook",
+            "facebk",
+            "fb ads",
             "meta ads",
             "instagram ads",
+            "instagram",
             "tiktok ads",
+            "tiktok",
             "social media",
         ],
         "6065",
         "Social Media Ads",
     ),
     (
-        ["legal", "attorney", "accountant", "cpa", "consult", "chamber"],
+        ["legal", "attorney", "accountant", "cpa", "consult", "chamber", "dues"],
         "6070",
-        "Professional Services",
+        "Legal & Professional Fees",
     ),
-    (["insurance", "geico", "state farm"], "6080", "Insurance"),
-    (["repair", "maintenance", "hvac"], "6090", "Repairs & Maintenance"),
+    (["insurance", "hiscox", "geico", "state farm", "liability"], "6080", "Insurance"),
+    (["repair", "maintenance", "hvac"], "6090", "Repair & Maintenance"),
     (
-        ["software", "saas", "aws", "vercel", "github", "microsoft", "adobe", "openai", "technology"],
+        [
+            "software",
+            "saas",
+            "aws",
+            "vercel",
+            "github",
+            "microsoft",
+            "adobe",
+            "openai",
+            "technology",
+            "apple.com",
+            "apple com",
+            "apple.com/bill",
+            "kit.com",
+            "subscription",
+        ],
         "6100",
-        "Technology & Software",
+        "Dues & Subscriptions",
     ),
     (
         [
@@ -152,9 +210,10 @@ DEFAULT_SEED_RULES: list[tuple[list[str], str, str]] = [
             "credit card interest",
             "interest charge",
             "finance charge",
+            "stripe fee",
         ],
         "6110",
-        "Bank Fees & Charges",
+        "Bank Charges",
     ),
     (["loan interest"], "6140", "Interest Expense"),
     (
@@ -164,9 +223,8 @@ DEFAULT_SEED_RULES: list[tuple[list[str], str, str]] = [
     ),
     (["parking", "toll", "sunpass"], "6170", "Parking & Tolls"),
     (["tax", "irs", "license", "permit"], "6130", "Taxes & Licenses"),
-    (["salary", "payroll", "wage", "gusto", "adp"], "6010", "Salaries & Wages"),
-    (["interest income", "dividend", "interest earned"], "4030", "Interest Income"),
-    # Customer / operating revenue (credits) — never Cash 1010
+    (["salary", "payroll", "wage", "gusto", "adp"], "6010", "Payroll Expenses"),
+    (["interest income", "dividend", "interest earned"], "4030", "Interest Earned"),
     (
         [
             "payment received",
@@ -185,17 +243,17 @@ DEFAULT_SEED_RULES: list[tuple[list[str], str, str]] = [
             "pos sale",
         ],
         "4010",
-        "Sales Revenue",
+        "Sales",
     ),
     (
-        ["service fee income", "consulting income", "professional fee", "retainer"],
+        ["service fee income", "consulting income", "professional fee", "retainer", "coaching"],
         "4020",
-        "Service Revenue",
+        "Coaching & Consulting Services",
     ),
     (
         ["deposit", "wire in", "wire credit", "ach credit", "incoming wire", "mobile deposit", "remote deposit"],
         "4040",
-        "Other Income",
+        "Other Ordinary Income",
     ),
     (["costco", "walmart", "target", "amazon"], "5010", "Cost of Goods Sold"),
     (
@@ -215,7 +273,7 @@ DEFAULT_SEED_RULES: list[tuple[list[str], str, str]] = [
             "serenity spa",
         ],
         "3030",
-        "Owner's Distributions / Equity Distributions",
+        "Owner's Distributions",
     ),
 ]
 
@@ -229,19 +287,26 @@ SOCIAL_ADS_MARKERS = frozenset(
         "google",
         "facebook ads",
         "facebook",
+        "facebk",
+        "fb ads",
         "meta ads",
         "instagram ads",
+        "instagram",
         "tiktok ads",
+        "tiktok",
         "social media",
     }
 )
-TRAVEL_MARKERS = frozenset({"uber", "lyft", "airline", "hotel", "marriott", "airbnb"})
+TRAVEL_MARKERS = frozenset(
+    {"uber", "lyft", "airline", "hotel", "marriott", "airbnb", "airfare", "lodging"}
+)
 MEALS_MARKERS = frozenset(
     {
         "restaurant",
         "starbucks",
         "doordash",
         "grubhub",
+        "uber eats",
         "texas roadhouse",
         "roadhouse",
         "sabor",
@@ -251,6 +316,13 @@ MEALS_MARKERS = frozenset(
         "cafeteria",
         "meals",
         "food",
+        "taqueria",
+        "diosa",
+        "bbq",
+        "grill",
+        "churrasc",
+        "churrascaso",
+        "apocalypse",
     }
 )
 
@@ -735,24 +807,62 @@ class RuleCoAClassifier:
                 patched_social += 1
                 continue
 
-            if code == "6050" and kws_set.intersection(TRAVEL_MARKERS) and not kws_set.intersection(MEALS_MARKERS):
-                client.table("account_rules").update(
-                    {
-                        "account_code": "6055",
-                        "account_name": accounts.get("6055", "Travel"),
-                        "updated_at": datetime.now(timezone.utc).isoformat(),
-                    }
-                ).eq("id", rule_id).execute()
+            if code == "6050" and kws_set.intersection(TRAVEL_MARKERS):
+                # Split legacy "Travel & Meals" blob: travel → 6055, meals stay 6050
+                travel_kws = [k for k in raw_kws if k in TRAVEL_MARKERS]
+                remaining = [k for k in raw_kws if k not in TRAVEL_MARKERS]
+                if remaining:
+                    client.table("account_rules").update(
+                        {
+                            "keywords": remaining,
+                            "account_code": "6050",
+                            "account_name": accounts.get("6050", "Meals Expense"),
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                    ).eq("id", rule_id).execute()
+                else:
+                    client.table("account_rules").update(
+                        {
+                            "account_code": "6055",
+                            "account_name": accounts.get("6055", "Travel"),
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                    ).eq("id", rule_id).execute()
+                    patched_travel_meals += 1
+                    continue
+                existing_kw = self._collect_existing_keywords(tenant_id)
+                if travel_kws:
+                    self._merge_or_insert_seed_rule(
+                        tenant_id,
+                        travel_kws,
+                        "6055",
+                        "Travel",
+                        accounts,
+                        existing_kw,
+                    )
                 patched_travel_meals += 1
                 continue
 
-            # Drop ambiguous short token "bar" (matches "barnes", etc.)
+            # Drop ambiguous short token "bar" / bare "ads" (false positives)
             if code == "6050" and "bar" in kws_set:
                 cleaned_kws = [k for k in raw_kws if k != "bar"]
                 if cleaned_kws != raw_kws:
                     client.table("account_rules").update(
                         {
                             "keywords": cleaned_kws,
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                    ).eq("id", rule_id).execute()
+                    raw_kws = cleaned_kws
+                    kws_set = set(raw_kws)
+
+            if code == "6060" and "ads" in kws_set:
+                cleaned_kws = [k for k in raw_kws if k != "ads"]
+                if cleaned_kws != raw_kws:
+                    client.table("account_rules").update(
+                        {
+                            "keywords": cleaned_kws,
+                            "account_name": accounts.get("6060", "Advertising"),
                             "updated_at": datetime.now(timezone.utc).isoformat(),
                         }
                     ).eq("id", rule_id).execute()
