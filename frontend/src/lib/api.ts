@@ -383,7 +383,7 @@ export const api = {
       '/api/transactions/recategorize',
       {
         method: 'POST',
-        body: JSON.stringify({ workspace_id, only_suspense, limit: 500 }),
+        body: JSON.stringify({ workspace_id, only_suspense, limit: 5000 }),
       },
     ),
 

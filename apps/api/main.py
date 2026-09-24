@@ -758,7 +758,7 @@ async def bulk_reject(
 class RecategorizeBody(BaseModel):
     workspace_id: str
     only_suspense: bool = True
-    limit: int = 500
+    limit: int = 5000
 
 
 @api.post("/transactions/recategorize")

@@ -141,7 +141,26 @@ def test_meals_keywords_map_to_meals_expense() -> None:
             assert code == "6050"
 
 
+def test_sabor_and_roadhouse_are_meals_seeds() -> None:
+    meals_kw: set[str] = set()
+    for keywords, code, _name in DEFAULT_SEED_RULES:
+        if code == "6050":
+            meals_kw.update(k.lower() for k in keywords)
+    for must in ("sabor", "roadhouse", "texas roadhouse", "rodizio"):
+        assert must in meals_kw
+
+
+def test_spa_dental_are_owner_distributions() -> None:
+    dist_kw: set[str] = set()
+    for keywords, code, _name in DEFAULT_SEED_RULES:
+        if code == "3030":
+            dist_kw.update(k.lower() for k in keywords)
+    for must in ("spa", "dental", "serenity spa"):
+        assert must in dist_kw
+
+
 def test_mislabeled_income_merchants_detected() -> None:
     assert looks_like_expense_merchant(clean_description("TEXAS ROADHOUSE #1234"))
+    assert looks_like_expense_merchant(clean_description("SABOR A COLOMBIA MIAMI FL"))
     assert looks_like_expense_merchant(clean_description("EXXONMOBIL FUEL"))
     assert not looks_like_expense_merchant(clean_description("STRIPE PAYMENT THANK YOU"))

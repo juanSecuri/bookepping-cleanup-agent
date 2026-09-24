@@ -41,7 +41,6 @@ _EXPENSE_MERCHANT_HINTS: tuple[str, ...] = (
     "sabor",
     "rodizio",
     "pizza",
-    "bar",
     "cafe",
     "cafeteria",
     "meals",
@@ -103,7 +102,6 @@ DEFAULT_SEED_RULES: list[tuple[list[str], str, str]] = [
             "sabor",
             "rodizio",
             "pizza",
-            "bar",
             "cafe",
             "cafeteria",
             "meals",
@@ -122,6 +120,7 @@ DEFAULT_SEED_RULES: list[tuple[list[str], str, str]] = [
         [
             "google ads",
             "google *ads",
+            "google",
             "facebook ads",
             "facebook",
             "meta ads",
@@ -132,7 +131,11 @@ DEFAULT_SEED_RULES: list[tuple[list[str], str, str]] = [
         "6065",
         "Social Media Ads",
     ),
-    (["legal", "attorney", "accountant", "cpa", "consult"], "6070", "Professional Services"),
+    (
+        ["legal", "attorney", "accountant", "cpa", "consult", "chamber"],
+        "6070",
+        "Professional Services",
+    ),
     (["insurance", "geico", "state farm"], "6080", "Insurance"),
     (["repair", "maintenance", "hvac"], "6090", "Repairs & Maintenance"),
     (
@@ -222,6 +225,8 @@ FUEL_COGS_MARKERS = frozenset(
 SOCIAL_ADS_MARKERS = frozenset(
     {
         "google ads",
+        "google *ads",
+        "google",
         "facebook ads",
         "facebook",
         "meta ads",
@@ -238,8 +243,10 @@ MEALS_MARKERS = frozenset(
         "doordash",
         "grubhub",
         "texas roadhouse",
+        "roadhouse",
+        "sabor",
+        "rodizio",
         "pizza",
-        "bar",
         "cafe",
         "cafeteria",
         "meals",
@@ -513,26 +520,24 @@ class RuleCoAClassifier:
                 existing_kw.add(str(k).lower())
 
         inserted = 0
+        merged = 0
         for keywords, code, default_name in DEFAULT_SEED_RULES:
             if code not in INCOME_CODES:
                 continue
-            if any(k.lower() in existing_kw for k in keywords):
-                continue
-            client.table("account_rules").insert(
-                {
-                    "tenant_id": str(tenant_id),
-                    "keywords": [k.lower() for k in keywords],
-                    "account_code": code,
-                    "account_name": accounts.get(code, default_name),
-                    "source": "seed",
-                    "is_active": True,
-                }
-            ).execute()
-            inserted += 1
-            existing_kw.update(k.lower() for k in keywords)
+            action = self._merge_or_insert_seed_rule(
+                tenant_id, list(keywords), code, default_name, accounts, existing_kw
+            )
+            if action == "inserted":
+                inserted += 1
+            elif action == "merged":
+                merged += 1
 
         self.invalidate(tenant_id)
-        return {"patched_cash_to_income": patched, "inserted_income_rules": inserted}
+        return {
+            "patched_cash_to_income": patched,
+            "inserted_income_rules": inserted,
+            "merged_income_keywords": merged,
+        }
 
     def _collect_existing_keywords(self, tenant_id: uuid.UUID) -> set[str]:
         client = get_supabase_client()
@@ -549,6 +554,81 @@ class RuleCoAClassifier:
                 existing_kw.add(str(k).lower())
         return existing_kw
 
+    def _merge_or_insert_seed_rule(
+        self,
+        tenant_id: uuid.UUID,
+        keywords: list[str],
+        code: str,
+        default_name: str,
+        accounts: dict[str, str],
+        existing_kw: set[str],
+        *,
+        seed_rows_by_code: dict[str, list[dict[str, Any]]] | None = None,
+    ) -> str:
+        """
+        Ensure every keyword for this seed lands on the right account_code.
+
+        Legacy bug: skip-if-any-keyword-exists left new tokens (sabor, spa, …)
+        out forever when an older meals/distributions seed already existed.
+        """
+        wanted = [k.lower() for k in keywords if k]
+        if not wanted:
+            return "noop"
+        client = get_supabase_client()
+        now = datetime.now(timezone.utc).isoformat()
+
+        rows_for_code: list[dict[str, Any]] = []
+        if seed_rows_by_code is not None:
+            rows_for_code = list(seed_rows_by_code.get(code) or [])
+        else:
+            found = (
+                client.table("account_rules")
+                .select("id,keywords,account_code")
+                .eq("tenant_id", str(tenant_id))
+                .eq("account_code", code)
+                .eq("source", "seed")
+                .eq("is_active", True)
+                .execute()
+            )
+            rows_for_code = list(found.data or [])
+
+        if rows_for_code:
+            primary = rows_for_code[0]
+            current = [str(k).lower() for k in (primary.get("keywords") or [])]
+            current_set = set(current)
+            missing = [k for k in wanted if k not in current_set]
+            if not missing:
+                existing_kw.update(wanted)
+                return "noop"
+            merged = current + missing
+            client.table("account_rules").update(
+                {
+                    "keywords": merged,
+                    "account_name": accounts.get(code, default_name),
+                    "updated_at": now,
+                }
+            ).eq("id", primary["id"]).execute()
+            existing_kw.update(wanted)
+            return "merged"
+
+        # Brand-new seed row for this account code
+        client.table("account_rules").insert(
+            {
+                "tenant_id": str(tenant_id),
+                "keywords": wanted,
+                "account_code": code,
+                "account_name": accounts.get(code, default_name),
+                "source": "seed",
+                "is_active": True,
+            }
+        ).execute()
+        existing_kw.update(wanted)
+        if seed_rows_by_code is not None:
+            seed_rows_by_code.setdefault(code, []).append(
+                {"id": "new", "keywords": wanted, "account_code": code}
+            )
+        return "inserted"
+
     def _insert_seed_rule_if_missing(
         self,
         tenant_id: uuid.UUID,
@@ -558,26 +638,16 @@ class RuleCoAClassifier:
         accounts: dict[str, str],
         existing_kw: set[str],
     ) -> bool:
-        if any(k.lower() in existing_kw for k in keywords):
-            return False
-        client = get_supabase_client()
-        client.table("account_rules").insert(
-            {
-                "tenant_id": str(tenant_id),
-                "keywords": [k.lower() for k in keywords],
-                "account_code": code,
-                "account_name": accounts.get(code, default_name),
-                "source": "seed",
-                "is_active": True,
-            }
-        ).execute()
-        existing_kw.update(k.lower() for k in keywords)
-        return True
+        """Backward-compatible wrapper: True when a row was inserted or merged."""
+        action = self._merge_or_insert_seed_rule(
+            tenant_id, keywords, code, default_name, accounts, existing_kw
+        )
+        return action in {"inserted", "merged"}
 
     def upgrade_expense_seed_rules(self, tenant_id: uuid.UUID) -> dict[str, int]:
         """
         Fix legacy seeds: fuel on COGS 5010 → Gas 6160; social ads on 6060 → 6065;
-        split travel/meals on 6050; insert missing expense seed rows.
+        split travel/meals on 6050; merge missing expense keywords into existing seeds.
         """
         client = get_supabase_client()
         accounts = self._load_accounts(tenant_id)
@@ -620,8 +690,8 @@ class RuleCoAClassifier:
                     patched_fuel += 1
                     continue
                 existing_kw = self._collect_existing_keywords(tenant_id)
-                if fuel_kws and not any(k in existing_kw for k in fuel_kws):
-                    self._insert_seed_rule_if_missing(
+                if fuel_kws:
+                    self._merge_or_insert_seed_rule(
                         tenant_id,
                         fuel_kws,
                         "6160",
@@ -653,8 +723,8 @@ class RuleCoAClassifier:
                     patched_social += 1
                     continue
                 existing_kw = self._collect_existing_keywords(tenant_id)
-                if social_kws and not any(k in existing_kw for k in social_kws):
-                    self._insert_seed_rule_if_missing(
+                if social_kws:
+                    self._merge_or_insert_seed_rule(
                         tenant_id,
                         social_kws,
                         "6065",
@@ -674,16 +744,53 @@ class RuleCoAClassifier:
                     }
                 ).eq("id", rule_id).execute()
                 patched_travel_meals += 1
+                continue
+
+            # Drop ambiguous short token "bar" (matches "barnes", etc.)
+            if code == "6050" and "bar" in kws_set:
+                cleaned_kws = [k for k in raw_kws if k != "bar"]
+                if cleaned_kws != raw_kws:
+                    client.table("account_rules").update(
+                        {
+                            "keywords": cleaned_kws,
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                    ).eq("id", rule_id).execute()
+                    raw_kws = cleaned_kws
+                    kws_set = set(raw_kws)
+
+        # Refresh seed index after patches, then merge/insert full DEFAULT expense seeds
+        seed_rows = (
+            client.table("account_rules")
+            .select("id,keywords,account_code")
+            .eq("tenant_id", str(tenant_id))
+            .eq("source", "seed")
+            .eq("is_active", True)
+            .execute()
+        )
+        by_code: dict[str, list[dict[str, Any]]] = {}
+        for row in seed_rows.data or []:
+            by_code.setdefault(str(row.get("account_code") or ""), []).append(row)
 
         existing_kw = self._collect_existing_keywords(tenant_id)
         inserted = 0
+        merged = 0
         for keywords, code, default_name in DEFAULT_SEED_RULES:
             if code in INCOME_CODES:
                 continue
-            if self._insert_seed_rule_if_missing(
-                tenant_id, list(keywords), code, default_name, accounts, existing_kw
-            ):
+            action = self._merge_or_insert_seed_rule(
+                tenant_id,
+                list(keywords),
+                code,
+                default_name,
+                accounts,
+                existing_kw,
+                seed_rows_by_code=by_code,
+            )
+            if action == "inserted":
                 inserted += 1
+            elif action == "merged":
+                merged += 1
 
         self.invalidate(tenant_id)
         return {
@@ -691,6 +798,7 @@ class RuleCoAClassifier:
             "patched_social_to_6065": patched_social,
             "patched_travel_on_6050": patched_travel_meals,
             "inserted_expense_rules": inserted,
+            "merged_expense_keywords": merged,
         }
 
     def classify(
@@ -751,6 +859,14 @@ class RuleCoAClassifier:
                 vendor=vendor,
             )
             if best is None or candidate.confidence > best.confidence:
+                best = candidate
+            elif (
+                best is not None
+                and abs(candidate.confidence - best.confidence) < 0.02
+                and (candidate.matched_keyword or "")
+                and len(candidate.matched_keyword or "") > len(best.matched_keyword or "")
+            ):
+                # Prefer longer keyword (e.g. "google ads" over "google" on Marketing)
                 best = candidate
 
         if best:
