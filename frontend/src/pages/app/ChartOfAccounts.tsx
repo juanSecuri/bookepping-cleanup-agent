@@ -219,20 +219,33 @@ export default function ChartOfAccounts() {
                 <p className="text-2xl font-semibold tabular-nums text-foreground">{activeCount}</p>
                 <p className="text-sm font-medium text-foreground/75">{t('coa.active')}</p>
               </div>
+              {TYPE_ORDER.filter((typ) => (typeCounts.get(typ) || 0) > 0).map((typ, i) => (
+                <div
+                  key={typ}
+                  className={cn(
+                    'soft-shadow-lift rounded-xl border border-border bg-card p-4 transition duration-200 hover:-translate-y-0.5',
+                    i === 0
+                      ? 'animate-fade-up-delay-2'
+                      : i === 1
+                        ? 'animate-fade-up-delay-3'
+                        : 'animate-fade-up-delay-4',
+                  )}
+                >
+                  <p className="text-2xl font-semibold tabular-nums text-foreground">
+                    {typeCounts.get(typ) || 0}
+                  </p>
+                  <p className="truncate text-sm font-medium text-foreground/75">
+                    {typeLabel(typ)}
+                  </p>
+                </div>
+              ))}
               {[...typeCounts.entries()]
+                .filter(([typ]) => !(TYPE_ORDER as readonly string[]).includes(typ))
                 .sort((a, b) => a[0].localeCompare(b[0]))
-                .slice(0, 4)
-                .map(([typ, count], i) => (
+                .map(([typ, count]) => (
                   <div
                     key={typ}
-                    className={cn(
-                      'soft-shadow-lift rounded-xl border border-border bg-card p-4 transition duration-200 hover:-translate-y-0.5',
-                      i === 0
-                        ? 'animate-fade-up-delay-2'
-                        : i === 1
-                          ? 'animate-fade-up-delay-3'
-                          : 'animate-fade-up-delay-4',
-                    )}
+                    className="soft-shadow-lift rounded-xl border border-border bg-card p-4 transition duration-200 hover:-translate-y-0.5"
                   >
                     <p className="text-2xl font-semibold tabular-nums text-foreground">{count}</p>
                     <p className="truncate text-sm font-medium text-foreground/75">
@@ -241,6 +254,7 @@ export default function ChartOfAccounts() {
                   </div>
                 ))}
             </div>
+            <p className="mt-2 text-xs text-muted-foreground">{t('coa.summaryHint')}</p>
           </section>
 
           <div className="mb-4">
