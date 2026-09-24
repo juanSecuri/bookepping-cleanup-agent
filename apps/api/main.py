@@ -774,6 +774,7 @@ async def recategorize_transactions(
     c = get_container()
     coa = RuleCoAClassifier()
     coa.upgrade_income_seed_rules(tid)
+    coa.upgrade_expense_seed_rules(tid)
     items = await c.transactions.list_by_tenant(tid, limit=max(body.limit, 5000))
     updated = 0
     income_n = 0
@@ -946,11 +947,13 @@ async def seed_account_rules(body: SeedCoABody) -> dict:
     clf = RuleCoAClassifier()
     rows = clf.ensure_seed_rules(uuid.UUID(body.workspace_id))
     upgrade = clf.upgrade_income_seed_rules(uuid.UUID(body.workspace_id))
+    expense_upgrade = clf.upgrade_expense_seed_rules(uuid.UUID(body.workspace_id))
     rows = clf.list_rules(uuid.UUID(body.workspace_id))
     return {
         "workspace_id": body.workspace_id,
         "rules": len(rows),
         "upgrade": upgrade,
+        "expense_upgrade": expense_upgrade,
         "engine": "local_rules",
     }
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   Bar,
@@ -38,6 +38,55 @@ function money(n: number) {
 const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 const MONTH_KEYS = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
 
+function shortMonthLabels(locale: string): string[] {
+  return locale === 'en'
+    ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
+    : MONTH_LABELS
+}
+
+function monthColumnHeaders(locale: string, fiscalYear: string): string[] {
+  const shorts = shortMonthLabels(locale)
+  if (!fiscalYear) return shorts
+  return shorts.map((m) => `${m} ${fiscalYear}`)
+}
+
+function formatBalanceAsOf(locale: string, fiscalYear: string, month: string): string {
+  if (!fiscalYear) return ''
+  if (month) {
+    const y = Number(fiscalYear)
+    const m = Number(month)
+    const last = new Date(y, m, 0)
+    return last.toLocaleDateString(locale === 'en' ? 'en-US' : 'es-CO', {
+      year: 'numeric',
+      month: 'long',
+      day: 'numeric',
+    })
+  }
+  if (locale === 'en') return `December 31, ${fiscalYear}`
+  return `31 de diciembre de ${fiscalYear}`
+}
+
+function FinancialReportHeader({
+  companyName,
+  reportTitle,
+  asOfPeriod,
+}: {
+  companyName: string
+  reportTitle: string
+  asOfPeriod: string
+}) {
+  const { t } = useLocale()
+  return (
+    <div className="border-b border-border bg-[color-mix(in_srgb,var(--accent-cream)_35%,var(--bg-card))] px-4 py-5 text-center">
+      <p className="text-sm font-medium text-muted-foreground">{companyName}</p>
+      <h3 className="mt-1 font-display text-2xl font-semibold tracking-wide">{reportTitle}</h3>
+      <p className="mt-1 text-sm text-muted-foreground">
+        {t('reports.asOf').replace('{period}', asOfPeriod)}
+      </p>
+    </div>
+  )
+}
+
 function pnlItems(
   pnl: PnLReport | null | undefined,
   key: 'revenueItems' | 'expenseItems' | 'cogsItems',
@@ -54,6 +103,7 @@ function MonthTable({
   showUncategorizedHint,
   onRowClick,
   layout = 'monthly',
+  fiscalYear,
 }: {
   title: string
   items: PnLLineItem[]
@@ -61,12 +111,10 @@ function MonthTable({
   showUncategorizedHint?: boolean
   onRowClick?: (row: PnLLineItem) => void
   layout?: 'monthly' | 'annual'
+  fiscalYear?: string
 }) {
   const { t, locale } = useLocale()
-  const monthLabels =
-    locale === 'en'
-      ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-      : MONTH_LABELS
+  const monthLabels = monthColumnHeaders(locale, fiscalYear ?? '')
   const showMonths = layout === 'monthly'
   const colSpan = showMonths ? 14 : 3
   return (
@@ -159,19 +207,18 @@ function BalanceSection({
   total,
   defaultOpen = true,
   layout = 'monthly',
+  fiscalYear,
 }: {
   title: string
   lines: BalanceLine[]
   total: number
   defaultOpen?: boolean
   layout?: 'monthly' | 'annual'
+  fiscalYear?: string
 }) {
   const { t, locale } = useLocale()
   const [open, setOpen] = useState(defaultOpen)
-  const monthLabels =
-    locale === 'en'
-      ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-      : MONTH_LABELS
+  const monthLabels = monthColumnHeaders(locale, fiscalYear ?? '')
   const showMonths = layout === 'monthly'
   return (
     <div className="animate-fade-up rounded-xl border border-border bg-card soft-shadow-lift">
@@ -215,8 +262,8 @@ function BalanceSection({
                     key={`${row.code}-${row.name}`}
                     className="border-t border-border transition-colors duration-200 hover:bg-[color-mix(in_srgb,var(--accent-cream)_8%,transparent)]"
                   >
-                    <td className="px-3 py-2 font-mono text-xs">{row.code ?? '—'}</td>
-                    <td className="px-3 py-2">{row.name ?? '—'}</td>
+                    <td className="px-3 py-2 pl-8 font-mono text-xs">{row.code ?? '—'}</td>
+                    <td className="px-3 py-2 pl-8">{row.name ?? '—'}</td>
                     {showMonths ? (
                       <>
                         {MONTH_KEYS.map((mk) => (
@@ -235,17 +282,361 @@ function BalanceSection({
                     )}
                   </tr>
                 ))}
-                <tr className="border-t-2 border-border bg-secondary/30">
+                <tr className="border-t border-border bg-secondary/25">
                   <td
                     colSpan={showMonths ? 14 : 3}
-                    className="px-3 py-2 text-right font-semibold"
+                    className="px-3 py-2 pl-6 text-right text-sm font-bold tabular-nums"
                   >
-                    {t('reports.totalFor')} {title} {money(total)}
+                    {t('reports.totalForName').replace('{name}', title)} {money(total)}
                   </td>
                 </tr>
               </tbody>
             </table>
           )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+type BalanceSheetData = NonNullable<StatementsBundle['balance_sheet']>
+
+function BalanceSheetMonthlyTable({
+  companyName,
+  asOfPeriod,
+  fiscalYear,
+  balanceSheet,
+}: {
+  companyName: string
+  asOfPeriod: string
+  fiscalYear: string
+  balanceSheet: BalanceSheetData
+}) {
+  const { t, locale } = useLocale()
+  const monthLabels = monthColumnHeaders(locale, fiscalYear)
+
+  const groups: Array<{
+    title: string
+    sections?: BalanceSectionGroup[] | null
+    fallbackLines: BalanceLine[]
+    fallbackTotal: number
+  }> = [
+    {
+      title: t('reports.assets').toUpperCase(),
+      sections: balanceSheet.sections?.assets,
+      fallbackLines: balanceSheet.assets || [],
+      fallbackTotal: Number(balanceSheet.totalAssets ?? 0),
+    },
+    {
+      title: t('reports.liabilities').toUpperCase(),
+      sections: balanceSheet.sections?.liabilities,
+      fallbackLines: balanceSheet.liabilities || [],
+      fallbackTotal: Number(balanceSheet.totalLiabilities ?? 0),
+    },
+    {
+      title: t('reports.equity').toUpperCase(),
+      sections: balanceSheet.sections?.equity,
+      fallbackLines: balanceSheet.equity || [],
+      fallbackTotal: Number(balanceSheet.totalEquity ?? 0),
+    },
+  ]
+
+  function sumByMonth(lines: BalanceLine[], mk: string) {
+    return lines.reduce((s, r) => s + Number(r.byMonth?.[mk] ?? 0), 0)
+  }
+
+  function renderAmountCells(row: BalanceLine) {
+    return (
+      <>
+        {MONTH_KEYS.map((mk) => (
+          <td key={mk} className="px-2 py-1.5 text-right tabular-nums text-xs">
+            {money(Number(row.byMonth?.[mk] ?? 0))}
+          </td>
+        ))}
+        <td className="px-3 py-1.5 text-right tabular-nums text-sm font-medium">
+          {money(Number(row.closing ?? row.amount ?? 0))}
+        </td>
+      </>
+    )
+  }
+
+  function renderBoldTotalRow(label: string, lines: BalanceLine[], total: number) {
+    return (
+      <tr className="border-t border-border bg-secondary/15">
+        <td className="px-3 py-2 pl-8 text-sm font-bold">{label}</td>
+        {MONTH_KEYS.map((mk) => (
+          <td key={mk} className="px-2 py-2 text-right text-xs font-bold tabular-nums">
+            {money(sumByMonth(lines, mk))}
+          </td>
+        ))}
+        <td className="px-3 py-2 text-right text-sm font-bold tabular-nums">{money(total)}</td>
+      </tr>
+    )
+  }
+
+  return (
+    <div className="table-scroll animate-fade-up overflow-hidden rounded-xl border border-border bg-card soft-shadow-lift">
+      <FinancialReportHeader
+        companyName={companyName}
+        reportTitle={t('reports.balanceSheet')}
+        asOfPeriod={asOfPeriod}
+      />
+      <table className="w-full min-w-[320px] text-left text-sm">
+        <thead className="border-b border-border bg-secondary/40 text-muted-foreground">
+          <tr>
+            <th className="px-3 py-2 font-medium">{t('reports.account')}</th>
+            {monthLabels.map((m) => (
+              <th key={m} className="px-2 py-2 text-right text-xs font-medium">
+                {m}
+              </th>
+            ))}
+            <th className="px-3 py-2 text-right font-medium">{t('reports.total')}</th>
+          </tr>
+        </thead>
+        <tbody>
+          {groups.map((group) => {
+            const hasSections = group.sections && group.sections.length > 0
+            return (
+              <Fragment key={group.title}>
+                <tr className="border-t-2 border-border bg-secondary/20">
+                  <td
+                    colSpan={14}
+                    className="px-3 py-2 font-display text-base font-semibold tracking-wide"
+                  >
+                    {group.title}
+                  </td>
+                </tr>
+                {hasSections ? (
+                  group.sections!.map((sec) => {
+                    const subName = String(sec.subcategory || t('reports.emptySection'))
+                    const lines = sec.lines || []
+                    const subTotal = Number(sec.total ?? 0)
+                    return (
+                      <Fragment key={`${group.title}-${subName}`}>
+                        <tr className="border-t border-border">
+                          <td colSpan={14} className="px-3 py-1.5 pl-6 font-semibold text-foreground">
+                            {subName}
+                          </td>
+                        </tr>
+                        {lines.map((row) => (
+                          <tr
+                            key={`${row.code}-${row.name}`}
+                            className="border-t border-border/60 hover:bg-[color-mix(in_srgb,var(--accent-cream)_8%,transparent)]"
+                          >
+                            <td className="px-3 py-1.5 pl-10">
+                              <span className="font-mono text-xs text-muted-foreground">
+                                {row.code ?? '—'}
+                              </span>{' '}
+                              {row.name ?? '—'}
+                            </td>
+                            {renderAmountCells(row)}
+                          </tr>
+                        ))}
+                        {renderBoldTotalRow(
+                          t('reports.totalForName').replace('{name}', subName),
+                          lines,
+                          subTotal,
+                        )}
+                      </Fragment>
+                    )
+                  })
+                ) : (
+                  group.fallbackLines.map((row) => (
+                    <tr
+                      key={`${row.code}-${row.name}`}
+                      className="border-t border-border hover:bg-[color-mix(in_srgb,var(--accent-cream)_8%,transparent)]"
+                    >
+                      <td className="px-3 py-1.5 pl-8">
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {row.code ?? '—'}
+                        </span>{' '}
+                        {row.name ?? '—'}
+                      </td>
+                      {renderAmountCells(row)}
+                    </tr>
+                  ))
+                )}
+                {renderBoldTotalRow(
+                  t('reports.totalForName').replace('{name}', group.title),
+                  hasSections
+                    ? (group.sections ?? []).flatMap((s) => s.lines ?? [])
+                    : group.fallbackLines,
+                  group.fallbackTotal,
+                )}
+              </Fragment>
+            )
+          })}
+        </tbody>
+      </table>
+    </div>
+  )
+}
+
+function CashFlowStatement({
+  bundle,
+  netIncome,
+  cfMonthly,
+}: {
+  bundle: StatementsBundle
+  netIncome: number
+  cfMonthly: Array<{ period?: string; inflows: number; outflows: number; net: number }>
+}) {
+  const { t } = useLocale()
+  const cf = bundle.cash_flow
+  const detail = bundle.cash_flow_detail
+
+  const operatingLines = detail?.operating ?? []
+  const investingLines = detail?.investing ?? []
+  const financingLines = detail?.financing ?? []
+
+  const operatingNet = Number(cf?.operating?.net ?? 0)
+  const opSubtotal = Number(detail?.operatingSubtotal ?? operatingNet)
+  const invSubtotal = Number(detail?.investingSubtotal ?? cf?.investing?.net ?? 0)
+  const finSubtotal = Number(detail?.financingSubtotal ?? cf?.financing?.net ?? 0)
+  const netTotal = Number(detail?.netTotal ?? cf?.netChange ?? 0)
+
+  const showInvesting =
+    investingLines.length > 0 || Math.abs(invSubtotal) > 0.0001
+  const showFinancing =
+    financingLines.length > 0 || Math.abs(finSubtotal) > 0.0001
+
+  function CfAmountRow({
+    label,
+    amount,
+    indentClass = 'pl-6',
+    bold = false,
+  }: {
+    label: string
+    amount: number
+    indentClass?: string
+    bold?: boolean
+  }) {
+    return (
+      <tr className="border-t border-border/60">
+        <td className={cn('px-4 py-1.5', indentClass, bold && 'font-bold')}>{label}</td>
+        <td
+          className={cn(
+            'px-4 py-1.5 text-right tabular-nums',
+            bold && 'font-bold',
+          )}
+        >
+          {money(amount)}
+        </td>
+      </tr>
+    )
+  }
+
+  function CfDetailRows(lines: PnLLineItem[], indentClass = 'pl-10') {
+    if (lines.length === 0) return null
+    return lines.map((row) => (
+      <tr
+        key={`${row.code}-${row.name}`}
+        className="border-t border-border/40 hover:bg-[color-mix(in_srgb,var(--accent-cream)_6%,transparent)]"
+      >
+        <td className={cn('px-4 py-1', indentClass, 'text-sm')}>
+          <span className="font-mono text-xs text-muted-foreground">{row.code}</span> {row.name}
+        </td>
+        <td className="px-4 py-1 text-right tabular-nums text-sm">
+          {money(Number(row.amount ?? 0))}
+        </td>
+      </tr>
+    ))
+  }
+
+  function CfSectionHeader(title: string) {
+    return (
+      <tr className="border-t-2 border-border bg-secondary/25">
+        <td colSpan={2} className="px-4 py-2 text-xs font-bold tracking-wide">
+          {title}
+        </td>
+      </tr>
+    )
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="table-scroll overflow-hidden rounded-xl border border-border bg-card soft-shadow-lift">
+        <div className="border-b border-border px-4 py-3">
+          <h3 className="font-display text-lg tracking-wide">{t('reports.cfStatementTitle')}</h3>
+        </div>
+        <table className="w-full min-w-[360px] text-left text-sm">
+          <tbody>
+            {CfSectionHeader(t('reports.cfOperatingActivities'))}
+            <CfAmountRow label={t('reports.cfNetIncomeLine')} amount={netIncome} />
+            <CfAmountRow label={t('reports.cfOperatingNet')} amount={operatingNet} indentClass="pl-8" />
+            {CfDetailRows(operatingLines)}
+            <CfAmountRow
+              label={t('reports.cfNetCashOperating')}
+              amount={opSubtotal}
+              indentClass="pl-6"
+              bold
+            />
+
+            {showInvesting && (
+              <>
+                {CfSectionHeader(t('reports.cfInvestingActivities'))}
+                {CfDetailRows(investingLines, 'pl-6')}
+                {investingLines.length === 0 && (
+                  <CfAmountRow label={t('reports.emptySection')} amount={invSubtotal} indentClass="pl-6" />
+                )}
+                <CfAmountRow
+                  label={t('reports.cfNetCashInvesting')}
+                  amount={invSubtotal}
+                  indentClass="pl-6"
+                  bold
+                />
+              </>
+            )}
+
+            {showFinancing && (
+              <>
+                {CfSectionHeader(t('reports.cfFinancingActivities'))}
+                {CfDetailRows(financingLines, 'pl-6')}
+                {financingLines.length === 0 && (
+                  <CfAmountRow label={t('reports.emptySection')} amount={finSubtotal} indentClass="pl-6" />
+                )}
+                <CfAmountRow
+                  label={t('reports.cfNetCashFinancing')}
+                  amount={finSubtotal}
+                  indentClass="pl-6"
+                  bold
+                />
+              </>
+            )}
+
+            <tr className="border-t-2 border-border bg-[color-mix(in_srgb,var(--accent-cream)_25%,var(--bg-card))]">
+              <td className="px-4 py-3 font-display text-sm font-bold tracking-wide">
+                {t('reports.cfNetIncreasePeriod')}
+              </td>
+              <td className="px-4 py-3 text-right font-bold tabular-nums">{money(netTotal)}</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      {cfMonthly.length > 0 && (
+        <div className="h-44 rounded-xl border border-border bg-background p-3 soft-shadow-lift">
+          <h4 className="mb-1 text-xs font-semibold text-muted-foreground">
+            {t('reports.cfMonthly')} — <span className="text-[var(--positive)]">■</span> /{' '}
+            <span className="text-[var(--negative)]">■</span>
+          </h4>
+          <ResponsiveContainer width="100%" height="85%">
+            <BarChart data={cfMonthly} stackOffset="sign">
+              <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
+              <XAxis dataKey="period" tick={{ fontSize: 10 }} />
+              <YAxis tick={{ fontSize: 10 }} width={48} />
+              <Tooltip
+                formatter={(v) => money(Number(v ?? 0))}
+                contentStyle={{
+                  background: 'var(--bg-card)',
+                  border: '1px solid var(--border)',
+                  borderRadius: 8,
+                }}
+              />
+              <Bar dataKey="inflows" name="In" stackId="cf" fill="var(--positive)" radius={[4, 4, 0, 0]} />
+              <Bar dataKey="outflows" name="Out" stackId="cf" fill="var(--negative)" radius={[4, 4, 0, 0]} />
+            </BarChart>
+          </ResponsiveContainer>
         </div>
       )}
     </div>
@@ -258,12 +649,14 @@ function BalanceMajorGroup({
   fallbackLines,
   fallbackTotal,
   layout = 'monthly',
+  fiscalYear,
 }: {
   title: string
   sections?: BalanceSectionGroup[] | null
   fallbackLines: BalanceLine[]
   fallbackTotal: number
   layout?: 'monthly' | 'annual'
+  fiscalYear?: string
 }) {
   const { t } = useLocale()
   if (sections && sections.length > 0) {
@@ -277,6 +670,7 @@ function BalanceMajorGroup({
             lines={sec.lines || []}
             total={Number(sec.total ?? 0)}
             layout={layout}
+            fiscalYear={fiscalYear}
           />
         ))}
         <p className="px-1 text-right text-sm font-semibold tabular-nums">
@@ -286,7 +680,13 @@ function BalanceMajorGroup({
     )
   }
   return (
-    <BalanceSection title={title} lines={fallbackLines} total={fallbackTotal} layout={layout} />
+    <BalanceSection
+      title={title}
+      lines={fallbackLines}
+      total={fallbackTotal}
+      layout={layout}
+      fiscalYear={fiscalYear}
+    />
   )
 }
 
@@ -327,16 +727,19 @@ export default function Reports() {
   const [drillTxs, setDrillTxs] = useState<Transaction[]>([])
   const [drillLoading, setDrillLoading] = useState(false)
   const [drillError, setDrillError] = useState<string | null>(null)
+  const [workspaceName, setWorkspaceName] = useState<string | null>(null)
 
   const loadMeta = useCallback(async () => {
     setLoading(true)
     setError(null)
     try {
-      const [periodsData, yearsData, avail] = await Promise.all([
+      const [periodsData, yearsData, avail, workspace] = await Promise.all([
         api.listPeriods({ workspace_id: workspaceId }),
         api.listFiscalYears(workspaceId),
         api.availableYears(workspaceId),
+        api.getWorkspace(workspaceId).catch(() => null),
       ])
+      setWorkspaceName(workspace?.name ?? null)
       setPeriods(Array.isArray(periodsData) ? periodsData : [])
       setFiscalYears(Array.isArray(yearsData.years) ? yearsData.years : [])
       // Prefer all discovered years (docs/Drive/txs); verified_years alone hid 2024
@@ -467,6 +870,8 @@ export default function Reports() {
   }, [bundle])
 
   const periodLabel = month ? `${fiscalYear}-${month}` : fiscalYear
+  const companyDisplayName = workspaceName?.trim() || 'LedgerAI'
+  const balanceAsOfPeriod = formatBalanceAsOf(locale, fiscalYear, month)
   const exportHref = api.exportStatementsUrl({
     workspace_id: workspaceId,
     fiscal_year: fiscalYear || undefined,
@@ -679,6 +1084,7 @@ export default function Reports() {
               items={pnlItems(displayPnl, 'revenueItems')}
               total={revTotal}
               layout={reportLayout}
+              fiscalYear={fiscalYear}
               onRowClick={(row) => void openPnLDrill(row)}
             />
             <MonthTable
@@ -686,6 +1092,7 @@ export default function Reports() {
               items={pnlItems(displayPnl, 'cogsItems')}
               total={cogsTotal}
               layout={reportLayout}
+              fiscalYear={fiscalYear}
               onRowClick={(row) => void openPnLDrill(row)}
             />
             <div className="rounded-xl border border-border bg-secondary/20 px-4 py-3 text-right">
@@ -699,6 +1106,7 @@ export default function Reports() {
               total={opexTotal}
               showUncategorizedHint
               layout={reportLayout}
+              fiscalYear={fiscalYear}
               onRowClick={(row) => void openPnLDrill(row)}
             />
 
@@ -798,163 +1206,48 @@ export default function Reports() {
                 </div>
               ))}
             </div>
-            <BalanceMajorGroup
-              title={t('reports.assets').toUpperCase()}
-              sections={bundle.balance_sheet.sections?.assets}
-              fallbackLines={bundle.balance_sheet.assets || []}
-              fallbackTotal={Number(bundle.balance_sheet.totalAssets ?? 0)}
-              layout={reportLayout}
-            />
-            <BalanceMajorGroup
-              title={t('reports.liabilities').toUpperCase()}
-              sections={bundle.balance_sheet.sections?.liabilities}
-              fallbackLines={bundle.balance_sheet.liabilities || []}
-              fallbackTotal={Number(bundle.balance_sheet.totalLiabilities ?? 0)}
-              layout={reportLayout}
-            />
-            <BalanceMajorGroup
-              title={t('reports.equity').toUpperCase()}
-              sections={bundle.balance_sheet.sections?.equity}
-              fallbackLines={bundle.balance_sheet.equity || []}
-              fallbackTotal={Number(bundle.balance_sheet.totalEquity ?? 0)}
-              layout={reportLayout}
-            />
+            {reportLayout === 'monthly' ? (
+              <BalanceSheetMonthlyTable
+                companyName={companyDisplayName}
+                asOfPeriod={balanceAsOfPeriod}
+                fiscalYear={fiscalYear}
+                balanceSheet={bundle.balance_sheet}
+              />
+            ) : (
+              <>
+                <BalanceMajorGroup
+                  title={t('reports.assets').toUpperCase()}
+                  sections={bundle.balance_sheet.sections?.assets}
+                  fallbackLines={bundle.balance_sheet.assets || []}
+                  fallbackTotal={Number(bundle.balance_sheet.totalAssets ?? 0)}
+                  layout={reportLayout}
+                  fiscalYear={fiscalYear}
+                />
+                <BalanceMajorGroup
+                  title={t('reports.liabilities').toUpperCase()}
+                  sections={bundle.balance_sheet.sections?.liabilities}
+                  fallbackLines={bundle.balance_sheet.liabilities || []}
+                  fallbackTotal={Number(bundle.balance_sheet.totalLiabilities ?? 0)}
+                  layout={reportLayout}
+                  fiscalYear={fiscalYear}
+                />
+                <BalanceMajorGroup
+                  title={t('reports.equity').toUpperCase()}
+                  sections={bundle.balance_sheet.sections?.equity}
+                  fallbackLines={bundle.balance_sheet.equity || []}
+                  fallbackTotal={Number(bundle.balance_sheet.totalEquity ?? 0)}
+                  layout={reportLayout}
+                  fiscalYear={fiscalYear}
+                />
+              </>
+            )}
           </div>
         )}
 
         {/* ── Cash flow ───────────────────────────────────────────────────── */}
         {bundle?.cash_flow && (
-          <div className="mb-6 space-y-4">
-            {cfMonthly.length > 0 && (
-              <div className="h-72 rounded-xl border border-border bg-background p-4 soft-shadow-lift">
-                <h3 className="mb-2 text-sm font-semibold">
-                  {t('reports.cfMonthly')} —{' '}
-                  <span className="text-[var(--positive)]">■</span> /{' '}
-                  <span className="text-[var(--negative)]">■</span>
-                </h3>
-                <ResponsiveContainer width="100%" height="90%">
-                  <BarChart data={cfMonthly} stackOffset="sign">
-                    <CartesianGrid strokeDasharray="3 3" stroke="var(--border)" />
-                    <XAxis dataKey="period" tick={{ fontSize: 11 }} />
-                    <YAxis tick={{ fontSize: 11 }} />
-                    <Tooltip
-                      formatter={(v) => money(Number(v ?? 0))}
-                      contentStyle={{
-                        background: 'var(--bg-card)',
-                        border: '1px solid var(--border)',
-                        borderRadius: 8,
-                      }}
-                    />
-                    <Bar
-                      dataKey="inflows"
-                      name="Entradas"
-                      stackId="cf"
-                      fill="var(--positive)"
-                      radius={[6, 6, 0, 0]}
-                    />
-                    <Bar
-                      dataKey="outflows"
-                      name="Salidas"
-                      stackId="cf"
-                      fill="var(--negative)"
-                      radius={[6, 6, 0, 0]}
-                    />
-                  </BarChart>
-                </ResponsiveContainer>
-              </div>
-            )}
-
-            <div className="table-scroll rounded-xl border border-border bg-card soft-shadow-lift">
-              <div className="border-b border-border px-4 py-3">
-                <h3 className="font-display text-lg tracking-wide">{t('reports.cfDetail')}</h3>
-              </div>
-              <table className="w-full min-w-[420px] text-left text-sm">
-                <thead className="bg-secondary/40 text-muted-foreground">
-                  <tr>
-                    <th className="px-3 py-2 font-medium">{t('reports.type')}</th>
-                    <th className="px-3 py-2 font-medium">{t('reports.code')}</th>
-                    <th className="px-3 py-2 font-medium">{t('reports.account')}</th>
-                    <th className="px-3 py-2 text-right font-medium">{t('reports.amount')}</th>
-                    <th className="px-3 py-2 text-right font-medium">{t('reports.txCount')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(
-                    [
-                      [t('reports.cfOperating'), 'operating', 'operatingSubtotal'],
-                      [t('reports.cfInvesting'), 'investing', 'investingSubtotal'],
-                      [t('reports.cfFinancing'), 'financing', 'financingSubtotal'],
-                    ] as const
-                  ).flatMap(([label, key, sub]) => {
-                    const lines = bundle.cash_flow_detail?.[key] || []
-                    const subtotal = Number(
-                      bundle.cash_flow_detail?.[sub] ??
-                        bundle.cash_flow?.[
-                          key === 'operating'
-                            ? 'operating'
-                            : key === 'investing'
-                              ? 'investing'
-                              : 'financing'
-                        ]?.net ??
-                        0,
-                    )
-                    const rows =
-                      lines.length === 0
-                        ? [
-                            <tr key={`${key}-empty`} className="border-t border-border">
-                              <td className="px-3 py-2 font-medium">{label}</td>
-                              <td colSpan={2} className="px-3 py-2 text-muted-foreground">
-                                {t('reports.emptySection')}
-                              </td>
-                              <td className="px-3 py-2 text-right tabular-nums">{money(subtotal)}</td>
-                              <td />
-                            </tr>,
-                          ]
-                        : lines.map((row) => (
-                            <tr
-                              key={`${key}-${row.code}-${row.name}`}
-                              className="border-t border-border transition-colors duration-200 hover:bg-[color-mix(in_srgb,var(--accent-cream)_8%,transparent)]"
-                            >
-                              <td className="px-3 py-2 font-medium">{label}</td>
-                              <td className="px-3 py-2 font-mono text-xs">{row.code}</td>
-                              <td className="px-3 py-2">{row.name}</td>
-                              <td className="px-3 py-2 text-right tabular-nums">
-                                {money(Number(row.amount ?? 0))}
-                              </td>
-                              <td className="px-3 py-2 text-right tabular-nums text-muted-foreground">
-                                {row.txCount ?? '—'}
-                              </td>
-                            </tr>
-                          ))
-                    return [
-                      ...rows,
-                      <tr key={`${key}-sub`} className="border-t border-border bg-secondary/20">
-                        <td colSpan={3} className="px-3 py-2 text-right font-semibold">
-                          {t('reports.subtotal')} {label}
-                        </td>
-                        <td className="px-3 py-2 text-right font-semibold tabular-nums">
-                          {money(subtotal)}
-                        </td>
-                        <td />
-                      </tr>,
-                    ]
-                  })}
-                  <tr className="border-t-2 border-border bg-secondary/40">
-                    <td colSpan={3} className="px-3 py-3 text-right font-display text-base font-semibold">
-                      {t('reports.cfNetTotal')}
-                    </td>
-                    <td className="px-3 py-3 text-right font-semibold tabular-nums">
-                      {money(
-                        Number(
-                          bundle.cash_flow_detail?.netTotal ?? bundle.cash_flow?.netChange ?? 0,
-                        ),
-                      )}
-                    </td>
-                    <td />
-                  </tr>
-                </tbody>
-              </table>
-            </div>
+          <div className="mb-6">
+            <CashFlowStatement bundle={bundle} netIncome={net} cfMonthly={cfMonthly} />
           </div>
         )}
       </section>

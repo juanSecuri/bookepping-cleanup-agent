@@ -52,8 +52,8 @@ El agente debe entonces:
 | — | Harden MVP (`harden-mvp-2026-08-26`) | **DONE** (cerrado 2026-08-26 EOD) |
 | **13a–13e** | Reportes, marca, Drive, OCR, Storage | **DONE** |
 | **14** | **CPA Taxes 2025** | **DONE** |
-| **15** | **Reportes QB: P&L + Balance mensual/anual (plantilla Excel, datos Drive)** | **ACTIVO** |
-| — | Infra: Render **Free** (sleep) + Supabase Free (wake) | Nota 2026-09-24 |
+| **15** | Reportes QB mensual/anual | **DONE** |
+| **16** | **CoA TPC + reglas bank stmt + BS/CF estilo QB + README MVP/decálogo** | **ACTIVO** |
 
 ---
 
@@ -257,6 +257,7 @@ Env: `EXTRACTION_MODE=local`, `LEDGERAI_UPLOAD_DIR=/var/data/ledgerai_uploads`.
 | **2026-08-27 EOD** | **Juan** | **Supabase Storage** bucket `documents` + `storage_path`; preview/worker leen de Storage; $0 en Free tier | **Sprint 08/27 cerrado** |
 | **2026-09-08** | **Empresa (vía Juan)** | Gastos sin categoría → buscar proveedor y categorizar; pagos/ingresos → cuenta ingresos; Balance con todas las cuentas; P&L drill detalle; conciliación banco×mes; reportes año/mes estilo QuickBooks para **CPA/SPA taxes 2025** | **Sprint 14 CPA Taxes** |
 | **2026-09-24** | **Empresa (vía Juan)** | P&L + Balance Sheet **formato QuickBooks** (Excel plantilla: mensual columnas + anual Total). Datos reales = Drive/LedgerAI, no números del Excel. Infra: **Render Free** (ya no Starter) + Supabase Free despertando. | **Sprint 15 QB Reports** |
+| **2026-09-24 (PM)** | **Empresa (vía Juan)** | Reportes más “original” QB (jerarquía); CoA CSV TPC; Cash Flow estilo QB; reglas bank stmt: meals, gas&oil, social media, insurance, parking, CC interest, spa→distributions equity; MVP + decálogo GitHub | **Sprint 16 CoA+QB+MVP** |
 
 ---
 
@@ -315,26 +316,26 @@ Split-screen extracto/OCR en Documentos | TanStack Table en Transacciones | Expo
 
 ## 11. Sprint activo
 
-### Sprint 15 — Reportes estilo QuickBooks mensual/anual (tarea 2026-09-24)
+### Sprint 16 — CoA TPC + reglas bank stmt + QB UI + MVP decálogo (2026-09-24 PM)
 
-**Objetivo:** mostrar P&L y Balance Sheet como los Excel de referencia QB (columnas por mes + vista anual Total), usando **solo datos de Drive/LedgerAI** (los Excel son plantilla de formato, no fuente de verdad).
+**Objetivo:** clasificación fiel a extractos (meals≠ingreso, gas&oil, social media, parking, distributions) + reportes más “original” QuickBooks + Cash Flow statement + README/decálogo GitHub. Datos = Drive; Excel/CSV = plantilla CoA/formato.
 
-| Orden | Tarea | DoD | Estado |
-|------:|-------|-----|--------|
-| T1 | Balance: columnas Jan–Dec con saldo acumulado YTD + vista anual Total | UI + API `byMonth` cumulativo + export | **DONE** |
-| T2 | P&L: toggle Mensual/Anual; Gross Profit; “Total for …” | UI + export | **DONE** |
-| T3 | Export XLSX alineado a plantilla QB | 4 tabs | **DONE** |
-| T4 | Copy Free tier (Render sleep + Supabase wake) | Cold-start banner | **DONE** |
+| Orden | Tarea | Estado |
+|------:|-------|--------|
+| T1 | CoA + `account_rules`: Meals, Gas&Oil, Social Media, Parking, CC interest, spa→3030 | **DONE** |
+| T2 | Heurística: merchants de gasto no caen en 4040 Other Income | **DONE** |
+| T3 | Balance Sheet UI jerárquico estilo QB | **DONE** |
+| T4 | Cash Flow statement layout O/I/F tipo QB | **DONE** |
+| T5 | Limpieza dead code + README decálogo MVP + descripción GitHub | **DONE** |
 
-**Constraint:** $0 APIs IA. **Infra 2026-09-24:** ya no Starter — Render Free (cold start) + Supabase Free (puede dormir).
-
-| Sprint | Objetivo | Estado |
-|--------|----------|--------|
-| **14** | CPA Taxes 2025 | **DONE** |
-| **15** | P&L + Balance formato QB mensual/anual (datos Drive) | **DONE** (código; redeploy pendiente) |
+| Sprint | Estado |
+|--------|--------|
+| **15** | **DONE** |
+| **16** | **DONE** (código; redeploy + seed CoA en workspace) |
 
 **Live:** https://ledgerai-0wyy.onrender.com
 
 ---
 
 *LedgerAI — parámetros vivos. Actualizar al cerrar sprints y al hablar con la empresa.*
+

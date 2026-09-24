@@ -30,6 +30,63 @@ INCOME_CODES = frozenset({"4010", "4020", "4030", "4040"})
 # Codes that must not swallow operating revenue when direction=income
 BLOCK_FOR_INCOME = frozenset({"1010", "9999"})
 
+# Known expense merchants — credits mislabeled as income must not land on 4040
+_EXPENSE_MERCHANT_HINTS: tuple[str, ...] = (
+    "restaurant",
+    "starbucks",
+    "doordash",
+    "grubhub",
+    "texas roadhouse",
+    "roadhouse",
+    "sabor",
+    "rodizio",
+    "pizza",
+    "bar",
+    "cafe",
+    "cafeteria",
+    "meals",
+    "food",
+    "exxon",
+    "shell",
+    "chevron",
+    "fuel",
+    "7-eleven",
+    "7 eleven",
+    "wawa",
+    "bp",
+    "gas station",
+    "parking",
+    "toll",
+    "sunpass",
+    "google ads",
+    "google *ads",
+    "facebook ads",
+    "meta ads",
+    "instagram ads",
+    "tiktok ads",
+    "social media",
+    "insurance",
+    "geico",
+    "state farm",
+    "spa",
+    "massage",
+    "dental",
+    "pharmacy",
+    "cvs",
+    "walgreens",
+    "serenity spa",
+    "barnes",
+    "chamber",
+)
+
+
+def looks_like_expense_merchant(cleaned: str) -> bool:
+    """True when description looks like OpEx/COGS vendor, not operating revenue."""
+    if not cleaned:
+        return False
+    return any(hint in cleaned for hint in _EXPENSE_MERCHANT_HINTS)
+
+
 # Bootstrap seeds when tenant has no account_rules yet
 DEFAULT_SEED_RULES: list[tuple[list[str], str, str]] = [
     (["rent", "lease", "landlord"], "6020", "Rent Expense"),
@@ -37,21 +94,44 @@ DEFAULT_SEED_RULES: list[tuple[list[str], str, str]] = [
     (["office depot", "staples", "supplies"], "6040", "Office Supplies"),
     (
         [
-            "uber",
-            "lyft",
-            "airline",
-            "hotel",
-            "marriott",
-            "airbnb",
             "restaurant",
             "starbucks",
             "doordash",
             "grubhub",
+            "texas roadhouse",
+            "roadhouse",
+            "sabor",
+            "rodizio",
+            "pizza",
+            "bar",
+            "cafe",
+            "cafeteria",
+            "meals",
+            "food",
         ],
         "6050",
-        "Travel & Meals",
+        "Meals Expense",
     ),
-    (["ads", "advertis", "facebook ads", "google ads", "marketing", "highlevel"], "6060", "Marketing & Advertising"),
+    (
+        ["uber", "lyft", "airline", "hotel", "marriott", "airbnb"],
+        "6055",
+        "Travel",
+    ),
+    (["marketing", "highlevel", "advertis"], "6060", "Marketing & Advertising"),
+    (
+        [
+            "google ads",
+            "google *ads",
+            "facebook ads",
+            "facebook",
+            "meta ads",
+            "instagram ads",
+            "tiktok ads",
+            "social media",
+        ],
+        "6065",
+        "Social Media Ads",
+    ),
     (["legal", "attorney", "accountant", "cpa", "consult"], "6070", "Professional Services"),
     (["insurance", "geico", "state farm"], "6080", "Insurance"),
     (["repair", "maintenance", "hvac"], "6090", "Repairs & Maintenance"),
@@ -60,7 +140,26 @@ DEFAULT_SEED_RULES: list[tuple[list[str], str, str]] = [
         "6100",
         "Technology & Software",
     ),
-    (["fee", "bank fee", "service charge", "overdraft"], "6110", "Bank Fees & Charges"),
+    (
+        [
+            "fee",
+            "bank fee",
+            "service charge",
+            "overdraft",
+            "credit card interest",
+            "interest charge",
+            "finance charge",
+        ],
+        "6110",
+        "Bank Fees & Charges",
+    ),
+    (["loan interest"], "6140", "Interest Expense"),
+    (
+        ["exxon", "shell", "chevron", "fuel", "7-eleven", "7 eleven", "wawa", "bp", "gas station"],
+        "6160",
+        "Gas & Oil",
+    ),
+    (["parking", "toll", "sunpass"], "6170", "Parking & Tolls"),
     (["tax", "irs", "license", "permit"], "6130", "Taxes & Licenses"),
     (["salary", "payroll", "wage", "gusto", "adp"], "6010", "Salaries & Wages"),
     (["interest income", "dividend", "interest earned"], "4030", "Interest Income"),
@@ -95,13 +194,58 @@ DEFAULT_SEED_RULES: list[tuple[list[str], str, str]] = [
         "4040",
         "Other Income",
     ),
-    (["costco", "walmart", "target", "amazon", "exxon", "shell", "chevron", "fuel"], "5010", "Cost of Goods Sold"),
+    (["costco", "walmart", "target", "amazon"], "5010", "Cost of Goods Sold"),
     (
-        ["owner draw", "owners draw", "personal", "retiro socio", "owner's draw", "draws"],
+        [
+            "owner draw",
+            "owners draw",
+            "personal",
+            "retiro socio",
+            "owner's draw",
+            "draws",
+            "spa",
+            "massage",
+            "dental",
+            "pharmacy",
+            "cvs",
+            "walgreens",
+            "serenity spa",
+        ],
         "3030",
-        "Owner's Draws / Retiros del Socio",
+        "Owner's Distributions / Equity Distributions",
     ),
 ]
+
+FUEL_COGS_MARKERS = frozenset(
+    {"exxon", "shell", "chevron", "fuel", "7-eleven", "7 eleven", "wawa", "bp", "gas station"}
+)
+SOCIAL_ADS_MARKERS = frozenset(
+    {
+        "google ads",
+        "facebook ads",
+        "facebook",
+        "meta ads",
+        "instagram ads",
+        "tiktok ads",
+        "social media",
+    }
+)
+TRAVEL_MARKERS = frozenset({"uber", "lyft", "airline", "hotel", "marriott", "airbnb"})
+MEALS_MARKERS = frozenset(
+    {
+        "restaurant",
+        "starbucks",
+        "doordash",
+        "grubhub",
+        "texas roadhouse",
+        "pizza",
+        "bar",
+        "cafe",
+        "cafeteria",
+        "meals",
+        "food",
+    }
+)
 
 
 @dataclass
@@ -390,6 +534,165 @@ class RuleCoAClassifier:
         self.invalidate(tenant_id)
         return {"patched_cash_to_income": patched, "inserted_income_rules": inserted}
 
+    def _collect_existing_keywords(self, tenant_id: uuid.UUID) -> set[str]:
+        client = get_supabase_client()
+        existing = (
+            client.table("account_rules")
+            .select("keywords")
+            .eq("tenant_id", str(tenant_id))
+            .eq("is_active", True)
+            .execute()
+        )
+        existing_kw: set[str] = set()
+        for row in existing.data or []:
+            for k in row.get("keywords") or []:
+                existing_kw.add(str(k).lower())
+        return existing_kw
+
+    def _insert_seed_rule_if_missing(
+        self,
+        tenant_id: uuid.UUID,
+        keywords: list[str],
+        code: str,
+        default_name: str,
+        accounts: dict[str, str],
+        existing_kw: set[str],
+    ) -> bool:
+        if any(k.lower() in existing_kw for k in keywords):
+            return False
+        client = get_supabase_client()
+        client.table("account_rules").insert(
+            {
+                "tenant_id": str(tenant_id),
+                "keywords": [k.lower() for k in keywords],
+                "account_code": code,
+                "account_name": accounts.get(code, default_name),
+                "source": "seed",
+                "is_active": True,
+            }
+        ).execute()
+        existing_kw.update(k.lower() for k in keywords)
+        return True
+
+    def upgrade_expense_seed_rules(self, tenant_id: uuid.UUID) -> dict[str, int]:
+        """
+        Fix legacy seeds: fuel on COGS 5010 → Gas 6160; social ads on 6060 → 6065;
+        split travel/meals on 6050; insert missing expense seed rows.
+        """
+        client = get_supabase_client()
+        accounts = self._load_accounts(tenant_id)
+        patched_fuel = 0
+        patched_social = 0
+        patched_travel_meals = 0
+
+        seed_rows = (
+            client.table("account_rules")
+            .select("id,keywords,account_code,source")
+            .eq("tenant_id", str(tenant_id))
+            .eq("source", "seed")
+            .eq("is_active", True)
+            .execute()
+        )
+        for row in seed_rows.data or []:
+            raw_kws = [str(k).lower() for k in (row.get("keywords") or [])]
+            kws_set = set(raw_kws)
+            rule_id = row["id"]
+            code = str(row.get("account_code") or "")
+
+            if code == "5010" and kws_set.intersection(FUEL_COGS_MARKERS):
+                remaining = [k for k in raw_kws if k not in FUEL_COGS_MARKERS]
+                fuel_kws = [k for k in raw_kws if k in FUEL_COGS_MARKERS]
+                if remaining:
+                    client.table("account_rules").update(
+                        {
+                            "keywords": remaining,
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                    ).eq("id", rule_id).execute()
+                else:
+                    client.table("account_rules").update(
+                        {
+                            "account_code": "6160",
+                            "account_name": accounts.get("6160", "Gas & Oil"),
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                    ).eq("id", rule_id).execute()
+                    patched_fuel += 1
+                    continue
+                existing_kw = self._collect_existing_keywords(tenant_id)
+                if fuel_kws and not any(k in existing_kw for k in fuel_kws):
+                    self._insert_seed_rule_if_missing(
+                        tenant_id,
+                        fuel_kws,
+                        "6160",
+                        "Gas & Oil",
+                        accounts,
+                        existing_kw,
+                    )
+                patched_fuel += 1
+                continue
+
+            if code == "6060" and kws_set.intersection(SOCIAL_ADS_MARKERS):
+                remaining = [k for k in raw_kws if k not in SOCIAL_ADS_MARKERS]
+                social_kws = [k for k in raw_kws if k in SOCIAL_ADS_MARKERS]
+                if remaining:
+                    client.table("account_rules").update(
+                        {
+                            "keywords": remaining,
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                    ).eq("id", rule_id).execute()
+                else:
+                    client.table("account_rules").update(
+                        {
+                            "account_code": "6065",
+                            "account_name": accounts.get("6065", "Social Media Ads"),
+                            "updated_at": datetime.now(timezone.utc).isoformat(),
+                        }
+                    ).eq("id", rule_id).execute()
+                    patched_social += 1
+                    continue
+                existing_kw = self._collect_existing_keywords(tenant_id)
+                if social_kws and not any(k in existing_kw for k in social_kws):
+                    self._insert_seed_rule_if_missing(
+                        tenant_id,
+                        social_kws,
+                        "6065",
+                        "Social Media Ads",
+                        accounts,
+                        existing_kw,
+                    )
+                patched_social += 1
+                continue
+
+            if code == "6050" and kws_set.intersection(TRAVEL_MARKERS) and not kws_set.intersection(MEALS_MARKERS):
+                client.table("account_rules").update(
+                    {
+                        "account_code": "6055",
+                        "account_name": accounts.get("6055", "Travel"),
+                        "updated_at": datetime.now(timezone.utc).isoformat(),
+                    }
+                ).eq("id", rule_id).execute()
+                patched_travel_meals += 1
+
+        existing_kw = self._collect_existing_keywords(tenant_id)
+        inserted = 0
+        for keywords, code, default_name in DEFAULT_SEED_RULES:
+            if code in INCOME_CODES:
+                continue
+            if self._insert_seed_rule_if_missing(
+                tenant_id, list(keywords), code, default_name, accounts, existing_kw
+            ):
+                inserted += 1
+
+        self.invalidate(tenant_id)
+        return {
+            "patched_fuel_cogs_to_gas": patched_fuel,
+            "patched_social_to_6065": patched_social,
+            "patched_travel_on_6050": patched_travel_meals,
+            "inserted_expense_rules": inserted,
+        }
+
     def classify(
         self,
         tenant_id: uuid.UUID,
@@ -401,6 +704,10 @@ class RuleCoAClassifier:
         vendor = extract_vendor(description)
         accounts = self._load_accounts(tenant_id)
         rules = self._load_rules(tenant_id)
+
+        effective_direction = direction
+        if direction == "income" and looks_like_expense_merchant(cleaned):
+            effective_direction = "expense"
 
         best: CoAMatch | None = None
         for rule in rules:
@@ -425,12 +732,12 @@ class RuleCoAClassifier:
             family = _code_family(code)
 
             # Direction filter: income credits must not land on Cash / OpEx
-            if direction == "income":
+            if effective_direction == "income":
                 if code in BLOCK_FOR_INCOME or family in {"expense", "cogs"}:
                     continue
                 if family == "income":
                     conf = min(conf + 0.05, 0.99)
-            elif direction == "expense":
+            elif effective_direction == "expense":
                 if family == "income":
                     continue
 
@@ -449,7 +756,7 @@ class RuleCoAClassifier:
         if best:
             return best
 
-        if direction == "income":
+        if effective_direction == "income":
             return CoAMatch(
                 code=INCOME_DEFAULT_CODE,
                 name=accounts.get(INCOME_DEFAULT_CODE, INCOME_DEFAULT_NAME),

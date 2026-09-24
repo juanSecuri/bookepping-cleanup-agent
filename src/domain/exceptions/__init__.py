@@ -20,12 +20,8 @@ class ReconciliationError(BookkeepingError):
 
 
 class CategorizationError(BookkeepingError):
-    """Raised when the RAG engine cannot assign a Chart-of-Accounts category."""
+    """Raised when CoA rules cannot assign a Chart-of-Accounts category."""
 
 
 class ExtractionError(BookkeepingError):
     """Raised when a document (image, PDF, audio) cannot be parsed."""
-
-
-class QuickBooksExportError(BookkeepingError):
-    """Raised when a verified transaction fails to sync with QuickBooks Online."""

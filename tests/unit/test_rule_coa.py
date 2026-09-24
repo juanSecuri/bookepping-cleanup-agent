@@ -3,14 +3,18 @@ from __future__ import annotations
 
 from src.infrastructure.classification.rule_coa import (
     DEFAULT_SEED_RULES,
+    FUEL_COGS_MARKERS,
     INCOME_CODES,
     INCOME_DEFAULT_CODE,
+    MEALS_MARKERS,
     SALES_REVENUE_CODE,
+    SOCIAL_ADS_MARKERS,
     SUSPENSE_CODE,
     _code_family,
     clean_description,
     extract_learn_keyword,
     extract_vendor,
+    looks_like_expense_merchant,
 )
 
 
@@ -101,3 +105,43 @@ def test_upgrade_markers_cover_income_seed_keywords() -> None:
             "professional fee",
             "retainer",
         } | sales_markers
+
+
+def test_expense_keywords_not_in_income_seeds() -> None:
+    expense_only = MEALS_MARKERS | FUEL_COGS_MARKERS | SOCIAL_ADS_MARKERS
+    for keywords, code, _name in DEFAULT_SEED_RULES:
+        if code not in INCOME_CODES:
+            continue
+        for kw in keywords:
+            assert kw.lower() not in expense_only, f"income seed must not own {kw!r}"
+
+
+def test_fuel_not_cogs_or_cash_in_default_seeds() -> None:
+    for keywords, code, _name in DEFAULT_SEED_RULES:
+        if not any(k.lower() in FUEL_COGS_MARKERS for k in keywords):
+            continue
+        assert code == "6160", f"fuel keywords {keywords} must map to 6160, got {code}"
+        assert code not in {"1010", "5010"}
+
+
+def test_social_media_ads_seed_code() -> None:
+    social_rules = [
+        (keywords, code)
+        for keywords, code, _name in DEFAULT_SEED_RULES
+        if any(k.lower() in SOCIAL_ADS_MARKERS for k in keywords)
+    ]
+    assert social_rules, "expected social media seed rules"
+    for _keywords, code in social_rules:
+        assert code == "6065"
+
+
+def test_meals_keywords_map_to_meals_expense() -> None:
+    for keywords, code, _name in DEFAULT_SEED_RULES:
+        if any(k.lower() in MEALS_MARKERS for k in keywords):
+            assert code == "6050"
+
+
+def test_mislabeled_income_merchants_detected() -> None:
+    assert looks_like_expense_merchant(clean_description("TEXAS ROADHOUSE #1234"))
+    assert looks_like_expense_merchant(clean_description("EXXONMOBIL FUEL"))
+    assert not looks_like_expense_merchant(clean_description("STRIPE PAYMENT THANK YOU"))
