@@ -368,6 +368,14 @@ Split-screen extracto/OCR en Documentos | TanStack Table en Transacciones | Expo
 
 **Live:** https://ledgerai-0wyy.onrender.com — redeploy tras push; luego Emitir estados / refrescar Reportes.
 
+### Sprint 18 — Decálogo de mercado alineado a ZOPP (tarea 2026-09-25)
+
+**Foco:** README para la clase. Árbol de problemas / objetivos del taller + decálogo de mercado solo con lo que LedgerAI hace (SaaS, ingesta Drive, dashboard). Fuera: outsourcing y backup como productos.
+
+| Orden | Tarea | Estado |
+|------:|-------|--------|
+| T1 | Reescribir decálogo en `README.md` con ZOPP y realidad del producto | **DONE** |
+
 ---
 
 *LedgerAI — parámetros vivos. Actualizar al cerrar sprints y al hablar con la empresa.*
