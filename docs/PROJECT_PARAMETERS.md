@@ -370,11 +370,12 @@ Split-screen extracto/OCR en Documentos | TanStack Table en Transacciones | Expo
 
 ### Sprint 18 — Decálogo de mercado alineado a ZOPP (tarea 2026-09-25)
 
-**Foco:** README para la clase. Árbol de problemas / objetivos del taller + decálogo de mercado solo con lo que LedgerAI hace (SaaS, ingesta Drive, dashboard). Fuera: outsourcing y backup como productos.
+**Foco:** README para la clase. Árbol ZOPP (15 sep) + decálogo con los 10 componentes del 22 sep (producto, demanda, oferta, precio no inventado, canal digital, marketing, insumos, geografía, proyección, conclusiones).
 
 | Orden | Tarea | Estado |
 |------:|-------|--------|
-| T1 | Reescribir decálogo en `README.md` con ZOPP y realidad del producto | **DONE** |
+| T1 | Árbol ZOPP + lluvia de ideas vs producto real | **DONE** |
+| T2 | Decálogo con los 10 componentes de la clase del 22 sep, sin cifras inventadas | **DONE** |
 
 ---
 

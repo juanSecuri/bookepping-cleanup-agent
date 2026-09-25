@@ -49,60 +49,100 @@ La idea elegida para atacar el problema central es la **plataforma web**: lee lo
 
 ---
 
-## Decálogo del mercado
+## Decálogo del estudio de mercado
 
-Los diez componentes del mercado, alineados al árbol y a lo que el software hace (no a las ideas que quedaron fuera).
+*(Clase 22 de septiembre de 2026 — componentes del módulo de mercado. Segmento objetivo = cliente potencial.)*
 
-### 1. Compradores (demanda)
-Dueños de negocio que ya son **clientes de TPC** y tienen **libros atrasados o desordenados** (el problema central).  
-Sienten los efectos: riesgo fiscal, dinero que no cuadra y poca claridad para el contador. Pagan una **suscripción mensual** por orden y reportes, no por un ERP ni por horas eternas de Excel.
+**Segmento objetivo (target):** dueño de un negocio pequeño que ya es cliente de The Profit Catalyst, con extractos de varios años sin ordenar, y que debe entregarle un paquete claro a su CPA. Caso de trabajo real: My Xcell Network CORP (Miami).
 
-### 2. Vendedores (oferta)
-Un **freelancer** desarrolla y vende el SaaS a esos clientes.  
-La oferta es el software de saneamiento contable. No es una firma de outsourcing ni una licencia de escritorio.
+**Justificación (impacto):** ordenar los libros baja el riesgo de sanciones y de decisiones con números malos, y le devuelve tiempo al dueño. Es un impacto práctico sobre el cumplimiento y sobre cómo se administra el negocio, no una campaña cultural aparte.
 
-### 3. Bienes y servicios (objeto)
-Un **servicio digital (SaaS)** que responde al objetivo central (sanear y automatizar):
+Los montos y el tamaño de la cartera **no se inventan**. Donde aún no hay cifra de lista o censo de clientes, queda dicho así.
 
-- Entrada de soportes desde las **carpetas de Google Drive** del cliente (y carga de PDF, Excel/CSV o foto)
-- Clasificación de cada movimiento según el plan de cuentas del cliente (ingreso solo si es un depósito real; gasto, retiro del dueño o pago de tarjeta según corresponda)
-- Conciliación por banco y por mes
-- Reportes del periodo: Balance, Pérdidas y Ganancias y Flujo de efectivo, más exportación para el CPA
+### 1. Definición y caracterización del producto o servicio. ¿Qué es?
+LedgerAI es un **servicio digital (SaaS)**: una aplicación web para sanear contabilidad atrasada.
 
-Lo intangible es **libros legibles** frente a carpetas y extractos sueltos. Los números salen de esos extractos, no de una plantilla de Excel.
+Hace cuatro cosas, con los documentos del propio cliente:
 
-### 4. Precio
-**Suscripción mensual** por cliente o empresa, del freelancer a clientes TPC.  
-El precio se compara con el costo de seguir en Excel manual y con lo que el cliente ya paga por apoyo contable. El monto de lista se acuerda en cada caso.
+- Lee las carpetas de Google Drive (y también PDF, Excel o CSV, y foto)
+- Clasifica cada movimiento en el plan de cuentas (un ingreso solo si es un depósito real)
+- Concilia banco por mes
+- Entrega Balance, Pérdidas y Ganancias y Flujo de efectivo del periodo, para que el humano verifique y el CPA reciba el paquete
 
-### 5. Canales de distribución
-- Aplicación web (computador y celular en el navegador)
-- Login por cliente / espacio de trabajo
-- Datos que entran por Google Drive y por carga de archivos
-- Resultados en pantalla y archivo para el CPA
-- Venta directa del freelancer a la cartera TPC
+No es outsourcing contable, no es un programa de escritorio y no es infraestructura alquilada (IaaS). El día a día no usa inteligencia artificial de pago.
 
-No hay instalación de un programa de escritorio.
+### 2. Análisis de la demanda real. ¿Quién es el cliente? Cuantifica. Población objetivo.
+**Cliente:** el dueño del negocio que contrata a TPC, no el público en general y no el contador como comprador principal. El CPA es quien recibe el resultado.
 
-### 6. Competencia
-Las causas del árbol son la competencia de hecho: **papel y Excel manual**, más QuickBooks (completo pero pesado), bookkeeping 100 % humano y herramientas de “contabilidad con IA” de pago.  
-LedgerAI se diferencia por enfocarse en **limpieza atrasada** con reglas del propio plan de cuentas del cliente, y por operar **sin alquilar un modelo de IA** para el trabajo diario.
+**Población objetivo:** negocios de la cartera activa de TPC que tienen libros desorganizados, atrasados o inestables (el problema central del árbol).
 
-### 7. Entorno geográfico o digital
-El servicio vive en la **web**.  
-Mercado inicial: **Estados Unidos · Florida · Miami**, donde están los clientes TPC de esta cartera (negocios locales). El alcance crece solo si crece esa cartera.
+**Cuantificación:** la unidad que se puede contar es “cliente activo de TPC con extractos sin cerrar”. Hoy el producto se demuestra con un cliente real (My Xcell). El censo de toda la cartera TPC no está en este documento; no se pone un número de empresas inventado.
 
-### 8. Información de mercado
-El cliente ve documentos, lo que falta por clasificar, bancos y meses, y los tres reportes del periodo.  
-Eso ataca el efecto de “deudas y pérdidas por mala información”: se puede responder cuánto fue gasto, cuánto ingreso (depósitos) y si el banco cuadra, antes de hablar con el CPA.
+### 3. Análisis de la oferta y competencia. ¿Cuántos hacen lo mismo? ¿A qué precio? ¿Cuál es su capacidad?
+Quienes cubren la misma necesidad, sin tarifa inventada:
 
-### 9. Marco institucional (reglas)
-El fin del árbol incluye **cumplimiento legal y buenas prácticas tributarias**. El software apoya ese fin con orden y reportes; **no sustituye** al CPA ni da asesoría fiscal.  
-Además: acceso por usuario, datos financieros del cliente con uso limitado al trabajo contable, y un contrato de servicio SaaS.
+| Oferta | Qué cubre | Precio (lo que sí se sabe) | Capacidad |
+|--------|-----------|----------------------------|-----------|
+| Papel o Excel manual | El dueño o un asistente arma los libros | El costo es el tiempo de la persona | Baja cuando hay años de extractos y muchas cuentas de banco |
+| QuickBooks | Contabilidad completa del día a día | Licencia de pago; la tarifa de lista no se copia aquí | Alta, pero pesada para solo “limpiar lo atrasado” |
+| Bookkeeping 100 % humano | Alguien clasifica línea por línea | Se cobra por hora o por mes de servicio | Limitada por las horas de esa persona |
+| Herramientas de contabilidad con IA de pago | Clasifican usando un modelo alquilado | Cobran el software y, además, el uso del modelo | Dependen de ese costo variable |
 
-### 10. Capacidad de pago (flujo de dinero)
-El cliente TPC paga la **mensualidad** al freelancer (transferencia, tarjeta o factura, según se acuerde).  
-Dentro del negocio del cliente, el flujo que el producto ordena es el de los extractos: clasificar, conciliar, reportar y entregar al contador. La reducción de costo del árbol (menos horas manuales) es lo que hace pagable la suscripción.
+LedgerAI no pretende contar “cuántas empresas iguales hay en el país”. Su lugar es más estrecho: **limpieza de libros atrasados** para clientes que TPC ya atiende, con reglas del plan de cuentas del cliente y sin pagar un modelo de IA por cada movimiento.
+
+### 4. Análisis de precios. Precio histórico, precio propuesto y justificación. No inventado.
+| | |
+|--|--|
+| **Precio histórico** | LedgerAI todavía no tiene una lista de precios cobrada. No hay tarifa anterior que citar. |
+| **Precio propuesto** | Suscripción **mensual** por cliente o por empresa (SaaS). El monto en dólares **no se fija en este estudio** hasta acordarlo con TPC. |
+| **Justificación** | Se compara con las horas de Excel o de bookkeeping que ese cliente ya paga, no con un número sacado de otra industria. El costo de operar el software se mantiene bajo porque el hosting del prototipo es un plan gratuito y la clasificación no alquila IA. |
+
+### 5. Canales de comercialización y distribución. ¿Cómo llega del productor al consumidor? Digital.
+El productor es el freelancer. El consumidor final es el cliente TPC.
+
+1. El freelancer ofrece LedgerAI dentro de la relación que TPC ya tiene con ese cliente.
+2. El cliente entra por el navegador (computador o celular), con su usuario.
+3. Los extractos llegan por las carpetas de Google Drive o por carga de archivo.
+4. El resultado vuelve en pantalla y en un archivo para el CPA.
+
+No hay tienda física, instalador ni distribuidor intermedio.
+
+### 6. Estrategia de marketing y ventas. ¿Cómo se dan a conocer? Presupuesto de promoción.
+**Cómo se conoce:** venta directa del freelancer a la cartera TPC. No hay pauta, feria ni red social de lanzamiento en este prototipo.
+
+**Presupuesto de promoción:** hoy es **cero**. No se anota un presupuesto de publicidad inventado. La promoción es la demo con un cliente real y el uso dentro de TPC.
+
+### 7. Mercado de insumos y proveedores. ¿Qué tan estable es el suministro?
+Los insumos del servicio son digitales:
+
+| Insumo | Proveedor | Estabilidad |
+|--------|-----------|-------------|
+| Extractos y carpetas del cliente | Google Drive (los comparte el cliente) | Estable si el cliente mantiene el acceso a esas carpetas |
+| Lectura de PDF, Excel y reglas de clasificación | Programas libres (sin licencia de IA) | Estable; no dependen de un proveedor de pago |
+| Aplicación en línea y base de datos del prototipo | Planes gratuitos de hosting | El servicio puede dormirse por inactividad y tiene tope de memoria; no es un suministro empresarial garantizado |
+
+El cuello de botella real no es un insumo físico. Es que el cliente entregue las carpetas completas y que alguien verifique lo clasificado.
+
+### 8. Área de influencia y mercado geográfico
+Influencia **digital** (se usa en el navegador) con mercado geográfico inicial **Estados Unidos, Florida, Miami**, porque ahí están los clientes TPC de esta cartera. No se afirma un mercado nacional ni internacional hasta que la cartera salga de esa zona.
+
+### 9. Proyección de ventas y estimación de la demanda
+La estimación se deja en fórmula, sin un ingreso inventado:
+
+**Clientes activos de TPC con libros atrasados × suscripción mensual acordada.**
+
+Hoy esa proyección no se convierte en dólares porque faltan las dos cifras: el censo de la cartera y el precio de lista. El primer caso (My Xcell) sirve para probar que el servicio se usa, no para extrapolar ventas.
+
+### 10. Conclusiones del estudio de mercado y riesgos
+**Conclusión:** hay una demanda acotada y conocida (clientes TPC con libros atrasados). La oferta se diferencia de Excel, de QuickBooks completo y de la IA de pago. El canal es digital y directo. El precio y el tamaño de la demanda **siguen abiertos a propósito**.
+
+**Riesgos:**
+
+- Precio sin cerrar: no hay ingreso predecible todavía.
+- La cartera puede ser pequeña; un solo cliente de prueba no prueba el mercado entero.
+- El hosting gratuito se duerme y limita el volumen.
+- Si el extracto se lee mal, alguien tiene que corregir la cuenta.
+- El reporte apoya al CPA; no evita una sanción por sí solo.
 
 ---
 
