@@ -6,6 +6,7 @@ import { AuthProvider } from './auth/AuthProvider'
 import { RequireAuth } from './auth/RequireAuth'
 import Landing from './pages/Landing'
 import Login from './pages/Login'
+import ResetPassword from './pages/ResetPassword'
 import Workspaces from './pages/Workspaces'
 import Layout from './pages/app/Layout'
 import Dashboard from './pages/app/Dashboard'
@@ -25,6 +26,7 @@ export default function App() {
             <Routes>
               <Route path="/" element={<Landing />} />
               <Route path="/login" element={<Login />} />
+              <Route path="/reset-password" element={<ResetPassword />} />
               <Route path="/workspaces" element={<Workspaces />} />
               <Route
                 path="/app/:workspaceId"

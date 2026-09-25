@@ -11,7 +11,17 @@ Empresa compró Render Starter y pidió Auth ahora. Scaffold: Supabase JWT + `wo
 | Bootstrap primer owner (`AUTH_BOOTSTRAP_FIRST_OWNER`) | Listo |
 | Checks en mutations (txs / movements / drive / file) | Listo |
 | Frontend login + signup (`/app/*` gate si hay `VITE_*`) | Listo |
+| Recuperar contraseña (`/login` → correo → `/reset-password`) | Listo en código |
 | Invite UX / RLS completa | Pendiente |
+
+## Recuperar contraseña
+
+En `/login`, **Olvidé mi contraseña** llama a `resetPasswordForEmail` y el enlace vuelve a `{origen}/reset-password`, donde el cliente elige la nueva clave (`updateUser`).
+
+En Supabase → Authentication → URL Configuration, agrega estas Redirect URLs (si no están, el correo no regresa a LedgerAI):
+
+- `https://ledgerai-0wyy.onrender.com/reset-password`
+- `http://localhost:5173/reset-password`
 
 ## Cómo activar Auth en producción (cuando estés en el PC)
 

@@ -22,6 +22,8 @@ type AuthContextValue = {
   signIn: (email: string, password: string) => Promise<void>
   signUp: (email: string, password: string) => Promise<void>
   signOut: () => Promise<void>
+  requestPasswordReset: (email: string) => Promise<void>
+  updatePassword: (password: string) => Promise<void>
 }
 
 const AuthContext = createContext<AuthContextValue | null>(null)
@@ -88,6 +90,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     syncTokenFromSession(null)
   }, [])
 
+  const requestPasswordReset = useCallback(async (email: string) => {
+    const sb = getSupabase()
+    if (!sb) throw new Error('Supabase auth is not configured')
+    const redirectTo = `${window.location.origin}/reset-password`
+    const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo })
+    if (error) throw error
+  }, [])
+
+  const updatePassword = useCallback(async (password: string) => {
+    const sb = getSupabase()
+    if (!sb) throw new Error('Supabase auth is not configured')
+    const { error } = await sb.auth.updateUser({ password })
+    if (error) throw error
+  }, [])
+
   const value = useMemo<AuthContextValue>(
     () => ({
       configured: authConfigured,
@@ -97,8 +114,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       signIn,
       signUp,
       signOut,
+      requestPasswordReset,
+      updatePassword,
     }),
-    [loading, session, signIn, signUp, signOut],
+    [loading, session, signIn, signUp, signOut, requestPasswordReset, updatePassword],
   )
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
