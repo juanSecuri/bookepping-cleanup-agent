@@ -38,6 +38,7 @@ from src.infrastructure.reconciliation.statement_chain import (
     StatementPeriodRepository,
     acknowledge_chain,
 )
+from src.infrastructure.drive.year_policy import years_at_or_below
 from src.infrastructure.reports.period_xlsx_export import bundle_to_xlsx_bytes
 from src.infrastructure.repositories.document_repository import DocumentRecord, DocumentRepository
 from src.infrastructure.repositories.supabase_client import get_supabase_client
@@ -1506,13 +1507,17 @@ async def available_years(workspace_id: str) -> dict:
     except Exception:
         pass
 
-    years_sorted = sorted(years, reverse=True)
-    verified_sorted = sorted(verified_years, reverse=True)
+    ws = await WorkspaceRepository().get(tid)
+    ceiling = ws.max_fiscal_year if ws else None
+    years_sorted = years_at_or_below(years, ceiling)
+    verified_sorted = years_at_or_below(verified_years, ceiling)
+    default_year = "2025" if "2025" in years_sorted else (verified_sorted or years_sorted or [None])[0]
     return {
         "workspace_id": workspace_id,
         "years": years_sorted,
         "verified_years": verified_sorted,
-        "default_year": (verified_sorted or years_sorted or [None])[0],
+        "max_fiscal_year": ceiling,
+        "default_year": default_year,
         "note": (
             "years incluye docs/Drive/extractos; P&L usa txs verificadas. "
             "Si ves 2024 en el selector pero P&L vacío, aprueba txs en Transacciones."

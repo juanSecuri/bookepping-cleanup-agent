@@ -29,6 +29,22 @@ def parse_max_fiscal_year(value: object | None) -> int | None:
     return year if 2000 <= year <= 2100 else None
 
 
+def years_at_or_below(
+    years: list[str] | set[str] | tuple[str, ...],
+    max_year: object | None,
+) -> list[str]:
+    """Keep YYYY years at or below the workspace ceiling. No ceiling = keep all."""
+    ceiling = parse_max_fiscal_year(max_year)
+    cleaned: set[str] = set()
+    for year in years:
+        text = str(year).strip()
+        if len(text) >= 4 and text[:4].isdigit() and text[:4].startswith("20"):
+            cleaned.add(text[:4])
+    if ceiling is None:
+        return sorted(cleaned, reverse=True)
+    return sorted((y for y in cleaned if int(y) <= ceiling), reverse=True)
+
+
 def year_from_drive_path(path: str | None, name: str | None = None) -> int | None:
     """Prefer dedicated YYYY folder in the Drive path; else year token in path/name."""
     hay = f"{path or ''}/{name or ''}".replace("\\", "/")

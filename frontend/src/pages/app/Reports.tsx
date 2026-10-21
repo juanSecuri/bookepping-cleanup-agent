@@ -201,104 +201,6 @@ function MonthTable({
   )
 }
 
-function BalanceSection({
-  title,
-  lines,
-  total,
-  defaultOpen = true,
-  layout = 'monthly',
-  fiscalYear,
-}: {
-  title: string
-  lines: BalanceLine[]
-  total: number
-  defaultOpen?: boolean
-  layout?: 'monthly' | 'annual'
-  fiscalYear?: string
-}) {
-  const { t, locale } = useLocale()
-  const [open, setOpen] = useState(defaultOpen)
-  const monthLabels = monthColumnHeaders(locale, fiscalYear ?? '')
-  const showMonths = layout === 'monthly'
-  return (
-    <div className="animate-fade-up rounded-xl border border-border bg-card soft-shadow-lift">
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        className="flex w-full items-center justify-between px-4 py-3 text-left transition-colors duration-200 hover:bg-secondary/30"
-      >
-        <span className="font-display text-lg tracking-wide">
-          {open ? '▼' : '▶'} {title}
-        </span>
-        <span className="tabular-nums font-semibold">{money(total)}</span>
-      </button>
-      {open && (
-        <div className="table-scroll border-t border-border">
-          {lines.length === 0 ? (
-            <p className="px-4 py-4 text-sm text-muted-foreground">{t('reports.emptySection')}</p>
-          ) : (
-            <table className="w-full min-w-[320px] text-left text-sm">
-              <thead className="bg-secondary/40 text-muted-foreground">
-                <tr>
-                  <th className="px-3 py-2 font-medium">{t('reports.code')}</th>
-                  <th className="px-3 py-2 font-medium">{t('reports.account')}</th>
-                  {showMonths ? (
-                    <>
-                      {monthLabels.map((m) => (
-                        <th key={m} className="px-2 py-2 text-right font-medium">
-                          {m}
-                        </th>
-                      ))}
-                      <th className="px-3 py-2 text-right font-medium">{t('reports.total')}</th>
-                    </>
-                  ) : (
-                    <th className="px-3 py-2 text-right font-medium">{t('reports.total')}</th>
-                  )}
-                </tr>
-              </thead>
-              <tbody>
-                {lines.map((row) => (
-                  <tr
-                    key={`${row.code}-${row.name}`}
-                    className="border-t border-border transition-colors duration-200 hover:bg-[color-mix(in_srgb,var(--accent-cream)_8%,transparent)]"
-                  >
-                    <td className="px-3 py-2 pl-8 font-mono text-xs">{row.code ?? '—'}</td>
-                    <td className="px-3 py-2 pl-8">{row.name ?? '—'}</td>
-                    {showMonths ? (
-                      <>
-                        {MONTH_KEYS.map((mk) => (
-                          <td key={mk} className="px-2 py-2 text-right tabular-nums text-xs">
-                            {money(Number(row.byMonth?.[mk] ?? 0))}
-                          </td>
-                        ))}
-                        <td className="px-3 py-2 text-right tabular-nums font-medium">
-                          {money(Number(row.closing ?? row.amount ?? 0))}
-                        </td>
-                      </>
-                    ) : (
-                      <td className="px-3 py-2 text-right tabular-nums font-medium">
-                        {money(Number(row.closing ?? row.amount ?? 0))}
-                      </td>
-                    )}
-                  </tr>
-                ))}
-                <tr className="border-t border-border bg-secondary/25">
-                  <td
-                    colSpan={showMonths ? 14 : 3}
-                    className="px-3 py-2 pl-6 text-right text-sm font-bold tabular-nums"
-                  >
-                    {t('reports.totalForName').replace('{name}', title)} {money(total)}
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          )}
-        </div>
-      )}
-    </div>
-  )
-}
-
 type BalanceSheetData = NonNullable<StatementsBundle['balance_sheet']>
 
 function BalanceSheetMonthlyTable({
@@ -643,53 +545,6 @@ function CashFlowStatement({
   )
 }
 
-function BalanceMajorGroup({
-  title,
-  sections,
-  fallbackLines,
-  fallbackTotal,
-  layout = 'monthly',
-  fiscalYear,
-}: {
-  title: string
-  sections?: BalanceSectionGroup[] | null
-  fallbackLines: BalanceLine[]
-  fallbackTotal: number
-  layout?: 'monthly' | 'annual'
-  fiscalYear?: string
-}) {
-  const { t } = useLocale()
-  if (sections && sections.length > 0) {
-    return (
-      <div className="space-y-3">
-        <h4 className="font-display text-lg tracking-wide text-muted-foreground">{title}</h4>
-        {sections.map((sec) => (
-          <BalanceSection
-            key={`${title}-${sec.subcategory}`}
-            title={String(sec.subcategory || t('reports.emptySection'))}
-            lines={sec.lines || []}
-            total={Number(sec.total ?? 0)}
-            layout={layout}
-            fiscalYear={fiscalYear}
-          />
-        ))}
-        <p className="px-1 text-right text-sm font-semibold tabular-nums">
-          {t('reports.totalFor')} {title} {money(fallbackTotal)}
-        </p>
-      </div>
-    )
-  }
-  return (
-    <BalanceSection
-      title={title}
-      lines={fallbackLines}
-      total={fallbackTotal}
-      layout={layout}
-      fiscalYear={fiscalYear}
-    />
-  )
-}
-
 const btnPrimary =
   'cursor-pointer rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition duration-200 hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50'
 const btnSecondary =
@@ -706,8 +561,8 @@ export default function Reports() {
   const [bundle, setBundle] = useState<StatementsBundle | null>(null)
   const [availableYears, setAvailableYears] = useState<string[]>([])
   const [fiscalYear, setFiscalYear] = useState('')
-  const [month, setMonth] = useState<string>('') // '' = whole year
-  const [reportLayout, setReportLayout] = useState<'monthly' | 'annual'>('monthly')
+  const [month, setMonth] = useState<string>('') // '' = Jan–Dec columns for that year
+  const reportLayout = 'monthly' as const
   const [loading, setLoading] = useState(true)
   const [loadingStmt, setLoadingStmt] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -742,21 +597,32 @@ export default function Reports() {
       setWorkspaceName(workspace?.name ?? null)
       setPeriods(Array.isArray(periodsData) ? periodsData : [])
       setFiscalYears(Array.isArray(yearsData.years) ? yearsData.years : [])
+      const ceiling =
+        workspace?.max_fiscal_year != null && !Number.isNaN(Number(workspace.max_fiscal_year))
+          ? Number(workspace.max_fiscal_year)
+          : 2025
       // Prefer all discovered years (docs/Drive/txs); verified_years alone hid 2024
-      const years = avail.years?.length
+      const rawYears = avail.years?.length
         ? avail.years
         : avail.verified_years?.length
           ? avail.verified_years
           : []
+      const years = rawYears.filter((y) => {
+        const n = Number(y)
+        return !Number.isNaN(n) && n <= ceiling
+      })
       setAvailableYears(years)
-      // CPA taxes 2025: prefer 2025 when present, else API default / newest year
+      // CPA: 2025 and below, month columns — never a lump of every year
       const def =
         years.includes('2025')
           ? '2025'
           : avail.default_year && years.includes(String(avail.default_year))
             ? String(avail.default_year)
-            : years[0] || String(new Date().getFullYear())
-      setFiscalYear((prev) => prev || String(def))
+            : years[0] || String(Math.min(ceiling, new Date().getFullYear()))
+      setFiscalYear((prev) => {
+        if (prev && years.includes(prev)) return prev
+        return String(def)
+      })
       setYearInput(String(def))
       setYearsReady(true)
     } catch (e) {
@@ -980,28 +846,6 @@ export default function Reports() {
               ))}
             </select>
           </label>
-          <div className="flex w-full flex-wrap gap-2 sm:w-auto sm:items-end">
-            <button
-              type="button"
-              className={cn(
-                reportLayout === 'monthly' ? btnPrimary : btnSecondary,
-                'flex-1 sm:flex-none',
-              )}
-              onClick={() => setReportLayout('monthly')}
-            >
-              {t('reports.layoutMonthly')}
-            </button>
-            <button
-              type="button"
-              className={cn(
-                reportLayout === 'annual' ? btnPrimary : btnSecondary,
-                'flex-1 sm:flex-none',
-              )}
-              onClick={() => setReportLayout('annual')}
-            >
-              {t('reports.layoutAnnual')}
-            </button>
-          </div>
           <div className="flex w-full flex-wrap gap-2 sm:w-auto">
             <button
               type="button"
@@ -1206,41 +1050,12 @@ export default function Reports() {
                 </div>
               ))}
             </div>
-            {reportLayout === 'monthly' ? (
-              <BalanceSheetMonthlyTable
-                companyName={companyDisplayName}
-                asOfPeriod={balanceAsOfPeriod}
-                fiscalYear={fiscalYear}
-                balanceSheet={bundle.balance_sheet}
-              />
-            ) : (
-              <>
-                <BalanceMajorGroup
-                  title={t('reports.assets').toUpperCase()}
-                  sections={bundle.balance_sheet.sections?.assets}
-                  fallbackLines={bundle.balance_sheet.assets || []}
-                  fallbackTotal={Number(bundle.balance_sheet.totalAssets ?? 0)}
-                  layout={reportLayout}
-                  fiscalYear={fiscalYear}
-                />
-                <BalanceMajorGroup
-                  title={t('reports.liabilities').toUpperCase()}
-                  sections={bundle.balance_sheet.sections?.liabilities}
-                  fallbackLines={bundle.balance_sheet.liabilities || []}
-                  fallbackTotal={Number(bundle.balance_sheet.totalLiabilities ?? 0)}
-                  layout={reportLayout}
-                  fiscalYear={fiscalYear}
-                />
-                <BalanceMajorGroup
-                  title={t('reports.equity').toUpperCase()}
-                  sections={bundle.balance_sheet.sections?.equity}
-                  fallbackLines={bundle.balance_sheet.equity || []}
-                  fallbackTotal={Number(bundle.balance_sheet.totalEquity ?? 0)}
-                  layout={reportLayout}
-                  fiscalYear={fiscalYear}
-                />
-              </>
-            )}
+            <BalanceSheetMonthlyTable
+              companyName={companyDisplayName}
+              asOfPeriod={balanceAsOfPeriod}
+              fiscalYear={fiscalYear}
+              balanceSheet={bundle.balance_sheet}
+            />
           </div>
         )}
 

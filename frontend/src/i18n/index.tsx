@@ -54,7 +54,7 @@ const es: Dict = {
   'coa.seedExplainShort': 'Plantilla CoA (no es data de extractos).',
   'reports.statementsTitle': 'Estados financieros',
   'reports.statementsHint':
-    'Balance + P&L por cuenta/mes + Cash flow O/I/F. Solo txs verificadas. Año completo = columnas mensuales; año + mes = detalle del mes.',
+    'Balance + P&L mes a mes (ene–dic) + Total del año. Solo txs verificadas. Tope CPA: 2025 hacia atrás. Un mes concreto acota el detalle.',
   'reports.year': 'Año',
   'reports.month': 'Mes (opcional)',
   'reports.monthAll': 'Todo el año',
@@ -74,7 +74,7 @@ const es: Dict = {
   'reports.layoutMonthly': 'Mensual (columnas)',
   'reports.layoutAnnual': 'Anual (Total)',
   'reports.layoutHint':
-    'Formato QuickBooks: mensual = Jan–Dic + Total; anual = solo Total. Datos = Drive/txs verificadas (no Excel de referencia).',
+    'Formato QuickBooks: una columna por mes + Total. No se mezcla todo el histórico en un solo global. Datos = Drive/txs verificadas.',
   'reports.totalFor': 'Total',
   'reports.balanceOk': 'Balance cuadrado: A = P + E',
   'reports.assets': 'Activos',
@@ -468,7 +468,7 @@ const en: Dict = {
   'coa.seedExplainShort': 'CoA template (not statement data).',
   'reports.statementsTitle': 'Financial statements',
   'reports.statementsHint':
-    'Balance + P&L by account/month + Cash flow O/I/F. Verified txs only. Full year = monthly columns; year + month = month detail.',
+    'Balance + P&L month by month (Jan–Dec) + year Total. Verified txs only. CPA cap: 2025 and earlier. A specific month narrows the detail.',
   'reports.year': 'Year',
   'reports.month': 'Month (optional)',
   'reports.monthAll': 'Full year',
@@ -488,7 +488,7 @@ const en: Dict = {
   'reports.layoutMonthly': 'Monthly (columns)',
   'reports.layoutAnnual': 'Annual (Total)',
   'reports.layoutHint':
-    'QuickBooks layout: monthly = Jan–Dec + Total; annual = Total only. Data = Drive/verified txs (not reference Excel).',
+    'QuickBooks layout: one column per month + Total. Years are not lumped into one global. Data = Drive/verified txs.',
   'reports.totalFor': 'Total',
   'reports.balanceOk': 'Balance sheet balances: A = L + E',
   'reports.assets': 'Assets',

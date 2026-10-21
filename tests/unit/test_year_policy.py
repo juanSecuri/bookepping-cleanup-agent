@@ -5,6 +5,7 @@ from src.infrastructure.drive.year_policy import (
     is_beyond_max_year,
     parse_max_fiscal_year,
     year_from_drive_path,
+    years_at_or_below,
 )
 
 
@@ -29,6 +30,12 @@ def test_no_ceiling_never_blocks() -> None:
         fiscal_year="2026",
         max_year=None,
     )
+
+
+def test_years_at_or_below_caps_at_ceiling() -> None:
+    assert years_at_or_below(["2026", "2025", "2024"], 2025) == ["2025", "2024"]
+    assert years_at_or_below(["2026", "2025"], None) == ["2026", "2025"]
+    assert years_at_or_below([], 2025) == []
 
 
 def test_workspace_ceiling_blocks_later_years_only() -> None:

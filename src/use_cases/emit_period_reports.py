@@ -17,8 +17,10 @@ from decimal import Decimal
 
 from src.domain.models.enums import TransactionStatus, TransactionType
 from src.infrastructure.classification.cash_flow import infer_cash_flow_type
+from src.infrastructure.drive.year_policy import parse_max_fiscal_year
 from src.infrastructure.repositories.supabase_client import get_supabase_client
 from src.infrastructure.repositories.transaction_repository import TransactionRepository
+from src.infrastructure.repositories.workspace_repository import WorkspaceRepository
 from src.use_cases.close_fiscal_year import FiscalYearCloseRepository
 
 # Equity accounts that must never hit P&L
@@ -314,6 +316,26 @@ class EmitPeriodReportsUseCase:
         month: int | None = None,
         currency: str = "USD",
     ) -> PeriodFinancialBundle:
+        try:
+            ws = await WorkspaceRepository().get(workspace_id)
+        except Exception:
+            ws = None
+        ceiling = parse_max_fiscal_year(getattr(ws, "max_fiscal_year", None) if ws else None)
+        if ceiling is not None:
+            requested: int | None = None
+            if fiscal_year and str(fiscal_year).isdigit():
+                requested = int(str(fiscal_year)[:4])
+            elif period and len(period) >= 4 and str(period)[:4].isdigit():
+                requested = int(str(period)[:4])
+            elif date_from and len(date_from) >= 4 and str(date_from)[:4].isdigit():
+                requested = int(str(date_from)[:4])
+            if requested is not None and requested > ceiling:
+                fiscal_year = str(ceiling)
+                month = None
+                period = str(ceiling)
+                date_from = None
+                date_to = None
+
         # Prefer explicit fiscal_year (+ optional month) over free-text period
         if fiscal_year and str(fiscal_year).isdigit() and len(str(fiscal_year)) == 4:
             fy = str(fiscal_year)
@@ -337,7 +359,7 @@ class EmitPeriodReportsUseCase:
         elif period and len(period) == 4 and period.isdigit():
             date_from = f"{period}-01-01"
             date_to = f"{period}-12-31"
-            label = f"{period} annual"
+            label = period
             granularity = "annual"
             resolved_year = period
         else:
