@@ -260,6 +260,34 @@
     .close-grid .card { min-height: 210px; }
     .close-grid .n { font-family: Fraunces, Georgia, serif; color: var(--gold); font-size: 28px; }
     .big-end { margin-top: 22px; font-family: Fraunces, Georgia, serif; font-size: 30px; letter-spacing: -0.03em; }
+    .target {
+      margin-top: 12px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: rgba(228, 194, 122, 0.12);
+      border: 1px solid rgba(228, 194, 122, 0.35);
+      color: var(--cream);
+      font-size: 15px;
+      line-height: 1.35;
+    }
+    .target b { color: var(--gold-2); font-weight: 600; }
+    .deca { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; flex: 1; min-height: 0; }
+    .deca article {
+      display: grid;
+      grid-template-columns: 46px 1fr;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(20, 48, 40, 0.88);
+    }
+    .deca b { font-family: Fraunces, Georgia, serif; color: var(--gold); font-size: 22px; font-weight: 640; }
+    .deca h3 { margin: 0; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold-2); font-weight: 600; }
+    .deca p { margin: 2px 0 0; font-size: 15px; line-height: 1.3; }
+    .risks { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 8px; }
+    .risks div { padding: 10px 10px 8px; border-radius: 12px; border: 1px solid rgba(240, 181, 160, 0.4); background: rgba(20, 48, 40, 0.88); font-size: 13px; line-height: 1.3; color: var(--dim); }
+    .risks strong { display: block; color: var(--cream); font-size: 13px; margin-bottom: 4px; }
 
     .chrome {
       position: fixed; left: 0; right: 0; bottom: 0; height: 52px;
@@ -308,7 +336,7 @@
   <div class="viewport">
     <div class="stage" id="stage">
 
-      <section class="slide on" data-notes="Buenas. En cinco minutos les muestro cómo formulamos LedgerAI, el software de The Profit Catalyst, con lo trabajado en clase: el árbol ZOPP, el mercado, el estudio técnico, la organización, lo legal y las cifras de los talleres. La ruta son ocho pasos. Empiezo por el problema.">
+      <section class="slide on" data-notes="Buenas. En cinco minutos: el problema, el objetivo, el decálogo de mercado, el producto, la operación, el equipo, lo legal y las cifras. Empiezo por el problema.">
         <div class="hero">
           <div class="brand-row">
             <div class="kicker">Uniremington · Formulación de proyectos <span>Pitch · 5:00</span></div>
@@ -319,12 +347,12 @@
           <div class="route">
             <div><strong>1 · Problema</strong>Árbol ZOPP</div>
             <div><strong>2 · Objetivo</strong>La idea SaaS</div>
-            <div><strong>3 · Producto</strong>Ficha y proceso</div>
-            <div><strong>4 · Operación</strong>Capacidad y lugar</div>
-            <div><strong>5 · Equipo</strong>Quién hace qué</div>
-            <div><strong>6 · Legal</strong>Qué aplica</div>
-            <div><strong>7 · Cifras</strong>Equilibrio y VPN</div>
-            <div><strong>8 · Cierre</strong>El plan B</div>
+            <div><strong>3 · Decálogo</strong>Los 10 del mercado</div>
+            <div><strong>4 · Producto</strong>Ficha y proceso</div>
+            <div><strong>5 · Operación</strong>Capacidad y lugar</div>
+            <div><strong>6 · Equipo</strong>Quién hace qué</div>
+            <div><strong>7 · Legal</strong>Qué aplica</div>
+            <div><strong>8 · Cifras</strong>Taller y plan B</div>
           </div>
           <div class="who">
             <div>
@@ -391,6 +419,40 @@
           </div>
         </div>
         <div class="foot"><span>En el cuaderno, la idea marcada es la plataforma web.</span><span>LedgerAI · The Profit Catalyst</span></div>
+      </section>
+
+      <section class="slide" data-notes="El decálogo es de la clase del 22 de septiembre. El cliente es el dueño que ya está en The Profit Catalyst y le debe un paquete a su CPA. El caso es My Xcell. Uno: LedgerAI es un SaaS. Lee, clasifica, concilia y entrega Balance, pérdidas y ganancias y flujo de efectivo. No es outsourcing, ni programa de escritorio, ni infraestructura alquilada, y el día a día no paga inteligencia artificial. Dos: no inventamos el censo. La unidad es el cliente de TPC con extractos sin cerrar, y hoy hay un caso. Tres: al lado están Excel, QuickBooks, el bookkeeping humano y la IA de pago. Cuatro: no hay precio histórico. La suscripción es mensual y el monto se acuerda con TPC. Cinco: el canal es el navegador. Del freelancer al archivo del CPA, sin tienda.">
+        <div class="kicker">Decálogo de mercado · 22 de septiembre <span>1:05</span></div>
+        <h2>A quién se le vende.</h2>
+        <div class="target"><b>Segmento.</b> Dueño de un negocio pequeño, ya cliente de The Profit Catalyst, con extractos de varios años sin ordenar, que debe entregarle un paquete claro a su CPA. Caso: My Xcell Network, Miami. Ordenar los libros baja sanciones y le devuelve tiempo.</div>
+        <div class="deca">
+          <article><b>01</b><div><h3>Qué es</h3><p>Servicio digital (SaaS). Lee Drive, PDF, Excel o foto; clasifica en el plan de cuentas; concilia por mes; entrega Balance, P&amp;L y flujo de efectivo. No es outsourcing, ni programa de escritorio, ni IaaS. El día a día no usa IA de pago.</p></div></article>
+          <article><b>02</b><div><h3>Demanda</h3><p>Compra el dueño, no el público y no el contador. El CPA recibe el resultado. La unidad contable es el cliente de TPC con extractos sin cerrar. Hoy se demuestra con My Xcell. El censo de la cartera no se inventa.</p></div></article>
+          <article><b>03</b><div><h3>Oferta</h3><p>Excel o papel, QuickBooks, bookkeeping humano, y herramientas que alquilan un modelo. LedgerAI limpia lo atrasado, con las reglas de ese cliente, sin pagar IA por movimiento. No se cuenta “cuántas empresas iguales hay en el país”.</p></div></article>
+          <article><b>04</b><div><h3>Precio</h3><p>No hay tarifa histórica. Lo propuesto es suscripción mensual por cliente. El monto no se fija hasta acordarlo con TPC. Se compara con las horas de Excel que ese cliente ya paga.</p></div></article>
+          <article><b>05</b><div><h3>Canal</h3><p>Digital y directo. El freelancer lo ofrece dentro de TPC. El cliente entra por el navegador. Los extractos llegan por Drive o por archivo. El resultado vuelve en pantalla y en un archivo para el CPA. Sin tienda ni instalador.</p></div></article>
+        </div>
+        <div class="foot"><span>Los montos y el tamaño de la cartera no se inventan.</span><span>LedgerAI · The Profit Catalyst</span></div>
+      </section>
+
+      <section class="slide" data-notes="Sigo con el decálogo. Seis: se conoce por venta directa a la cartera de TPC. El presupuesto de promoción es cero. La promoción es la demo con un cliente real. Siete: los insumos son las carpetas de Drive, programas libres y un hosting gratuito que se duerme. El cuello de botella es que el cliente entregue las carpetas completas y que alguien verifique. Ocho: influencia digital, mercado inicial Miami, Florida. No se afirma un mercado nacional. Nueve: la proyección es clientes con libros atrasados por la suscripción acordada. Sin dólares, porque faltan el censo y el precio. Diez: hay demanda, está acotada, y el precio sigue abierto. Los riesgos son el precio, la cartera chica, el hosting free, una lectura mal hecha, y que el reporte apoya al CPA pero no evita la sanción por sí solo.">
+        <div class="kicker">Decálogo de mercado · 22 de septiembre <span>1:30</span></div>
+        <h2>Cómo llega, y qué lo frena.</h2>
+        <div class="deca">
+          <article><b>06</b><div><h3>Marketing</h3><p>Venta directa del freelancer a la cartera de TPC. No hay pauta, feria ni red de lanzamiento. Presupuesto de promoción: cero. La promoción es la demo con un cliente real.</p></div></article>
+          <article><b>07</b><div><h3>Insumos</h3><p>Drive del cliente, programas libres y hosting gratuito. El free se duerme y tiene tope de memoria. El cuello de botella es la carpeta completa y la verificación humana.</p></div></article>
+          <article><b>08</b><div><h3>Geografía</h3><p>Influencia digital. Mercado inicial: Estados Unidos, Florida, Miami, porque ahí está esta cartera. No se afirma un mercado nacional ni internacional.</p></div></article>
+          <article><b>09</b><div><h3>Proyección</h3><p>Clientes de TPC con libros atrasados × suscripción mensual acordada. Hoy no se pasa a dólares: faltan el censo y el precio de lista. My Xcell prueba el uso, no las ventas.</p></div></article>
+          <article><b>10</b><div><h3>Conclusión</h3><p>Hay demanda acotada y conocida. El canal es digital y directo. El precio y el tamaño de la demanda siguen abiertos a propósito.</p></div></article>
+        </div>
+        <div class="risks">
+          <div><strong>Precio</strong>Sin ingreso predecible.</div>
+          <div><strong>Cartera</strong>Un cliente no es el mercado.</div>
+          <div><strong>Hosting</strong>El free se duerme.</div>
+          <div><strong>Lectura</strong>Si falla, alguien corrige.</div>
+          <div><strong>Sanción</strong>El reporte apoya al CPA. No la evita solo.</div>
+        </div>
+        <div class="foot"><span>Clase del 22 de septiembre de 2026.</span><span>LedgerAI · The Profit Catalyst</span></div>
       </section>
 
       <section class="slide" data-notes="LedgerAI limpia libros atrasados de clientes que The Profit Catalyst ya atiende. Lee las carpetas, clasifica cada movimiento en el plan de cuentas, concilia el banco por mes y entrega el balance. Es un servicio digital, un SaaS, una aplicación web. La necesidad es digitalizar la información de empresas pequeñas, medianas y grandes. El diferencial, tal como quedó escrito: no es papel, ni un software contable genérico, ni bookkeeping humano. No pretende contar cuántas empresas hay en el país. Trabaja con las reglas del plan de cuentas de ese cliente, sin pagar un modelo de inteligencia artificial.">
@@ -553,7 +615,7 @@
         <div class="foot"><span>Los otros ítems de la guía quedaron en blanco a propósito: no aplican a un software remoto.</span><span>LedgerAI · The Profit Catalyst</span></div>
       </section>
 
-      <section class="slide" data-notes="Estas son las cifras de los talleres, para explicar el método. En el ejercicio de inversión: costo variable 124.000, margen 25 por ciento, precio 165.333. Costo fijo 8.354.000. El equilibrio da 202 unidades. Los ingresos son 65,4, 87,2 y 110,8 millones, la tasa es 12 por ciento y la inversión es 220 millones. El valor presente neto da menos 13,27 millones: no viable. En el ejercicio de precio, con margen del 40 por ciento, el precio sale 70.833. En la proyección, la demanda del ejercicio es 12.000 al año, se atiende el 10 por ciento, y las ventas pasan de 7,1 millones en 2026 a 10,7 millones en 2029, con IVA del 19 por ciento. LedgerAI no parte de una inversión de 220 millones: por eso ese VPN negativo no es el plan del producto. El plan del producto es el servidor chico y el precio que falta cerrar con TPC.">
+      <section class="slide" data-notes="Estas son las cifras de los talleres, para explicar el método. No son las ventas del decálogo: allí la proyección de LedgerAI se deja en fórmula, sin dólares, porque faltan el censo y el precio. En el ejercicio de inversión: costo variable 124.000, margen 25 por ciento, precio 165.333. Costo fijo 8.354.000. El equilibrio da 202 unidades. Los ingresos son 65,4, 87,2 y 110,8 millones, la tasa es 12 por ciento y la inversión es 220 millones. El valor presente neto da menos 13,27 millones: no viable. En el ejercicio de precio, con margen del 40 por ciento, el precio sale 70.833. En la proyección, la demanda del ejercicio es 12.000 al año, se atiende el 10 por ciento, y las ventas pasan de 7,1 millones en 2026 a 10,7 millones en 2029, con IVA del 19 por ciento. LedgerAI no parte de una inversión de 220 millones: por eso ese VPN negativo no es el plan del producto. El plan del producto es el servidor chico y el precio que falta cerrar con TPC.">
         <div class="kicker">Talleres de cifras · para explicar el método <span>4:15</span></div>
         <h2>Con 220 millones, el VPN no da.</h2>
         <div class="heroes">
@@ -583,7 +645,7 @@
             <div class="bar"><i style="height:160px"></i><b>10,69 M</b><em>2029 · 1.390</em></div>
           </div>
         </div>
-        <div class="foot"><span>Precio base del ejercicio: 5.000 sin IVA · 5.950 con IVA. Inflación anotada: 0%.</span><span>LedgerAI · The Profit Catalyst</span></div>
+        <div class="foot"><span>Precio base 5.000 sin IVA · 5.950 con IVA · inflación anotada 0%. El decálogo no convierte estas barras en ventas de LedgerAI.</span><span>LedgerAI · The Profit Catalyst</span></div>
       </section>
 
       <section class="slide" data-notes="Cierro con el plan B que el taller pide, y con lo que nosotros escribimos que hace falta. Uno: servidor de pago, porque el free se duerme y se queda en 512 megas. Dos: definir la venta a TPC y el modelo SaaS; el precio histórico no existe y el precio propuesto no se inventa. Tres: crecer solo con los clientes reales de The Profit Catalyst; la cartera puede ser pequeña y un cliente de prueba no es todo el mercado. Si entra un competidor, si baja el precio o si cambia lo que el cliente necesita, ese es el plan. El humano verifica. TPC recibe el archivo. Gracias.">

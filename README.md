@@ -10,7 +10,7 @@ LedgerAI ayuda a los **clientes de TPC** a pasar de libros desordenados a libros
 
 ## Taller de clase (metodología ZOPP)
 
-Pitch de 5 minutos, con el árbol, la ficha, la operación y las cifras de los talleres: [`docs/pitch/ledgerai-pitch-5min.html`](docs/pitch/ledgerai-pitch-5min.html). Se abre en el navegador. Flechas para avanzar, `N` notas del guion, `T` cronómetro, `F` pantalla completa.
+Pitch de 5 minutos, con el árbol, el decálogo de mercado, la ficha, la operación y las cifras de los talleres: [`docs/pitch/ledgerai-pitch-5min.html`](docs/pitch/ledgerai-pitch-5min.html). Se abre en el navegador. Flechas para avanzar, `N` notas del guion, `T` cronómetro, `F` pantalla completa.
 
 *(Formulación y gestión de proyectos — Taller N.º 1, notas 2026-09-24)*
 
