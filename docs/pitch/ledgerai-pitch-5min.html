@@ -330,6 +330,48 @@
     @media (prefers-reduced-motion: reduce) {
       * { scroll-behavior: auto !important; transition: none !important; }
     }
+    @media print {
+      @page { size: 13.333in 7.5in; margin: 0; }
+      html, body {
+        height: auto;
+        background: #071410;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .viewport { position: static; inset: auto; overflow: visible; }
+      .chrome, .notes { display: none !important; }
+      .stage {
+        position: static !important;
+        left: auto !important;
+        top: auto !important;
+        transform: none !important;
+        width: auto;
+        height: auto;
+        border-radius: 0;
+        box-shadow: none;
+        overflow: visible;
+        background: none;
+      }
+      .stage::before { display: none; }
+      .slide,
+      .slide.on {
+        display: flex !important;
+        position: relative;
+        inset: auto;
+        width: 13.333in;
+        height: 7.5in;
+        margin: 0;
+        box-sizing: border-box;
+        overflow: hidden;
+        break-after: page;
+        page-break-after: always;
+        background:
+          radial-gradient(900px 420px at 12% -10%, rgba(228, 194, 122, 0.14), transparent 55%),
+          radial-gradient(800px 480px at 110% 110%, rgba(80, 140, 110, 0.18), transparent 50%),
+          linear-gradient(180deg, var(--bg-2), var(--bg));
+      }
+      .slide:last-child { break-after: auto; page-break-after: auto; }
+    }
   </style>
 </head>
 <body>
