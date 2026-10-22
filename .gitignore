@@ -37,6 +37,8 @@ frontend/node_modules/.tmp/
 ingestion_report_*.json
 *.xlsx
 *.pdf
+# The class pitch is a hand-in, not a generated report.
+!docs/pitch/LedgerAI-pitch-5min.pdf
 _run_tests.bat
 _reprocess_*.py
 

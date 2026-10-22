@@ -1,0 +1,850 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>LedgerAI · Pitch de 5 minutos</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,520;9..144,640&family=Outfit:wght@380;500;600&display=swap" rel="stylesheet" />
+  <style>
+    :root {
+      --bg: #071410;
+      --bg-2: #10241d;
+      --card: #163028;
+      --card-2: #1c3a30;
+      --line: rgba(243, 234, 216, 0.16);
+      --cream: #f6f0e4;
+      --dim: #cfc4b0;
+      --muted: #9aafA3;
+      --gold: #e4c27a;
+      --gold-2: #f3ddb0;
+      --moss: #b7d4c4;
+      --bad: #f0b5a0;
+      --ok: #b7d7a8;
+      --shadow: 0 24px 60px rgba(0, 0, 0, 0.28);
+    }
+    * { box-sizing: border-box; }
+    html, body { margin: 0; height: 100%; background: #040c0a; color: var(--cream); font-family: Outfit, "Segoe UI", sans-serif; }
+    button, kbd { font-family: inherit; }
+    .viewport { position: fixed; inset: 0 0 52px 0; overflow: hidden; }
+    .stage {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 1280px;
+      height: 720px;
+      transform-origin: center center;
+      background:
+        radial-gradient(900px 420px at 12% -10%, rgba(228, 194, 122, 0.14), transparent 55%),
+        radial-gradient(800px 480px at 110% 110%, rgba(80, 140, 110, 0.18), transparent 50%),
+        linear-gradient(180deg, var(--bg-2), var(--bg));
+      border-radius: 18px;
+      box-shadow: var(--shadow);
+      overflow: hidden;
+    }
+    .stage::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background-image:
+        linear-gradient(rgba(243, 234, 216, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(243, 234, 216, 0.035) 1px, transparent 1px);
+      background-size: 40px 40px;
+      mask-image: linear-gradient(180deg, rgba(0,0,0,.55), transparent 92%);
+      pointer-events: none;
+    }
+    .slide {
+      position: absolute;
+      inset: 0;
+      display: none;
+      flex-direction: column;
+      padding: 36px 48px 32px;
+      z-index: 1;
+    }
+    .slide.on { display: flex; }
+    .kicker {
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      gap: 16px;
+      color: var(--gold);
+      font-size: 13px;
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      text-transform: uppercase;
+    }
+    .kicker span { color: var(--muted); letter-spacing: 0.08em; font-weight: 500; }
+    h1 {
+      font-family: Fraunces, Georgia, serif;
+      font-weight: 640;
+      font-size: 68px;
+      line-height: 0.96;
+      margin: 18px 0 0;
+      letter-spacing: -0.03em;
+    }
+    h2 {
+      font-family: Fraunces, Georgia, serif;
+      font-weight: 640;
+      font-size: 40px;
+      line-height: 1.02;
+      margin: 10px 0 0;
+      letter-spacing: -0.03em;
+    }
+    .lede { margin: 14px 0 0; max-width: 760px; color: var(--dim); font-size: 20px; line-height: 1.35; }
+    .grow { flex: 1; min-height: 0; }
+    .foot {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      color: var(--muted);
+      font-size: 13px;
+      letter-spacing: 0.04em;
+      padding-top: 12px;
+      margin-top: auto;
+    }
+    .grid { display: grid; gap: 14px; }
+    .card {
+      background: rgba(20, 48, 40, 0.86);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 16px 18px;
+    }
+    .card h3 { margin: 0 0 6px; font-size: 15px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: var(--gold-2); }
+    .card p, .card li { margin: 0; color: var(--cream); font-size: 16px; line-height: 1.35; }
+    .card ul { margin: 0; padding-left: 18px; }
+    .card li + li { margin-top: 4px; }
+
+    /* portada */
+    .hero { display: flex; flex-direction: column; height: 100%; }
+    .brand-row { display: flex; justify-content: space-between; align-items: center; }
+    .mark {
+      width: 46px; height: 46px; border-radius: 14px;
+      border: 1px solid rgba(228, 194, 122, 0.5);
+      display: grid; place-items: center;
+      color: var(--gold);
+      font-family: Fraunces, Georgia, serif;
+      font-size: 20px;
+    }
+    .route { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: auto; }
+    .route div {
+      border-top: 2px solid var(--gold);
+      padding-top: 8px;
+      color: var(--dim);
+      font-size: 14px;
+      line-height: 1.3;
+    }
+    .route strong { display: block; color: var(--cream); font-weight: 600; font-size: 15px; }
+    .who { margin-top: 28px; display: flex; justify-content: space-between; align-items: end; }
+    .who b { font-family: Fraunces, Georgia, serif; font-size: 22px; font-weight: 520; }
+
+    /* tree */
+    .split { display: grid; grid-template-columns: 0.9fr 1.2fr; gap: 22px; margin-top: 18px; flex: 1; min-height: 0; }
+    .tree { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0; }
+    .nodes { display: flex; gap: 12px; }
+    .node {
+      min-width: 210px;
+      text-align: center;
+      padding: 14px 16px;
+      border-radius: 14px;
+      border: 1px solid var(--line);
+      background: rgba(22, 48, 40, 0.9);
+      font-size: 16px;
+      line-height: 1.25;
+    }
+    .node small { display: block; color: var(--gold); letter-spacing: 0.12em; font-size: 11px; text-transform: uppercase; margin-bottom: 4px; }
+    .node.core {
+      background: var(--cream);
+      color: #14241c;
+      border-color: transparent;
+      min-width: 340px;
+      font-family: Fraunces, Georgia, serif;
+      font-size: 26px;
+      font-weight: 640;
+      padding: 18px 22px;
+    }
+    .node.core small { color: #6d5a32; }
+    .node.root { border-color: rgba(240, 181, 160, 0.55); }
+    .stem { width: 2px; height: 22px; background: rgba(228, 194, 122, 0.7); }
+    .fork { width: 240px; height: 18px; border-top: 2px solid rgba(228, 194, 122, 0.7); border-left: 2px solid rgba(228, 194, 122, 0.55); border-right: 2px solid rgba(228, 194, 122, 0.55); }
+
+    .ideas { display: flex; flex-direction: column; gap: 8px; }
+    .idea {
+      display: grid;
+      grid-template-columns: 36px 1fr;
+      gap: 10px;
+      align-items: center;
+      padding: 10px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(20, 48, 40, 0.75);
+      font-size: 15px;
+    }
+    .idea b { font-weight: 600; }
+    .idea span { color: var(--dim); display: block; font-size: 13px; }
+    .idea i {
+      width: 36px; height: 36px; border-radius: 10px;
+      display: grid; place-items: center;
+      font-style: normal; font-weight: 600;
+      background: rgba(243, 234, 216, 0.08);
+    }
+    .idea.pick {
+      background: var(--cream);
+      color: #14241c;
+      border-color: transparent;
+    }
+    .idea.pick span { color: #4e5e54; }
+    .idea.pick i { background: #14241c; color: var(--gold-2); }
+
+    .spec { width: 100%; border-collapse: collapse; margin-top: 16px; }
+    .spec th, .spec td { text-align: left; vertical-align: top; padding: 11px 12px; border-bottom: 1px solid var(--line); font-size: 16px; }
+    .spec th { width: 250px; color: var(--gold-2); font-weight: 600; font-size: 14px; letter-spacing: 0.04em; text-transform: uppercase; }
+
+    .flow { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 22px; position: relative; }
+    .step { position: relative; padding: 18px 16px 16px; border-radius: 16px; background: rgba(20, 48, 40, 0.9); border: 1px solid var(--line); min-height: 280px; }
+    .step .n {
+      font-family: Fraunces, Georgia, serif;
+      font-size: 42px;
+      color: var(--gold);
+      line-height: 1;
+    }
+    .step h3 { margin: 10px 0 8px; font-size: 22px; font-family: Fraunces, Georgia, serif; font-weight: 640; letter-spacing: -0.02em; }
+    .step p { margin: 0; color: var(--dim); font-size: 15px; line-height: 1.35; }
+    .step .meta { margin-top: 16px; padding-top: 12px; border-top: 1px solid var(--line); color: var(--moss); font-size: 14px; line-height: 1.4; }
+
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; margin-top: 16px; }
+    .stat { padding: 16px 16px 14px; border-radius: 16px; background: rgba(20, 48, 40, 0.9); border: 1px solid var(--line); }
+    .stat .num { font-family: Fraunces, Georgia, serif; font-size: 40px; letter-spacing: -0.03em; line-height: 1; }
+    .stat .lbl { margin-top: 8px; color: var(--gold-2); font-size: 13px; letter-spacing: 0.08em; text-transform: uppercase; }
+    .stat p { margin: 8px 0 0; color: var(--dim); font-size: 14px; line-height: 1.35; }
+    .trio { display: grid; grid-template-columns: 1.1fr 0.9fr 1fr; gap: 12px; margin-top: 12px; }
+
+    .org { display: grid; grid-template-columns: 0.85fr 1.15fr; gap: 14px; margin-top: 14px; flex: 1; }
+    .roles { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    table.mini { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    table.mini th { text-align: left; color: var(--gold-2); font-weight: 600; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; padding: 0 8px 6px; }
+    table.mini td { padding: 6px 8px; border-top: 1px solid var(--line); vertical-align: top; }
+    .gapnote { margin-top: 8px; color: var(--bad); font-size: 14px; }
+
+    .legal { display: grid; grid-template-columns: 1.25fr 0.85fr; gap: 14px; margin-top: 14px; flex: 1; }
+    .score {
+      display: flex; align-items: center; gap: 16px;
+    }
+    .ring {
+      width: 108px; height: 108px; border-radius: 50%;
+      display: grid; place-items: center;
+      background: conic-gradient(var(--gold) 0 216deg, rgba(243,234,216,0.12) 216deg 360deg);
+      flex: none;
+    }
+    .ring span {
+      width: 82px; height: 82px; border-radius: 50%;
+      background: var(--bg-2);
+      display: grid; place-items: center;
+      font-family: Fraunces, Georgia, serif;
+      font-size: 32px;
+    }
+    .bars { display: flex; align-items: end; gap: 18px; height: 188px; margin-top: 8px; }
+    .bar { flex: 1; display: flex; flex-direction: column; justify-content: end; align-items: center; gap: 8px; height: 100%; }
+    .bar i { display: block; width: 100%; flex: 0 0 auto; border-radius: 10px 10px 4px 4px; background: linear-gradient(180deg, var(--gold-2), #b8893e); }
+    .bar b { font-size: 13px; font-weight: 600; }
+    .bar em { font-style: normal; color: var(--dim); font-size: 12px; }
+
+    .heroes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin-top: 14px; }
+    .hero-num { padding: 16px 18px 14px; border-radius: 16px; background: rgba(20, 48, 40, 0.92); border: 1px solid var(--line); }
+    .hero-num .num { font-family: Fraunces, Georgia, serif; font-size: 48px; letter-spacing: -0.04em; line-height: 0.95; }
+    .hero-num .num.bad { color: var(--bad); }
+    .hero-num .lbl { margin-top: 6px; color: var(--gold-2); font-size: 13px; letter-spacing: 0.06em; text-transform: uppercase; }
+    .hero-num p { margin: 8px 0 0; color: var(--dim); font-size: 14px; line-height: 1.35; }
+    .formula { margin-top: 12px; color: var(--moss); font-size: 15px; line-height: 1.45; }
+    .close-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; margin-top: 22px; }
+    .close-grid .card { min-height: 210px; }
+    .close-grid .n { font-family: Fraunces, Georgia, serif; color: var(--gold); font-size: 28px; }
+    .big-end { margin-top: 22px; font-family: Fraunces, Georgia, serif; font-size: 30px; letter-spacing: -0.03em; }
+    .target {
+      margin-top: 12px;
+      padding: 10px 14px;
+      border-radius: 12px;
+      background: rgba(228, 194, 122, 0.12);
+      border: 1px solid rgba(228, 194, 122, 0.35);
+      color: var(--cream);
+      font-size: 15px;
+      line-height: 1.35;
+    }
+    .target b { color: var(--gold-2); font-weight: 600; }
+    .deca { display: flex; flex-direction: column; gap: 8px; margin-top: 12px; flex: 1; min-height: 0; }
+    .deca article {
+      display: grid;
+      grid-template-columns: 46px 1fr;
+      gap: 10px;
+      align-items: center;
+      padding: 8px 12px;
+      border-radius: 12px;
+      border: 1px solid var(--line);
+      background: rgba(20, 48, 40, 0.88);
+    }
+    .deca b { font-family: Fraunces, Georgia, serif; color: var(--gold); font-size: 22px; font-weight: 640; }
+    .deca h3 { margin: 0; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--gold-2); font-weight: 600; }
+    .deca p { margin: 2px 0 0; font-size: 15px; line-height: 1.3; }
+    .risks { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; margin-top: 8px; }
+    .risks div { padding: 10px 10px 8px; border-radius: 12px; border: 1px solid rgba(240, 181, 160, 0.4); background: rgba(20, 48, 40, 0.88); font-size: 13px; line-height: 1.3; color: var(--dim); }
+    .risks strong { display: block; color: var(--cream); font-size: 13px; margin-bottom: 4px; }
+
+    .chrome {
+      position: fixed; left: 0; right: 0; bottom: 0; height: 52px;
+      display: flex; align-items: center; gap: 10px;
+      padding: 0 16px;
+      background: #06110e;
+      border-top: 1px solid rgba(243, 234, 216, 0.08);
+      color: var(--dim);
+      font-size: 13px;
+    }
+    .chrome button {
+      background: transparent;
+      color: var(--cream);
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      padding: 6px 12px;
+      cursor: pointer;
+    }
+    .chrome button:hover { border-color: var(--gold); }
+    .track { flex: 1; height: 4px; background: rgba(243,234,216,0.12); border-radius: 99px; overflow: hidden; }
+    .track i { display: block; height: 100%; background: var(--gold); width: 0; }
+    #timer { min-width: 52px; font-variant-numeric: tabular-nums; color: var(--gold-2); font-weight: 600; }
+    #timer.over { color: var(--bad); }
+    #count { min-width: 52px; text-align: right; }
+    .notes {
+      position: fixed;
+      left: 16px; right: 16px; bottom: 64px;
+      background: #f6f0e4;
+      color: #1a241c;
+      border-radius: 14px;
+      padding: 14px 16px 12px;
+      display: none;
+      box-shadow: var(--shadow);
+      z-index: 5;
+    }
+    .notes.on { display: block; }
+    .notes b { font-family: Fraunces, Georgia, serif; font-size: 16px; }
+    .notes p { margin: 6px 0 0; font-size: 16px; line-height: 1.4; }
+    kbd { border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; color: var(--cream); }
+    @media (prefers-reduced-motion: reduce) {
+      * { scroll-behavior: auto !important; transition: none !important; }
+    }
+    @media print {
+      @page { size: 13.333in 7.5in; margin: 0; }
+      html, body {
+        height: auto;
+        background: #071410;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+      }
+      .viewport { position: static; inset: auto; overflow: visible; }
+      .chrome, .notes { display: none !important; }
+      .stage {
+        position: static !important;
+        left: auto !important;
+        top: auto !important;
+        transform: none !important;
+        width: auto;
+        height: auto;
+        border-radius: 0;
+        box-shadow: none;
+        overflow: visible;
+        background: none;
+      }
+      .stage::before { display: none; }
+      .slide,
+      .slide.on {
+        display: flex !important;
+        position: relative;
+        inset: auto;
+        width: 13.333in;
+        height: 7.5in;
+        margin: 0;
+        box-sizing: border-box;
+        overflow: hidden;
+        break-after: page;
+        page-break-after: always;
+        background:
+          radial-gradient(900px 420px at 12% -10%, rgba(228, 194, 122, 0.14), transparent 55%),
+          radial-gradient(800px 480px at 110% 110%, rgba(80, 140, 110, 0.18), transparent 50%),
+          linear-gradient(180deg, var(--bg-2), var(--bg));
+      }
+      .slide:last-child { break-after: auto; page-break-after: auto; }
+    }
+  </style>
+</head>
+<body>
+  <div class="viewport">
+    <div class="stage" id="stage">
+
+      <section class="slide on" data-notes="Buenas. En cinco minutos: el problema, el objetivo, el decálogo de mercado, el producto, la operación, el equipo, lo legal y las cifras. Empiezo por el problema.">
+        <div class="hero">
+          <div class="brand-row">
+            <div class="kicker">Uniremington · Formulación de proyectos <span>Pitch · 5:00</span></div>
+            <div class="mark">LA</div>
+          </div>
+          <h1>LedgerAI</h1>
+          <p class="lede">Saneamiento de libros atrasados para los clientes de The Profit Catalyst. Proyecto Bookkeeping cleanup, contado con los talleres de clase.</p>
+          <div class="route">
+            <div><strong>1 · Problema</strong>Árbol ZOPP</div>
+            <div><strong>2 · Objetivo</strong>La idea SaaS</div>
+            <div><strong>3 · Decálogo</strong>Los 10 del mercado</div>
+            <div><strong>4 · Producto</strong>Ficha y proceso</div>
+            <div><strong>5 · Operación</strong>Capacidad y lugar</div>
+            <div><strong>6 · Equipo</strong>Quién hace qué</div>
+            <div><strong>7 · Legal</strong>Qué aplica</div>
+            <div><strong>8 · Cifras</strong>Taller y plan B</div>
+          </div>
+          <div class="who">
+            <div>
+              <div style="color:var(--muted);font-size:13px;letter-spacing:.12em;text-transform:uppercase;">Presenta</div>
+              <b>Juanes Gallego</b>
+            </div>
+            <div style="text-align:right;color:var(--dim);font-size:15px;">Cliente de trabajo: My Xcell Network<br/>Mercado inicial: Miami, Florida</div>
+          </div>
+        </div>
+      </section>
+
+      <section class="slide" data-notes="El problema central es la desorganización financiera: libros atrasados e inestables. Arriba, los efectos que escribimos: sanciones fiscales, si aplican, y pérdidas financieras. Abajo, la causa: sobrecostos en papelería. ZOPP es el método de la clase: un enfoque participativo que convierte un problema concreto en objetivos. Primero el problema, sus ramas y su raíz. Todavía no la solución.">
+        <div class="kicker">Taller 1 · Metodología ZOPP <span>0:20</span></div>
+        <h2>El problema no es “falta un software”.</h2>
+        <p class="lede">Es la desorganización financiera. ZOPP obliga a nombrar efectos y causa antes de elegir producto.</p>
+        <div class="split">
+          <div class="card" style="align-self:center;">
+            <h3>Qué es ZOPP</h3>
+            <p>Enfoque participativo para planear. Transforma problemas concretos en objetivos estructurados.</p>
+            <ul style="margin-top:12px;">
+              <li>Árbol de problemas: causa, centro y efectos.</li>
+              <li>Árbol de objetivos: los mismos puntos, en positivo.</li>
+              <li>Marco lógico: objetivos, indicadores, actividades y riesgos. Es el paso que sigue; en el cuaderno queda definido, no cerrado.</li>
+            </ul>
+          </div>
+          <div class="tree">
+            <div class="nodes">
+              <div class="node"><small>Efecto</small>Sanciones fiscales<br/>(si aplica)</div>
+              <div class="node"><small>Efecto</small>Pérdidas<br/>financieras</div>
+            </div>
+            <div class="fork"></div>
+            <div class="stem"></div>
+            <div class="node core"><small>Problema central</small>Desorganización financiera</div>
+            <div class="stem"></div>
+            <div class="node root"><small>Causa</small>Sobrecostos en papelería</div>
+          </div>
+        </div>
+        <div class="foot"><span>Proyecto Bookkeeping cleanup</span><span>LedgerAI · The Profit Catalyst</span></div>
+      </section>
+
+      <section class="slide" data-notes="El mismo árbol, volteado. Los fines son cumplimiento legal, beneficios tributarios, automatización y reducción de costos. El objetivo es sanear esa desorganización. De cinco ideas marcamos la plataforma web SaaS. Outsourcing sería gente, no software. El bot de ingesta, el dashboard y el backup no se venden aparte: viven dentro de esa plataforma, o no son el producto. La idea con la que se ataca el problema es una sola.">
+        <div class="kicker">Taller 1 · Árbol de objetivos y lluvia de ideas <span>0:55</span></div>
+        <h2>Un objetivo. Una idea marcada.</h2>
+        <div class="split">
+          <div class="tree">
+            <div class="nodes">
+              <div class="node"><small>Fin</small>Cumplimiento legal</div>
+              <div class="node"><small>Fin</small>Beneficios tributarios</div>
+            </div>
+            <div class="fork"></div>
+            <div class="nodes" style="margin-top:8px;">
+              <div class="node"><small>Fin</small>Automatización</div>
+              <div class="node"><small>Fin</small>Reducción de costos</div>
+            </div>
+            <div class="stem"></div>
+            <div class="node core"><small>Objetivo</small>Sanear la contabilidad del negocio</div>
+          </div>
+          <div class="ideas">
+            <div class="idea pick"><i>1</i><div><b>Plataforma web SaaS</b><span>La idea elegida. Se usa en el navegador, computador o celular.</span></div></div>
+            <div class="idea"><i>2</i><div><b>Outsourcing contable</b><span>Servicio humano. No es LedgerAI.</span></div></div>
+            <div class="idea"><i>3</i><div><b>Bot web de ingesta automatizada</b><span>Queda dentro del SaaS: carpetas, PDF, Excel y foto.</span></div></div>
+            <div class="idea"><i>4</i><div><b>Dashboard o plantilla dinámica</b><span>Queda dentro del SaaS: documentos, movimientos y reportes.</span></div></div>
+            <div class="idea"><i>5</i><div><b>Backup contable</b><span>No se vende como producto. Los archivos siguen en la nube del cliente.</span></div></div>
+          </div>
+        </div>
+        <div class="foot"><span>En el cuaderno, la idea marcada es la plataforma web.</span><span>LedgerAI · The Profit Catalyst</span></div>
+      </section>
+
+      <section class="slide" data-notes="El decálogo es de la clase del 22 de septiembre. El cliente es el dueño que ya está en The Profit Catalyst y le debe un paquete a su CPA. El caso es My Xcell. Uno: LedgerAI es un SaaS. Lee, clasifica, concilia y entrega Balance, pérdidas y ganancias y flujo de efectivo. No es outsourcing, ni programa de escritorio, ni infraestructura alquilada, y el día a día no paga inteligencia artificial. Dos: no inventamos el censo. La unidad es el cliente de TPC con extractos sin cerrar, y hoy hay un caso. Tres: al lado están Excel, QuickBooks, el bookkeeping humano y la IA de pago. Cuatro: no hay precio histórico. La suscripción es mensual y el monto se acuerda con TPC. Cinco: el canal es el navegador. Del freelancer al archivo del CPA, sin tienda.">
+        <div class="kicker">Decálogo de mercado · 22 de septiembre <span>1:05</span></div>
+        <h2>A quién se le vende.</h2>
+        <div class="target"><b>Segmento.</b> Dueño de un negocio pequeño, ya cliente de The Profit Catalyst, con extractos de varios años sin ordenar, que debe entregarle un paquete claro a su CPA. Caso: My Xcell Network, Miami. Ordenar los libros baja sanciones y le devuelve tiempo.</div>
+        <div class="deca">
+          <article><b>01</b><div><h3>Qué es</h3><p>Servicio digital (SaaS). Lee Drive, PDF, Excel o foto; clasifica en el plan de cuentas; concilia por mes; entrega Balance, P&amp;L y flujo de efectivo. No es outsourcing, ni programa de escritorio, ni IaaS. El día a día no usa IA de pago.</p></div></article>
+          <article><b>02</b><div><h3>Demanda</h3><p>Compra el dueño, no el público y no el contador. El CPA recibe el resultado. La unidad contable es el cliente de TPC con extractos sin cerrar. Hoy se demuestra con My Xcell. El censo de la cartera no se inventa.</p></div></article>
+          <article><b>03</b><div><h3>Oferta</h3><p>Excel o papel, QuickBooks, bookkeeping humano, y herramientas que alquilan un modelo. LedgerAI limpia lo atrasado, con las reglas de ese cliente, sin pagar IA por movimiento. No se cuenta “cuántas empresas iguales hay en el país”.</p></div></article>
+          <article><b>04</b><div><h3>Precio</h3><p>No hay tarifa histórica. Lo propuesto es suscripción mensual por cliente. El monto no se fija hasta acordarlo con TPC. Se compara con las horas de Excel que ese cliente ya paga.</p></div></article>
+          <article><b>05</b><div><h3>Canal</h3><p>Digital y directo. El freelancer lo ofrece dentro de TPC. El cliente entra por el navegador. Los extractos llegan por Drive o por archivo. El resultado vuelve en pantalla y en un archivo para el CPA. Sin tienda ni instalador.</p></div></article>
+        </div>
+        <div class="foot"><span>Los montos y el tamaño de la cartera no se inventan.</span><span>LedgerAI · The Profit Catalyst</span></div>
+      </section>
+
+      <section class="slide" data-notes="Sigo con el decálogo. Seis: se conoce por venta directa a la cartera de TPC. El presupuesto de promoción es cero. La promoción es la demo con un cliente real. Siete: los insumos son las carpetas de Drive, programas libres y un hosting gratuito que se duerme. El cuello de botella es que el cliente entregue las carpetas completas y que alguien verifique. Ocho: influencia digital, mercado inicial Miami, Florida. No se afirma un mercado nacional. Nueve: la proyección es clientes con libros atrasados por la suscripción acordada. Sin dólares, porque faltan el censo y el precio. Diez: hay demanda, está acotada, y el precio sigue abierto. Los riesgos son el precio, la cartera chica, el hosting free, una lectura mal hecha, y que el reporte apoya al CPA pero no evita la sanción por sí solo.">
+        <div class="kicker">Decálogo de mercado · 22 de septiembre <span>1:30</span></div>
+        <h2>Cómo llega, y qué lo frena.</h2>
+        <div class="deca">
+          <article><b>06</b><div><h3>Marketing</h3><p>Venta directa del freelancer a la cartera de TPC. No hay pauta, feria ni red de lanzamiento. Presupuesto de promoción: cero. La promoción es la demo con un cliente real.</p></div></article>
+          <article><b>07</b><div><h3>Insumos</h3><p>Drive del cliente, programas libres y hosting gratuito. El free se duerme y tiene tope de memoria. El cuello de botella es la carpeta completa y la verificación humana.</p></div></article>
+          <article><b>08</b><div><h3>Geografía</h3><p>Influencia digital. Mercado inicial: Estados Unidos, Florida, Miami, porque ahí está esta cartera. No se afirma un mercado nacional ni internacional.</p></div></article>
+          <article><b>09</b><div><h3>Proyección</h3><p>Clientes de TPC con libros atrasados × suscripción mensual acordada. Hoy no se pasa a dólares: faltan el censo y el precio de lista. My Xcell prueba el uso, no las ventas.</p></div></article>
+          <article><b>10</b><div><h3>Conclusión</h3><p>Hay demanda acotada y conocida. El canal es digital y directo. El precio y el tamaño de la demanda siguen abiertos a propósito.</p></div></article>
+        </div>
+        <div class="risks">
+          <div><strong>Precio</strong>Sin ingreso predecible.</div>
+          <div><strong>Cartera</strong>Un cliente no es el mercado.</div>
+          <div><strong>Hosting</strong>El free se duerme.</div>
+          <div><strong>Lectura</strong>Si falla, alguien corrige.</div>
+          <div><strong>Sanción</strong>El reporte apoya al CPA. No la evita solo.</div>
+        </div>
+        <div class="foot"><span>Clase del 22 de septiembre de 2026.</span><span>LedgerAI · The Profit Catalyst</span></div>
+      </section>
+
+      <section class="slide" data-notes="LedgerAI limpia libros atrasados de clientes que The Profit Catalyst ya atiende. Lee las carpetas, clasifica cada movimiento en el plan de cuentas, concilia el banco por mes y entrega el balance. Es un servicio digital, un SaaS, una aplicación web. La necesidad es digitalizar la información de empresas pequeñas, medianas y grandes. El diferencial, tal como quedó escrito: no es papel, ni un software contable genérico, ni bookkeeping humano. No pretende contar cuántas empresas hay en el país. Trabaja con las reglas del plan de cuentas de ese cliente, sin pagar un modelo de inteligencia artificial.">
+        <div class="kicker">Estudio técnico · Ficha del servicio <span>1:30</span></div>
+        <h2>Qué recibe el cliente.</h2>
+        <table class="spec">
+          <tr><th>Nombre</th><td>LedgerAI</td></tr>
+          <tr><th>Descripción</th><td>Limpieza de libros atrasados, con clientes que The Profit Catalyst ya atiende.</td></tr>
+          <tr><th>Qué hace</th><td>Lee las carpetas. Clasifica cada movimiento en el plan de cuentas. Concilia el banco por mes. Entrega el balance.</td></tr>
+          <tr><th>Cómo se entrega</th><td>Servicio digital (SaaS). Aplicación web para sanear contabilidad atrasada.</td></tr>
+          <tr><th>Necesidad</th><td>Digitalizar la información de empresas pequeñas, medianas y grandes.</td></tr>
+          <tr><th>Diferencial</th><td>No es papel, ni software contable genérico, ni bookkeeping humano. No cuenta “cuántas empresas hay en el país”. Usa las reglas del plan de cuentas del cliente, sin pagar un modelo de IA.</td></tr>
+        </table>
+        <div class="foot" style="margin-top:auto;"><span>Unidad de producción: 1 cliente = My Xcell Network</span><span>LedgerAI · The Profit Catalyst</span></div>
+      </section>
+
+      <section class="slide" data-notes="El mapa operativo tiene cuatro pasos, con responsable. Uno: el freelancer ofrece LedgerAI, con PC y servidor. Dos: el cliente entra por el navegador, desde el celular o el computador. Tres: los extractos llegan por las carpetas de Google Drive; el responsable es el cliente. Cuatro: el resultado vuelve en pantalla y en un archivo, y lo recibe The Profit Catalyst. Ahí se cierra el circuito: de la carpeta al reporte.">
+        <div class="kicker">Estudio técnico · Mapa del proceso <span>2:05</span></div>
+        <h2>De la carpeta al reporte, en cuatro pasos.</h2>
+        <div class="flow">
+          <article class="step">
+            <div class="n">01</div>
+            <h3>Ofrecer LedgerAI</h3>
+            <p>Se presenta dentro de la relación que TPC ya tiene con el cliente.</p>
+            <div class="meta">Recurso: PC y servidor<br/>Responsable: freelancer</div>
+          </article>
+          <article class="step">
+            <div class="n">02</div>
+            <h3>Entrar por el navegador</h3>
+            <p>El cliente abre la aplicación en el computador o en el celular. No hay instalador.</p>
+            <div class="meta">Recurso: celular o PC<br/>Responsable: cliente</div>
+          </article>
+          <article class="step">
+            <div class="n">03</div>
+            <h3>Llegan los extractos</h3>
+            <p>Las carpetas del cliente entran por Google Drive. También PDF, Excel o CSV, y foto.</p>
+            <div class="meta">Recurso: PC y Google Drive<br/>Responsable: cliente</div>
+          </article>
+          <article class="step">
+            <div class="n">04</div>
+            <h3>El resultado vuelve</h3>
+            <p>Queda en pantalla y en un archivo: balance, estado de resultados y flujo de efectivo.</p>
+            <div class="meta">Recurso: PC y archivo<br/>Responsable: TPC</div>
+          </article>
+        </div>
+        <div class="foot" style="margin-top:auto;"><span>Un archivo a la vez. El humano verifica.</span><span>LedgerAI · The Profit Catalyst</span></div>
+      </section>
+
+      <section class="slide" data-notes="Hoy la capacidad máxima es un servidor de 512 megas, ocupado al cien por ciento por el primer cliente: My Xcell Network, sin plan de pago. El servidor gratuito se duerme y despierta cuando el cliente entra. Al mes uno el dato del cuaderno es 1 giga, para uno o dos clientes: dos con plan de pago y uno free. Al mes seis, 8 gigas y 8 clientes, en un servidor estable. La operación son unas ocho horas del día del cliente. No hay local. El lugar es remoto: acceso de clientes con peso 20 por ciento; conectividad 30 por ciento, con Render y Neon; seguridad 30 por ciento, según el cliente. Para programar, una PC propia. Servidor y base de datos, dos, alquilados. El espacio de LedgerAI es el servidor: 512 megas en plan free; el plan starter de pago, en dólares, cuando se necesite más.">
+        <div class="kicker">Estudio técnico · Capacidad, lugar y recursos <span>2:35</span></div>
+        <h2>Cabe un cliente. El plan es caber ocho.</h2>
+        <div class="stats">
+          <div class="stat">
+            <div class="num">512 MB</div>
+            <div class="lbl">Capacidad máxima</div>
+            <p>1 cliente al 100%. El primero es My Xcell, sin plan de pago.</p>
+          </div>
+          <div class="stat">
+            <div class="num">1 GB</div>
+            <div class="lbl">Mes 1</div>
+            <p>1 o 2 clientes. Dos con plan de pago y uno free.</p>
+          </div>
+          <div class="stat">
+            <div class="num">8 GB</div>
+            <div class="lbl">Mes 6</div>
+            <p>8 clientes. Servidor estable, como estándar de operación.</p>
+          </div>
+          <div class="stat">
+            <div class="num">8 h</div>
+            <div class="lbl">Jornada</div>
+            <p>Horas del día del cliente. El servidor free se duerme y despierta con la petición.</p>
+          </div>
+        </div>
+        <div class="trio">
+          <div class="card">
+            <h3>Localización · remoto</h3>
+            <p>Acceso de clientes, peso 20%. Conectividad, 30%: remoto, Render y Neon. Seguridad y entorno, 30%, según el cliente. No hay lugar B: no hay sede física.</p>
+          </div>
+          <div class="card">
+            <h3>Recursos</h3>
+            <p>1 PC propia, para programar. Servidor y base de datos: 2, alquilados, para clientes y datos.</p>
+          </div>
+          <div class="card">
+            <h3>Espacio</h3>
+            <p>LedgerAI no usa una planta. Usa espacio en servidores. Plan free de 512 MB. El plan starter, de pago y en dólares, es el escalón estable.</p>
+          </div>
+        </div>
+        <div class="foot"><span>Cifras de la guía del 6 de octubre.</span><span>LedgerAI · The Profit Catalyst</span></div>
+      </section>
+
+      <section class="slide" data-notes="Aclaro la sigla, como en el cuaderno: TPC es la empresa. El servicio se llama The Profit Catalyst. En la etapa inicial el freelancer desarrolla y reporta a TPC. Finanzas las lleva TPC frente al cliente. El servicio al cliente lo da el freelancer. Mercadeo y producción no tienen un cargo aparte: los cubre la misma persona. Tres cargos críticos. El desarrollador automatiza y crea. El contador audita y revisa. El gerente de TPC verifica y valida, en todas las áreas. En la matriz, producir lo lidera TPC con apoyo del freelancer; registrar ingresos y gastos, y los proveedores, los lidera el cliente con apoyo de TPC. La función que hoy no tiene dueño es la inteligencia artificial.">
+        <div class="kicker">Estudio organizacional <span>3:15</span></div>
+        <h2>Poca gente. Cada cosa con dueño.</h2>
+        <div class="org">
+          <div>
+            <div class="card" style="margin-bottom:10px;">
+              <h3>Estructura de arranque</h3>
+              <p><b>Dirección.</b> Freelancer / desarrollador → reporta a The Profit Catalyst.</p>
+              <p style="margin-top:6px;"><b>Finanzas.</b> The Profit Catalyst → frente al cliente.</p>
+              <p style="margin-top:6px;"><b>Servicio.</b> Freelancer → frente al cliente.</p>
+              <p style="margin-top:6px;color:var(--dim);">Producción y mercadeo no tienen cargo aparte en esta etapa.</p>
+            </div>
+            <div class="roles">
+              <div class="card" style="padding:12px;"><h3>Desarrollador</h3><p>Automatizar y crear. Sistemas.</p></div>
+              <div class="card" style="padding:12px;"><h3>Contador</h3><p>Auditar y revisar. Bookkeeping.</p></div>
+              <div class="card" style="padding:12px;"><h3>Gerente TPC</h3><p>Verificar y validar. En todas.</p></div>
+            </div>
+            <p class="gapnote">Función sin asignar: la inteligencia artificial.</p>
+          </div>
+          <div class="card">
+            <h3>Matriz de responsabilidades</h3>
+            <table class="mini">
+              <thead><tr><th>Actividad</th><th>Responsable</th><th>Apoya</th></tr></thead>
+              <tbody>
+                <tr><td>Comprar insumos</td><td>TPC</td><td>Recursos humanos</td></tr>
+                <tr><td>Producir / prestar el servicio</td><td>TPC</td><td>Freelancer</td></tr>
+                <tr><td>Vender / atender</td><td>TPC</td><td>TPC</td></tr>
+                <tr><td>Registrar ingresos y gastos</td><td>Cliente</td><td>TPC</td></tr>
+                <tr><td>Gestionar proveedores</td><td>Cliente</td><td>TPC</td></tr>
+                <tr><td>Resolver PQR</td><td>TPC</td><td>Freelancer</td></tr>
+              </tbody>
+            </table>
+            <p style="margin-top:12px;color:var(--dim);font-size:14px;">TPC es la empresa. El servicio que se presta se llama The Profit Catalyst.</p>
+          </div>
+        </div>
+        <div class="foot"><span>Coherente con una microempresa: varias funciones, una persona.</span><span>LedgerAI · The Profit Catalyst</span></div>
+      </section>
+
+      <section class="slide" data-notes="En lo legal marcamos cuatro sí. Registro: empresa LLC en Estados Unidos; hay que validar la empresa. Laboral: auxilio de conectividad, fuente TICS. Protección de datos: habeas data, por ley constitucional. Propiedad intelectual: patente y Cámara de Comercio. La barrera para arrancar es la patente. Si el software es low code, no se patenta: el copyright queda en The Profit Catalyst. La nota de preparación es 3 de 5. Falta adaptar el modelo del cliente, los pagos, los servidores, el SaaS y la producción. Lo menos sustentado, escrito al final de la guía: el plan free de Render, el precio sin cerrar, y que la cartera puede ser pequeña.">
+        <div class="kicker">Estudio legal y diagnóstico <span>3:45</span></div>
+        <h2>Puede operar. Todavía no está cerrado.</h2>
+        <div class="legal">
+          <div class="card">
+            <h3>Lo que sí aplica</h3>
+            <table class="mini">
+              <thead><tr><th>Aspecto</th><th>Trámite</th><th>Dónde se verifica</th></tr></thead>
+              <tbody>
+                <tr><td>Registro empresarial</td><td>Empresa LLC en Estados Unidos</td><td>Validar la empresa</td></tr>
+                <tr><td>Laboral</td><td>Auxilio de conectividad</td><td>TICS</td></tr>
+                <tr><td>Protección de datos</td><td>Habeas data</td><td>Ley constitucional</td></tr>
+                <tr><td>Propiedad intelectual</td><td>Patente y Cámara de Comercio</td><td>Cámara de Comercio</td></tr>
+              </tbody>
+            </table>
+            <p style="margin-top:14px;">Barrera: la patente. En software low code no se patenta. El copyright es de The Profit Catalyst.</p>
+          </div>
+          <div class="card" style="display:flex;flex-direction:column;justify-content:space-between;">
+            <div class="score">
+              <div class="ring"><span>3/5</span></div>
+              <div>
+                <h3>Listo para operar</h3>
+                <p>Falta adaptar el modelo del cliente, los pagos, los servidores, el SaaS y la producción.</p>
+              </div>
+            </div>
+            <div>
+              <h3>Lo menos sustentado</h3>
+              <p>Render en plan free.<br/>Precio sin cerrar.<br/>La cartera puede ser pequeña.</p>
+            </div>
+          </div>
+        </div>
+        <div class="foot"><span>Los otros ítems de la guía quedaron en blanco a propósito: no aplican a un software remoto.</span><span>LedgerAI · The Profit Catalyst</span></div>
+      </section>
+
+      <section class="slide" data-notes="Estas son las cifras de los talleres, para explicar el método. No son las ventas del decálogo: allí la proyección de LedgerAI se deja en fórmula, sin dólares, porque faltan el censo y el precio. En el ejercicio de inversión: costo variable 124.000, margen 25 por ciento, precio 165.333. Costo fijo 8.354.000. El equilibrio da 202 unidades. Los ingresos son 65,4, 87,2 y 110,8 millones, la tasa es 12 por ciento y la inversión es 220 millones. El valor presente neto da menos 13,27 millones: no viable. En el ejercicio de precio, con margen del 40 por ciento, el precio sale 70.833. En la proyección, la demanda del ejercicio es 12.000 al año, se atiende el 10 por ciento, y las ventas pasan de 7,1 millones en 2026 a 10,7 millones en 2029, con IVA del 19 por ciento. LedgerAI no parte de una inversión de 220 millones: por eso ese VPN negativo no es el plan del producto. El plan del producto es el servidor chico y el precio que falta cerrar con TPC.">
+        <div class="kicker">Talleres de cifras · para explicar el método <span>4:15</span></div>
+        <h2>Con 220 millones, el VPN no da.</h2>
+        <div class="heroes">
+          <div class="hero-num">
+            <div class="num">202</div>
+            <div class="lbl">Punto de equilibrio</div>
+            <p>Precio 165.333. Costo variable 124.000. Costo fijo 8.354.000. Margen 25%.</p>
+          </div>
+          <div class="hero-num">
+            <div class="num bad">−13,27</div>
+            <div class="lbl">VPN · no viable</div>
+            <p>Inversión 220 millones. Tasa 12%. Ingresos 65,4 · 87,2 · 110,8 millones.</p>
+          </div>
+          <div class="hero-num">
+            <div class="num">70.833</div>
+            <div class="lbl">Precio con margen 40%</div>
+            <p>Ejercicio de costeo: tela, hilo, cremallera, mano de obra y CIF suman 42.500.</p>
+          </div>
+        </div>
+        <p class="formula">Precio = 124.000 / (1 − 0,25) = 165.333 &nbsp;·&nbsp; Equilibrio = 8.354.000 / 41.333 = 202 &nbsp;·&nbsp; VPN = 58,30 + 69,50 + 78,93 − 220 = −13,27</p>
+        <div class="card" style="margin-top:12px;">
+          <h3>Proyección del taller · IVA 19% · crecimiento 5% · se atiende el 10% de 12.000</h3>
+          <div class="bars" aria-hidden="true">
+            <div class="bar"><i style="height:108px"></i><b>7,14 M</b><em>2026 · 1.200</em></div>
+            <div class="bar"><i style="height:122px"></i><b>8,10 M</b><em>2027 · 1.260</em></div>
+            <div class="bar"><i style="height:143px"></i><b>9,47 M</b><em>2028 · 1.323</em></div>
+            <div class="bar"><i style="height:160px"></i><b>10,69 M</b><em>2029 · 1.390</em></div>
+          </div>
+        </div>
+        <div class="foot"><span>Precio base 5.000 sin IVA · 5.950 con IVA · inflación anotada 0%. El decálogo no convierte estas barras en ventas de LedgerAI.</span><span>LedgerAI · The Profit Catalyst</span></div>
+      </section>
+
+      <section class="slide" data-notes="Cierro con el plan B que el taller pide, y con lo que nosotros escribimos que hace falta. Uno: servidor de pago, porque el free se duerme y se queda en 512 megas. Dos: definir la venta a TPC y el modelo SaaS; el precio histórico no existe y el precio propuesto no se inventa. Tres: crecer solo con los clientes reales de The Profit Catalyst; la cartera puede ser pequeña y un cliente de prueba no es todo el mercado. Si entra un competidor, si baja el precio o si cambia lo que el cliente necesita, ese es el plan. El humano verifica. TPC recibe el archivo. Gracias.">
+        <div class="kicker">Diagnóstico · plan B <span>4:40</span></div>
+        <h2>El proyecto cabe si no se infla.</h2>
+        <p class="lede">La pregunta del taller —si hay mercado, si es viable, y qué pasa si entra un competidor, baja el precio o cambia el gusto— se responde con tres decisiones ya escritas.</p>
+        <div class="close-grid">
+          <article class="card">
+            <div class="n">01</div>
+            <h3>Servidor de pago</h3>
+            <p>El plan free de Render alcanza para demostrar el primer cliente. No alcanza para ocho. El siguiente escalón es el plan starter.</p>
+          </article>
+          <article class="card">
+            <div class="n">02</div>
+            <h3>Precio con TPC</h3>
+            <p>No hay tarifa histórica. La suscripción mensual se acuerda con The Profit Catalyst. No se copia un precio de otra industria.</p>
+          </article>
+          <article class="card">
+            <div class="n">03</div>
+            <h3>La cartera real</h3>
+            <p>La demanda es los clientes de TPC con libros atrasados. My Xcell prueba el uso. No prueba todo el mercado.</p>
+          </article>
+        </div>
+        <p class="big-end">El humano verifica. TPC recibe el archivo.</p>
+        <div class="foot"><span>Gracias.</span><span>LedgerAI · The Profit Catalyst</span></div>
+      </section>
+
+    </div>
+  </div>
+
+  <aside class="notes" id="notes" aria-live="polite">
+    <b id="notes-title">Guion</b>
+    <p id="notes-body"></p>
+  </aside>
+
+  <div class="chrome">
+    <button type="button" id="prev" aria-label="Diapositiva anterior">←</button>
+    <button type="button" id="next" aria-label="Diapositiva siguiente">→</button>
+    <div class="track" aria-hidden="true"><i id="bar"></i></div>
+    <span id="count">1 / 10</span>
+    <span id="timer" title="Cronómetro de 5 minutos">0:00</span>
+    <button type="button" id="toggle-notes">Notas</button>
+    <button type="button" id="toggle-timer">Tiempo</button>
+    <button type="button" id="fullscreen">Pantalla</button>
+    <span><kbd>N</kbd> notas · <kbd>T</kbd> tiempo · <kbd>F</kbd> pantalla</span>
+  </div>
+
+  <script>
+    (function () {
+      var slides = Array.prototype.slice.call(document.querySelectorAll(".slide"));
+      var index = 0;
+      var notesOn = false;
+      var started = null;
+      var timerOn = false;
+      var stage = document.getElementById("stage");
+      var notes = document.getElementById("notes");
+      var notesBody = document.getElementById("notes-body");
+      var count = document.getElementById("count");
+      var bar = document.getElementById("bar");
+      var timerEl = document.getElementById("timer");
+
+      function fit() {
+        var notesH = notesOn ? 150 : 0;
+        var availH = window.innerHeight - 52 - notesH - 28;
+        var scale = Math.min(window.innerWidth / 1280, availH / 720);
+        stage.style.transform = "translate(-50%, -50%) scale(" + scale + ")";
+      }
+
+      function show(next) {
+        index = (next + slides.length) % slides.length;
+        slides.forEach(function (slide, i) {
+          slide.classList.toggle("on", i === index);
+        });
+        count.textContent = (index + 1) + " / " + slides.length;
+        bar.style.width = ((index + 1) / slides.length * 100) + "%";
+        notesBody.textContent = slides[index].getAttribute("data-notes") || "";
+        var hash = "#" + (index + 1);
+        if (location.hash !== hash) history.replaceState(null, "", hash);
+        fit();
+      }
+
+      function tick() {
+        if (!timerOn || started === null) return;
+        var sec = Math.floor((Date.now() - started) / 1000);
+        var m = Math.floor(sec / 60);
+        var s = sec % 60;
+        timerEl.textContent = m + ":" + (s < 10 ? "0" : "") + s;
+        timerEl.classList.toggle("over", sec >= 300);
+        requestAnimationFrame(tick);
+      }
+
+      document.getElementById("prev").addEventListener("click", function () { show(index - 1); });
+      document.getElementById("next").addEventListener("click", function () { show(index + 1); });
+      document.getElementById("toggle-notes").addEventListener("click", function () {
+        notesOn = !notesOn;
+        notes.classList.toggle("on", notesOn);
+        fit();
+      });
+      document.getElementById("toggle-timer").addEventListener("click", function () {
+        if (timerOn) {
+          timerOn = false;
+          started = null;
+          timerEl.textContent = "0:00";
+          timerEl.classList.remove("over");
+          return;
+        }
+        timerOn = true;
+        started = Date.now();
+        requestAnimationFrame(tick);
+      });
+      document.getElementById("fullscreen").addEventListener("click", function () {
+        if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+        else document.exitFullscreen();
+      });
+
+      document.addEventListener("keydown", function (event) {
+        var key = event.key;
+        if (key === "ArrowRight" || key === "PageDown" || key === " ") {
+          event.preventDefault();
+          show(index + 1);
+        } else if (key === "ArrowLeft" || key === "PageUp" || key === "Backspace") {
+          event.preventDefault();
+          show(index - 1);
+        } else if (key === "Home") {
+          show(0);
+        } else if (key === "End") {
+          show(slides.length - 1);
+        } else if (key === "n" || key === "N") {
+          document.getElementById("toggle-notes").click();
+        } else if (key === "t" || key === "T") {
+          document.getElementById("toggle-timer").click();
+        } else if (key === "f" || key === "F") {
+          document.getElementById("fullscreen").click();
+        }
+      });
+
+      var touchX = null;
+      stage.addEventListener("touchstart", function (event) {
+        touchX = event.changedTouches[0].clientX;
+      }, { passive: true });
+      stage.addEventListener("touchend", function (event) {
+        if (touchX === null) return;
+        var dx = event.changedTouches[0].clientX - touchX;
+        if (Math.abs(dx) > 40) show(index + (dx < 0 ? 1 : -1));
+        touchX = null;
+      }, { passive: true });
+
+      function fromHash() {
+        var n = parseInt(String(location.hash).replace("#", ""), 10);
+        if (!isNaN(n) && n >= 1 && n <= slides.length) return n - 1;
+        return 0;
+      }
+
+      window.addEventListener("resize", fit);
+      window.addEventListener("hashchange", function () { show(fromHash()); });
+      show(fromHash());
+    })();
+  </script>
+</body>
+</html>
