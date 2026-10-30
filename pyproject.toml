@@ -26,6 +26,7 @@ dependencies = [
     "pgvector>=0.3",
     # Report generation
     "openpyxl>=3.1",
+    "tzdata>=2024.1",  # zoneinfo on slim Docker images (report footer time)
     # Local OCR ($0) — requires tesseract-ocr binary (Docker)
     "pytesseract>=0.3.10",
     "Pillow>=10.3",

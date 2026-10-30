@@ -25,12 +25,11 @@ from src.container import get_container
 from src.domain.exceptions import BookkeepingError
 from src.domain.models.enums import (
     DocumentFileType,
-    DocumentSource,
     DocumentStatus,
     TransactionStatus,
     TransactionType,
 )
-from src.domain.models.transaction import ExtractionMetadata, FinancialTransaction
+from src.domain.models.transaction import FinancialTransaction
 from src.infrastructure.classification.cash_flow import infer_cash_flow_type
 from src.infrastructure.queue.document_worker import get_document_worker, upload_dir
 from src.infrastructure.storage.document_storage import resolve_document_bytes
@@ -40,6 +39,8 @@ from src.infrastructure.reconciliation.statement_chain import (
 )
 from src.infrastructure.drive.year_policy import years_at_or_below
 from src.infrastructure.reports.period_xlsx_export import bundle_to_xlsx_bytes
+from src.infrastructure.reports.qb_layout import basis_footer, build_qb_reports
+from src.infrastructure.reports.qb_xlsx import report_xlsx_bytes
 from src.infrastructure.repositories.document_repository import DocumentRecord, DocumentRepository
 from src.infrastructure.repositories.supabase_client import get_supabase_client
 from src.infrastructure.repositories.workspace_repository import Workspace, WorkspaceRepository
@@ -1525,17 +1526,19 @@ async def available_years(workspace_id: str) -> dict:
     }
 
 
-@api.get("/reports/pnl")
-async def pnl_report(
+_XLSX = "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+
+
+async def _period_bundle(
     workspace_id: str,
+    *,
+    period: str | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
     fiscal_year: str | None = None,
     month: int | None = None,
-    period: str | None = None,
-) -> dict:
-    """P&L from verified txs — excludes Owner's Draws / equity (same engine as statements)."""
-    bundle = await EmitPeriodReportsUseCase().execute(
+):
+    return await EmitPeriodReportsUseCase().execute(
         uuid.UUID(workspace_id),
         period=period,
         date_from=date_from,
@@ -1543,37 +1546,25 @@ async def pnl_report(
         fiscal_year=fiscal_year,
         month=month,
     )
-    pnl = dict(bundle.pnl)
-    net = float(pnl.get("netIncome") or pnl.get("net_income") or 0)
-    rev = float(pnl.get("totalRevenue") or pnl.get("revenue") or 0)
-    revenue_items = pnl.get("revenueItems") or []
-    expense_items = pnl.get("expenseItems") or []
-    cogs_items = pnl.get("cogsItems") or []
-    pnl.update(
-        {
-            "grossMargin": (net / rev * 100) if rev else 0,
-            "lines": [
-                *[
-                    {"account": i["name"], "amount": i["amount"], "category": "revenue"}
-                    for i in revenue_items
-                ],
-                *[
-                    {"account": i["name"], "amount": i["amount"], "category": "cogs"}
-                    for i in cogs_items
-                ],
-                *[
-                    {"account": i["name"], "amount": i["amount"], "category": "expense"}
-                    for i in expense_items
-                ],
-            ],
-            "transactionCount": bundle.transaction_count,
-            "pendingCount": bundle.pending_count,
-            "fiscal_year": bundle.fiscal_year,
-            "month": bundle.month,
-            "granularity": bundle.granularity,
-        }
+
+
+async def _company_name(workspace_id: str) -> str:
+    try:
+        ws = await WorkspaceRepository().get(uuid.UUID(workspace_id))
+    except Exception:
+        ws = None
+    if ws is None:
+        return "LedgerAI"
+    return (ws.name or "LedgerAI").strip()
+
+
+def _xlsx_response(data: bytes, filename: str) -> Response:
+    safe = "".join(ch if ch.isalnum() or ch in "-_." else "_" for ch in filename)
+    return Response(
+        content=data,
+        media_type=_XLSX,
+        headers={"Content-Disposition": f'attachment; filename="{safe}"'},
     )
-    return pnl
 
 
 @api.get("/reports/statements")
@@ -1586,8 +1577,8 @@ async def financial_statements_report(
     month: int | None = None,
 ) -> dict:
     """Emit P&L + Balance + Cash flow. Prefer fiscal_year (+ optional month)."""
-    bundle = await EmitPeriodReportsUseCase().execute(
-        uuid.UUID(workspace_id),
+    bundle = await _period_bundle(
+        workspace_id,
         period=period,
         date_from=date_from,
         date_to=date_to,
@@ -1596,6 +1587,7 @@ async def financial_statements_report(
     )
     chain_alerts = StatementPeriodRepository().list_alerts(uuid.UUID(workspace_id))
     return {
+        "qb": build_qb_reports(bundle, await _company_name(workspace_id)),
         "workspace_id": bundle.workspace_id,
         "period_label": bundle.period_label,
         "date_from": bundle.date_from,
@@ -1649,32 +1641,22 @@ async def balance_chain_ack(body: ChainAckBody) -> dict:
     return {"ok": True, "period": row}
 
 
-@api.get("/reports/sql")
-async def sql_report_views(
+@api.get("/reports/qb/{report}.xlsx")
+async def export_quickbooks_report(
+    report: str,
     workspace_id: str,
-    period: str | None = None,
-) -> dict:
-    """Agregados desde vistas Supabase (v_pnl_by_month, v_cash_flow_by_month, …)."""
-    client = get_supabase_client()
-    tid = workspace_id
-    pnl_q = client.table("v_pnl_by_month").select("*").eq("tenant_id", tid)
-    cf_q = client.table("v_cash_flow_by_month").select("*").eq("tenant_id", tid)
-    bal_q = client.table("v_balance_equity_proxy").select("*").eq("tenant_id", tid)
-    if period and len(period) == 7:
-        pnl_q = pnl_q.eq("period", period)
-        cf_q = cf_q.eq("period", period)
-    elif period and len(period) == 4:
-        bal_q = bal_q.eq("fiscal_year", period)
-        pnl_q = pnl_q.like("period", f"{period}-%")
-        cf_q = cf_q.like("period", f"{period}-%")
-    return {
-        "workspace_id": workspace_id,
-        "period": period,
-        "pnl_by_month": pnl_q.order("period").execute().data or [],
-        "cash_flow_by_month": cf_q.order("period").execute().data or [],
-        "balance_by_year": bal_q.order("fiscal_year").execute().data or [],
-        "engine": "supabase_sql_views",
-    }
+    fiscal_year: str | None = None,
+    month: int | None = None,
+):
+    """Download one report (`profit-and-loss` | `balance-sheet`) as the TPC template Excel."""
+    key = {"profit-and-loss": "profit_and_loss", "balance-sheet": "balance_sheet"}.get(report)
+    if key is None:
+        raise HTTPException(404, "Unknown report")
+    bundle = await _period_bundle(workspace_id, fiscal_year=fiscal_year, month=month)
+    company = await _company_name(workspace_id)
+    payload = build_qb_reports(bundle, company)[key]
+    data = report_xlsx_bytes(company=company, report=payload, footer=basis_footer())
+    return _xlsx_response(data, f"{company}_{payload['title']}_{bundle.period_label}.xlsx")
 
 
 @api.get("/reports/export.xlsx")
@@ -1686,25 +1668,26 @@ async def export_statements_xlsx(
     fiscal_year: str | None = None,
     month: int | None = None,
 ):
-    """Descarga P&L + Balance + Cash flow + Transacciones en Excel (openpyxl, $0)."""
+    """CPA package: P&L + Balance Sheet (QuickBooks layout) + Cash flow + Transactions."""
     from src.infrastructure.repositories.transaction_repository import TransactionRepository
 
-    bundle = await EmitPeriodReportsUseCase().execute(
-        uuid.UUID(workspace_id),
+    bundle = await _period_bundle(
+        workspace_id,
         period=period,
         date_from=date_from,
         date_to=date_to,
         fiscal_year=fiscal_year,
         month=month,
     )
-    txns = await TransactionRepository().list_by_tenant(uuid.UUID(workspace_id), limit=20000)
-    data = bundle_to_xlsx_bytes(bundle, transactions=txns)
-    fname = f"ledgerai-{bundle.period_label.replace(' ', '_')}.xlsx"
-    return Response(
-        content=data,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={"Content-Disposition": f'attachment; filename="{fname}"'},
+    txns = await TransactionRepository().list_by_tenant_date_range(
+        uuid.UUID(workspace_id),
+        date_from=bundle.date_from,
+        date_to=bundle.date_to,
+        statuses=["verified", "closed"],
     )
+    company = await _company_name(workspace_id)
+    data = bundle_to_xlsx_bytes(bundle, transactions=txns, company_name=company)
+    return _xlsx_response(data, f"{company}_CPA_package_{bundle.period_label}.xlsx")
 
 
 # Legacy ingest endpoint

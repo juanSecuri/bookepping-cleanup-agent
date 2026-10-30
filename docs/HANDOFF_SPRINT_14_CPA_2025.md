@@ -108,7 +108,8 @@ Mensaje de cambios 2026-09-08:
 ### 4.5 Periodo / export CPA (T5)
 
 - Año/mes en Reportes (desde Sprint 13a; Sprint 14 prefiere default **2025**).
-- `GET /api/reports/export.xlsx?workspace_id&fiscal_year&month=` → 4 sheets.
+- `GET /api/reports/export.xlsx?workspace_id&fiscal_year&month=` → 4 sheets (P&L y Balance en formato QuickBooks desde Sprint 19).
+- `GET /api/reports/qb/{profit-and-loss|balance-sheet}.xlsx?workspace_id&fiscal_year&month=` → un reporte con la plantilla TPC.
 
 ### 4.6 Tests nuevos / tocados
 

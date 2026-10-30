@@ -5,27 +5,17 @@ from src.domain.models.enums import (
     TransactionStatus,
     TransactionType,
 )
-from src.domain.models.financial_statement import (
-    BalanceSheet,
-    BalanceSheetSection,
-    IncomeStatement,
-    StatementLineItem,
-)
 from src.domain.models.monthly_ledger import LedgerEntry, MonthlyLedger
 from src.domain.models.transaction import ExtractionMetadata, FinancialTransaction
 
 __all__ = [
     "AccountType",
-    "BalanceSheet",
-    "BalanceSheetSection",
     "BankMovement",
     "DocumentSource",
     "ExtractionMetadata",
     "FinancialTransaction",
-    "IncomeStatement",
     "LedgerEntry",
     "MonthlyLedger",
-    "StatementLineItem",
     "TransactionStatus",
     "TransactionType",
 ]

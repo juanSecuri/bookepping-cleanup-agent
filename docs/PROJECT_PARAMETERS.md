@@ -53,7 +53,8 @@ El agente debe entonces:
 | **13a–13e** | Reportes, marca, Drive, OCR, Storage | **DONE** |
 | **14** | **CPA Taxes 2025** | **DONE** |
 | **15** | Reportes QB mensual/anual | **DONE** |
-| **16** | **CoA TPC + reglas bank stmt + BS/CF estilo QB + README MVP/decálogo** | **ACTIVO** |
+| **16** | **CoA TPC + reglas bank stmt + BS/CF estilo QB + README MVP/decálogo** | **DONE** |
+| **19** | **Reportes plantilla QuickBooks (P&L + Balance Sheet) + descarga Excel por reporte** | **DONE** (2026-10-30) |
 
 ---
 
@@ -142,7 +143,7 @@ Una capacidad no está hecha hasta:
 **Excel / CSV** — OK (openpyxl/csv → txs).  
 **Imagen** — OK (Tesseract eng+spa; Docker).  
 **Audio** — OK (faster-whisper opcional / Groq free tier + reglas CoA; sin OpenAI).  
-**Reportes** — OK (P&L + Balance + CF O/I/F + vistas SQL + export xlsx).  
+**Reportes** — OK (P&L + Balance Sheet plantilla QuickBooks + CF O/I/F + export xlsx por reporte y paquete CPA).  
 **Cold start / RAM** — OK (banner + cola 1-a-1).  
 **Docker / Render** — OK (live `ledgerai-0wyy`; health path `/health` — ver `RENDER_DOCKER.md`).  
 **Auth** — **IN PROGRESS** (JWT + membership scaffold; ver `docs/AUTH.md`).  
@@ -290,6 +291,7 @@ Env: `EXTRACTION_MODE=local`, `LEDGERAI_UPLOAD_DIR=/var/data/ledgerai_uploads`.
 | **2026-09-24 (PM)** | **Empresa (vía Juan)** | Reportes más “original” QB (jerarquía); CoA CSV TPC; Cash Flow estilo QB; reglas bank stmt: meals, gas&oil, social media, insurance, parking, CC interest, spa→distributions equity; MVP + decálogo GitHub | **Sprint 16 CoA+QB+MVP** |
 | **2026-09-24 (PM+)** | **Empresa (vía Juan)** | Autonomía del agente: clasificar por descripción compra/pago → CoA; ingresos/gastos por perfil de cliente; conciliaciones bancarias; elaborar Balance + P&L (y CF) | **Mandato autonomía** |
 | **2026-09-24 (EOD)** | **Juan** | Reportes: datos Drive (no Excel como fuente); Social Media y 6xxx **gastos** no ingresos; no duplicar en INGRESOS/GASTOS; revisar Balance pasivos/patrimonio; cierre día | **Sprint 17 / cierre 09-24** |
+| **2026-10-30** | **Empresa (vía Juan)** | My Xcell ≤ 2025: P&L y Balance Sheet en la web **con la forma exacta de las plantillas QuickBooks de TPC** (datos = plataforma, no el Excel) + **descarga Excel por reporte**. Sprints, limpiar código muerto, refactor. | **Sprint 19** |
 
 ---
 
@@ -376,6 +378,27 @@ Split-screen extracto/OCR en Documentos | TanStack Table en Transacciones | Expo
 |------:|-------|--------|
 | T1 | Árbol ZOPP + lluvia de ideas vs producto real | **DONE** |
 | T2 | Decálogo con los 10 componentes de la clase del 22 sep, sin cifras inventadas | **DONE** |
+
+### Sprint 19 — Reportes plantilla QuickBooks (tarea 2026-10-30)
+
+**Foco:** My Xcell Network ≤ 2025 — la web muestra **Profit and Loss** y **Balance Sheet** como las plantillas QuickBooks de TPC (`…Profit_and_Loss_1.xlsx`, `…Balance_Sheet_1.xlsx`): empresa / título / periodo, columna **Total**, secciones con "Total for X", footer *Cash Basis*. Los números salen de la plataforma (txs verificadas de Drive), **nunca** del Excel de ejemplo.
+
+| Orden | Tarea | Estado |
+|------:|-------|--------|
+| T1 | Motor: un solo `post_transactions()` (P&L / CF del periodo) + **Balance acumulado "as of"** (años previos → Retained Earnings, año en curso → Net Income, como QB). Ya no depende de `fiscal_year_closes` para RE. | **DONE** |
+| T2 | `qb_layout.py`: filas QB (Income → COGS → Gross Profit → Expenses → NOI → Other Income/Expenses → Net Income; Assets → Bank Accounts / AR / Other CA → Fixed → Liabilities → Credit Cards / Long-term → Equity → RE → Net Income). Sub-cuentas por `Parent:Child` o subcategoría no genérica. | **DONE** |
+| T3 | `qb_xlsx.py`: Excel idéntico a la plantilla (A1 empresa, A2 título, A3 periodo, B5 Total, totales con **fórmulas vivas**, footer Cash Basis). `GET /api/reports/qb/{profit-and-loss|balance-sheet}.xlsx`. Paquete CPA (`/reports/export.xlsx`) usa las mismas hojas + Cash Flow + Transacciones. | **DONE** |
+| T4 | Web: `QbReportCard` (P&L + Balance), botón **Descargar Excel** por reporte + **Paquete CPA**, toggle *Ver por mes*; descargas con token (antes `<a href>` sin auth). Drill a transacciones por cuenta. | **DONE** |
+| T5 | Limpieza: fuera `/reports/pnl` y `/reports/sql` (sin uso), `financial_statement.py` v1, helpers xlsx viejos, MonthTable/BalanceSheetMonthlyTable, 39 claves i18n muertas, 4 funciones del cliente API sin uso. | **DONE** |
+| T6 | **Cuentas de extracto en el Balance** (`funding_accounts.py`): cada tx se asienta contra el banco o la tarjeta de su carpeta Drive (Truist Checking 4461, Truist CC 1203, Elan 3647, Citi Costco 1802, Citi Best Buy, Wells Fargo CC 8398, CSV huérfano = tarjeta). Banco = activo (Bank Accounts), tarjeta = pasivo (Credit Cards); pagos de tarjeta / transferencias → *Card Payments & Transfers in Transit*; pago de préstamo desde el banco reduce el préstamo. **A = P + E por construcción.** El P&L no cambia. | **DONE** |
+| T7 | Verificado: 117 tests (incl. revisión independiente del motor: 300 datasets aleatorios, mismas reglas de P&L/CF); **datos reales My Xcell (1,442 txs) → Balance 2023/2024/2025 cuadrado Δ 0.00**, RE 2025 = NI 2023 + NI 2024; Excel real recalculado en LibreOffice = web (0 diferencias); build + capturas desktop/móvil. | **DONE** |
+
+**Pendiente (Sprint 20) — huecos de datos que el Balance real de My Xcell deja a la vista:**
+- **Faltan extractos bancarios 2023–2024 y casi todo 2025:** solo hay Truist Checking 4461 (ago–dic 2025). Sin banco no hay depósitos → ingresos 2023/2024 = 0 y el banco sale negativo. Cargar en Drive los extractos de la(s) cuenta(s) que pagan las tarjetas y reciben ventas.
+- **Saldos iniciales (Opening Balance Equity):** las tarjetas ya tenían saldo antes del primer extracto (p. ej. Elan ≈ $13.9k, Citi Best Buy ≈ $6.0k, Wells Fargo ≈ $3.3k) y el préstamo SBA EIDL no tiene saldo de origen. Cargar el saldo inicial por cuenta (del primer extracto) → línea Opening Balance Equity como en la plantilla QB.
+- **Elan 3647:** cargos sin ningún pago registrado → faltan pagos o el extracto de la cuenta que lo paga.
+- **`statement_month` mal leído** en varios PDF (muchos quedan en `AAAA-01`) → el cadenazo no sirve todavía para saldos iniciales automáticos.
+- Cash Flow sigue el modelo anterior (caja combinada); alinearlo al Balance por cuenta.
 
 ---
 

@@ -117,7 +117,6 @@ async def test_social_media_never_in_revenue_even_if_bank_says_income(
             },
         },
     )
-    monkeypatch.setattr(uc, "_prior_retained_earnings", lambda *_a, **_k: Decimal("0"))
 
     bundle = await uc.execute(workspace_id=wid, period="2025")
     rev_codes = {r["code"] for r in bundle.pnl["revenueItems"]}

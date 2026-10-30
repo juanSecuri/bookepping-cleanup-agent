@@ -1,4 +1,5 @@
-"""Export period financial statements to openpyxl workbook ($0) — 4 sheets."""
+"""Export the period CPA package to an openpyxl workbook ($0) — 4 sheets."""
+
 from __future__ import annotations
 
 from io import BytesIO
@@ -8,7 +9,9 @@ import openpyxl
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 
-from src.use_cases.emit_period_reports import MONTH_KEYS, PeriodFinancialBundle
+from src.infrastructure.reports.qb_layout import basis_footer, build_qb_reports
+from src.infrastructure.reports.qb_xlsx import write_qb_sheet
+from src.use_cases.emit_period_reports import PeriodFinancialBundle
 
 HEADER_FILL = PatternFill("solid", fgColor="1A4032")
 HEADER_FONT = Font(bold=True, color="E8DCC8")
@@ -33,137 +36,30 @@ def _style_header_row(ws, row: int, cols: int) -> None:
         cell.alignment = Alignment(horizontal="center")
 
 
-def _append_pnl_section(ws, title: str, items: list, months: list[str], start_row: int) -> int:
-    r = start_row
-    ws.cell(row=r, column=1, value=title).font = Font(bold=True, size=12)
-    r += 1
-    headers = ["Código", "Cuenta", *[m for m in months], "Total"]
-    for i, h in enumerate(headers, 1):
-        ws.cell(row=r, column=i, value=h)
-    _style_header_row(ws, r, len(headers))
-    r += 1
-    section_total = 0.0
-    for item in items:
-        by_m = item.get("byMonth") or {}
-        ws.cell(row=r, column=1, value=item.get("code"))
-        ws.cell(row=r, column=2, value=item.get("name"))
-        for i, mk in enumerate(months, 3):
-            _money_cell(ws, r, i, float(by_m.get(mk) or 0))
-        amt = float(item.get("amount") or 0)
-        _money_cell(ws, r, 2 + len(months) + 1, amt)
-        section_total += amt
-        r += 1
-    ws.cell(row=r, column=2, value=f"TOTAL {title}").font = TOTAL_FONT
-    total_col = 2 + len(months) + 1
-    _money_cell(ws, r, total_col, section_total)
-    ws.cell(row=r, column=total_col).font = TOTAL_FONT
-    return r + 2
-
-
-def _append_bs_section(
-    ws,
-    title: str,
-    items: list,
-    months: list[str],
-    start_row: int,
-    section_total: float,
-) -> int:
-    r = start_row
-    ws.cell(row=r, column=1, value=title).font = Font(bold=True, size=12)
-    r += 1
-    headers = ["Código", "Cuenta", *[m for m in months], "Total"]
-    for i, h in enumerate(headers, 1):
-        ws.cell(row=r, column=i, value=h)
-    _style_header_row(ws, r, len(headers))
-    r += 1
-    for item in items:
-        by_m = item.get("byMonth") or {}
-        ws.cell(row=r, column=1, value=item.get("code"))
-        ws.cell(row=r, column=2, value=item.get("name"))
-        for i, mk in enumerate(months, 3):
-            _money_cell(ws, r, i, float(by_m.get(mk) or 0))
-        amt = float(item.get("closing") or item.get("amount") or 0)
-        _money_cell(ws, r, 2 + len(months) + 1, amt)
-        r += 1
-    ws.cell(row=r, column=2, value=f"TOTAL {title}").font = TOTAL_FONT
-    total_col = 2 + len(months) + 1
-    _money_cell(ws, r, total_col, section_total)
-    ws.cell(row=r, column=total_col).font = TOTAL_FONT
-    return r + 2
-
-
-def _append_pnl_subtotal_row(
-    ws,
-    label: str,
-    months: list[str],
-    row: int,
-    total: float,
-    by_month: dict | None,
-) -> int:
-    ws.cell(row=row, column=2, value=label).font = TOTAL_FONT
-    by_m = by_month or {}
-    for i, mk in enumerate(months, 3):
-        _money_cell(ws, row, i, float(by_m.get(mk) or 0))
-        ws.cell(row=row, column=i).font = TOTAL_FONT
-    total_col = 2 + len(months) + 1
-    _money_cell(ws, row, total_col, total)
-    ws.cell(row=row, column=total_col).font = TOTAL_FONT
-    return row + 2
-
-
 def bundle_to_xlsx_bytes(
     bundle: PeriodFinancialBundle,
     transactions: list[Any] | None = None,
+    *,
+    company_name: str = "LedgerAI",
 ) -> bytes:
+    """CPA package: P&L + Balance Sheet (QuickBooks layout) + Cash Flow + Transactions."""
     wb = openpyxl.Workbook()
-    months = list(bundle.pnl.get("months") or MONTH_KEYS)
-
-    # ── P&L ────────────────────────────────────────────────────────────────
-    ws = wb.active
-    ws.title = "P&L"
-    ws.append(["LedgerAI — Estado de resultados", bundle.period_label])
-    ws["A1"].font = TITLE_FONT
-    ws.append(["Motor", bundle.engine, "Txs verificadas", bundle.transaction_count])
-    ws.append([])
-    r = 4
-    r = _append_pnl_section(ws, "INGRESOS", bundle.pnl.get("revenueItems") or [], months, r)
-    r = _append_pnl_section(ws, "COSTO DE VENTAS", bundle.pnl.get("cogsItems") or [], months, r)
-    gp = float(bundle.pnl.get("grossProfit") or 0)
-    gp_by_m = bundle.pnl.get("grossProfitByMonth") or {}
-    r = _append_pnl_subtotal_row(ws, "UTILIDAD BRUTA (GROSS PROFIT)", months, r, gp, gp_by_m)
-    r = _append_pnl_section(ws, "GASTOS OPERATIVOS", bundle.pnl.get("expenseItems") or [], months, r)
-    ws.cell(row=r, column=2, value="UTILIDAD NETA").font = TOTAL_FONT
-    net = float(bundle.pnl.get("netIncome") or bundle.pnl.get("net_income") or 0)
-    total_col = 2 + len(months) + 1
-    _money_cell(ws, r, total_col, net)
-    ws.cell(row=r, column=total_col).font = TOTAL_FONT
-
-    # ── Balance ────────────────────────────────────────────────────────────
-    bs = wb.create_sheet("Balance")
-    bal = bundle.balance_sheet or {}
-    bs.append(["LedgerAI — Balance general", bundle.period_label])
-    bs["A1"].font = TITLE_FONT
-    bs.append(["Cuadra", bal.get("balanced"), "Ecuación", bal.get("equation")])
-    bs.append([bal.get("note") or ""])
-    bs.append([])
-    row_i = 5
-    for section, key in (("ACTIVOS", "assets"), ("PASIVOS", "liabilities"), ("PATRIMONIO", "equity")):
-        total_key = {
-            "assets": "totalAssets",
-            "liabilities": "totalLiabilities",
-            "equity": "totalEquity",
-        }[key]
-        row_i = _append_bs_section(
-            bs,
-            section,
-            bal.get(key) or [],
-            months,
-            row_i,
-            float(bal.get(total_key) or 0),
+    footer = basis_footer()
+    qb = build_qb_reports(bundle, company_name)
+    first = True
+    for key in ("profit_and_loss", "balance_sheet"):
+        report = qb[key]
+        ws = wb.active if first else wb.create_sheet()
+        ws.title = report["title"][:31]
+        first = False
+        write_qb_sheet(
+            ws,
+            company=company_name,
+            title=report["title"],
+            period=report["period"],
+            rows=report["rows"],
+            footer=footer,
         )
-    bs.cell(row=row_i, column=1, value="Verificación A = P + E")
-    bs.cell(row=row_i, column=2, value=bool(bal.get("balanced")))
-    bs.cell(row=row_i, column=3, value=bal.get("equation"))
 
     # ── Cash flow ──────────────────────────────────────────────────────────
     cf = wb.create_sheet("Cash Flow")
@@ -242,8 +138,8 @@ def bundle_to_xlsx_bytes(
     if row_i == 4:
         tx.cell(row=4, column=1, value="(Sin txs verificadas en el periodo)")
 
-    for sheet in wb.worksheets:
-        for col in range(1, 3 + len(months) + 2):
+    for sheet in (cf, tx):
+        for col in range(1, 8):
             sheet.column_dimensions[get_column_letter(col)].width = 14
         sheet.column_dimensions["B"].width = 28
         sheet.column_dimensions["C"].width = 28

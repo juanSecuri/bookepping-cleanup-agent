@@ -76,7 +76,6 @@ async def test_emit_2024_uses_date_range_query(monkeypatch: pytest.MonkeyPatch) 
             },
         },
     )
-    monkeypatch.setattr(uc, "_prior_retained_earnings", lambda *_a, **_k: Decimal("0"))
 
     bundle = await uc.execute(wid, fiscal_year="2024")
     assert bundle.transaction_count == 2

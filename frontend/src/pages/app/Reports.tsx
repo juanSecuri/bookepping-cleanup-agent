@@ -1,4 +1,4 @@
-import { Fragment, useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import {
   Bar,
@@ -11,11 +11,11 @@ import {
 } from 'recharts'
 import {
   api,
-  type BalanceLine,
-  type BalanceSectionGroup,
   type Period,
   type PnLLineItem,
-  type PnLReport,
+  type QbReport,
+  type QbReportKey,
+  type QbRow,
   type StatementsBundle,
   type Transaction,
 } from '../../lib/api'
@@ -35,6 +35,12 @@ function money(n: number) {
   return n.toLocaleString(undefined, { style: 'currency', currency: 'USD' })
 }
 
+/** QuickBooks prints plain numbers (no $), negatives with a minus sign. */
+function qbNumber(n: number | null | undefined) {
+  if (n == null) return ''
+  return n.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+}
+
 const MONTH_LABELS = ['Ene', 'Feb', 'Mar', 'Abr', 'May', 'Jun', 'Jul', 'Ago', 'Sep', 'Oct', 'Nov', 'Dic']
 const MONTH_KEYS = ['01', '02', '03', '04', '05', '06', '07', '08', '09', '10', '11', '12']
 
@@ -44,119 +50,103 @@ function shortMonthLabels(locale: string): string[] {
     : MONTH_LABELS
 }
 
-function monthColumnHeaders(locale: string, fiscalYear: string): string[] {
-  const shorts = shortMonthLabels(locale)
-  if (!fiscalYear) return shorts
-  return shorts.map((m) => `${m} ${fiscalYear}`)
-}
+const btnPrimary =
+  'cursor-pointer rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition duration-200 hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50'
+const btnSecondary =
+  'cursor-pointer rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium transition duration-200 hover:border-primary/50 hover:bg-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50'
 
-function formatBalanceAsOf(locale: string, fiscalYear: string, month: string): string {
-  if (!fiscalYear) return ''
-  if (month) {
-    const y = Number(fiscalYear)
-    const m = Number(month)
-    const last = new Date(y, m, 0)
-    return last.toLocaleDateString(locale === 'en' ? 'en-US' : 'es-CO', {
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric',
-    })
-  }
-  if (locale === 'en') return `December 31, ${fiscalYear}`
-  return `31 de diciembre de ${fiscalYear}`
-}
+const NON_DRILL_CODES = new Set(['NI', '3020'])
 
-function FinancialReportHeader({
-  companyName,
-  reportTitle,
-  asOfPeriod,
-}: {
-  companyName: string
-  reportTitle: string
-  asOfPeriod: string
-}) {
-  const { t } = useLocale()
-  return (
-    <div className="border-b border-border bg-[color-mix(in_srgb,var(--accent-cream)_35%,var(--bg-card))] px-4 py-5 text-center">
-      <p className="text-sm font-medium text-muted-foreground">{companyName}</p>
-      <h3 className="mt-1 font-display text-2xl font-semibold tracking-wide">{reportTitle}</h3>
-      <p className="mt-1 text-sm text-muted-foreground">
-        {t('reports.asOf').replace('{period}', asOfPeriod)}
-      </p>
-    </div>
-  )
-}
-
-function pnlItems(
-  pnl: PnLReport | null | undefined,
-  key: 'revenueItems' | 'expenseItems' | 'cogsItems',
-): PnLLineItem[] {
-  if (!pnl) return []
-  const items = pnl[key]
-  return Array.isArray(items) ? items : []
-}
-
-function MonthTable({
-  title,
-  items,
-  total,
-  showUncategorizedHint,
-  onRowClick,
-  layout = 'monthly',
+/**
+ * One QuickBooks-layout report (Profit and Loss / Balance Sheet).
+ * Rows come from the API already in template order; the Excel download uses the same rows.
+ */
+function QbReportCard({
+  company,
+  report,
+  showMonths,
   fiscalYear,
+  onAccountClick,
+  onDownload,
+  downloading,
 }: {
-  title: string
-  items: PnLLineItem[]
-  total: number
-  showUncategorizedHint?: boolean
-  onRowClick?: (row: PnLLineItem) => void
-  layout?: 'monthly' | 'annual'
-  fiscalYear?: string
+  company: string
+  report: QbReport
+  showMonths: boolean
+  fiscalYear: string
+  onAccountClick?: (row: QbRow) => void
+  onDownload: () => void
+  downloading: boolean
 }) {
   const { t, locale } = useLocale()
-  const monthLabels = monthColumnHeaders(locale, fiscalYear ?? '')
-  const showMonths = layout === 'monthly'
-  const colSpan = showMonths ? 14 : 3
+  const monthHeaders = shortMonthLabels(locale).map((m) => `${m} ${fiscalYear}`)
+  const isBalance = report.balanced !== undefined
+
   return (
-    <div className="table-scroll animate-fade-up rounded-xl border border-border bg-card soft-shadow-lift">
-      <div className="border-b border-border px-4 py-3">
-        <h3 className="font-display text-lg tracking-wide">{title}</h3>
+    <div className="animate-fade-up overflow-hidden rounded-xl border border-border bg-card soft-shadow-lift">
+      <div className="relative border-b border-border bg-[color-mix(in_srgb,var(--accent-cream)_35%,var(--bg-card))] px-4 py-5 text-center">
+        <p className="text-sm font-semibold">{company}</p>
+        <h3 className="mt-1 font-display text-2xl font-semibold tracking-wide">{report.title}</h3>
+        <p className="mt-1 text-sm text-muted-foreground">{report.period}</p>
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-2 sm:absolute sm:right-4 sm:top-4 sm:mt-0">
+          {isBalance && (
+            <span
+              className={cn(
+                'rounded-md px-2 py-1 text-xs font-medium',
+                report.balanced
+                  ? 'bg-success text-success-foreground'
+                  : 'bg-warning text-warning-foreground',
+              )}
+              title={t('reports.balanceEquationHint')}
+            >
+              {report.balanced
+                ? `✓ ${t('reports.balanceOk')}`
+                : `Δ ${qbNumber(report.imbalance ?? 0)}`}
+            </span>
+          )}
+          <button type="button" className={btnSecondary} onClick={onDownload} disabled={downloading}>
+            {downloading ? t('common.loading') : t('reports.downloadExcel')}
+          </button>
+        </div>
       </div>
-      {items.length === 0 ? (
-        <p className="px-4 py-6 text-sm text-muted-foreground">—</p>
-      ) : (
-        <table className="w-full min-w-[320px] text-left text-sm">
-          <thead className="bg-secondary/40 text-muted-foreground">
-            <tr>
-              <th className="px-3 py-2 font-medium">{t('reports.code')}</th>
-              <th className="px-3 py-2 font-medium">{t('reports.account')}</th>
+      <div className="table-scroll">
+        <table className={cn('w-full text-left text-sm', showMonths ? 'min-w-[1100px]' : 'min-w-0')}>
+          <thead>
+            <tr className="border-b border-border text-muted-foreground">
+              <th className="px-4 py-2 font-medium" />
               {showMonths &&
-                monthLabels.map((m) => (
-                  <th key={m} className="px-2 py-2 text-right font-medium">
+                monthHeaders.map((m) => (
+                  <th key={m} className="px-2 py-2 text-right text-xs font-medium">
                     {m}
                   </th>
                 ))}
-              <th className="px-3 py-2 text-right font-medium">{t('reports.total')}</th>
+              <th className="px-3 py-2 text-right font-semibold text-foreground sm:px-4">
+                {t('reports.totalColumn')}
+              </th>
             </tr>
           </thead>
           <tbody>
-            {items.map((row) => {
-              const isSuspense = row.code === '9999'
-              const clickable = Boolean(onRowClick && row.code)
+            {report.rows.map((row, i) => {
+              const strong = row.kind === 'total' || row.kind === 'summary'
+              const clickable = Boolean(
+                onAccountClick && row.kind === 'account' && row.code && !NON_DRILL_CODES.has(row.code),
+              )
+              const isLast = i === report.rows.length - 1
               return (
                 <tr
-                  key={`${row.code}-${row.name}`}
+                  key={`${i}-${row.label}`}
                   className={cn(
-                    'border-t border-border transition-colors duration-200 hover:bg-[color-mix(in_srgb,var(--accent-cream)_8%,transparent)]',
-                    clickable && 'cursor-pointer',
+                    'transition-colors duration-150',
+                    clickable &&
+                      'cursor-pointer hover:bg-[color-mix(in_srgb,var(--accent-cream)_10%,transparent)]',
                   )}
-                  onClick={clickable ? () => onRowClick?.(row) : undefined}
+                  onClick={clickable ? () => onAccountClick?.(row) : undefined}
                   onKeyDown={
                     clickable
                       ? (e) => {
                           if (e.key === 'Enter' || e.key === ' ') {
                             e.preventDefault()
-                            onRowClick?.(row)
+                            onAccountClick?.(row)
                           }
                         }
                       : undefined
@@ -165,212 +155,67 @@ function MonthTable({
                   role={clickable ? 'button' : undefined}
                   title={clickable ? t('reports.drillHint') : undefined}
                 >
-                  <td className="px-3 py-2 font-mono text-xs">{row.code ?? '—'}</td>
-                  <td className="px-3 py-2">
-                    {row.name ?? '—'}
-                    {isSuspense && showUncategorizedHint && (
-                      <span
-                        className="ml-1 cursor-help text-warning-foreground"
-                        title={t('transactions.suspenseHint')}
-                      >
-                        ⚠️
-                      </span>
-                    )}
+                  <td
+                    className={cn('py-1.5 pr-2', strong && 'font-semibold')}
+                    style={{ paddingLeft: `${0.75 + row.depth * 1}rem` }}
+                  >
+                    {row.label}
                   </td>
                   {showMonths &&
                     MONTH_KEYS.map((mk) => (
-                      <td key={mk} className="px-2 py-2 text-right tabular-nums text-xs">
-                        {money(Number(row.byMonth?.[mk] ?? 0))}
+                      <td
+                        key={mk}
+                        className={cn(
+                          'px-2 py-1.5 text-right text-xs tabular-nums',
+                          strong && 'border-t border-border font-semibold',
+                        )}
+                      >
+                        {row.kind === 'header' ? '' : qbNumber(row.byMonth?.[mk] ?? 0)}
                       </td>
                     ))}
-                  <td className="px-3 py-2 text-right tabular-nums font-medium">
-                    {money(Number(row.amount ?? 0))}
+                  <td
+                    className={cn(
+                      'whitespace-nowrap px-3 py-1.5 text-right tabular-nums sm:px-4',
+                      strong && 'border-t border-border font-semibold',
+                      isLast && 'border-b-4 border-double border-border',
+                    )}
+                  >
+                    {qbNumber(row.amount)}
                   </td>
                 </tr>
               )
             })}
-            <tr className="border-t-2 border-border bg-secondary/30">
-              <td colSpan={colSpan} className="px-3 py-2 text-right font-semibold">
-                {t('reports.totalFor')} {title} {money(total)}
-              </td>
-            </tr>
           </tbody>
         </table>
-      )}
+      </div>
     </div>
   )
 }
 
-type BalanceSheetData = NonNullable<StatementsBundle['balance_sheet']>
-
-function BalanceSheetMonthlyTable({
-  companyName,
-  asOfPeriod,
-  fiscalYear,
-  balanceSheet,
+/** One amount line of the Cash Flow statement. */
+function CfAmountRow({
+  label,
+  amount,
+  indentClass = 'pl-6',
+  bold = false,
 }: {
-  companyName: string
-  asOfPeriod: string
-  fiscalYear: string
-  balanceSheet: BalanceSheetData
+  label: string
+  amount: number
+  indentClass?: string
+  bold?: boolean
 }) {
-  const { t, locale } = useLocale()
-  const monthLabels = monthColumnHeaders(locale, fiscalYear)
-
-  const groups: Array<{
-    title: string
-    sections?: BalanceSectionGroup[] | null
-    fallbackLines: BalanceLine[]
-    fallbackTotal: number
-  }> = [
-    {
-      title: t('reports.assets').toUpperCase(),
-      sections: balanceSheet.sections?.assets,
-      fallbackLines: balanceSheet.assets || [],
-      fallbackTotal: Number(balanceSheet.totalAssets ?? 0),
-    },
-    {
-      title: t('reports.liabilities').toUpperCase(),
-      sections: balanceSheet.sections?.liabilities,
-      fallbackLines: balanceSheet.liabilities || [],
-      fallbackTotal: Number(balanceSheet.totalLiabilities ?? 0),
-    },
-    {
-      title: t('reports.equity').toUpperCase(),
-      sections: balanceSheet.sections?.equity,
-      fallbackLines: balanceSheet.equity || [],
-      fallbackTotal: Number(balanceSheet.totalEquity ?? 0),
-    },
-  ]
-
-  function sumByMonth(lines: BalanceLine[], mk: string) {
-    return lines.reduce((s, r) => s + Number(r.byMonth?.[mk] ?? 0), 0)
-  }
-
-  function renderAmountCells(row: BalanceLine) {
-    return (
-      <>
-        {MONTH_KEYS.map((mk) => (
-          <td key={mk} className="px-2 py-1.5 text-right tabular-nums text-xs">
-            {money(Number(row.byMonth?.[mk] ?? 0))}
-          </td>
-        ))}
-        <td className="px-3 py-1.5 text-right tabular-nums text-sm font-medium">
-          {money(Number(row.closing ?? row.amount ?? 0))}
-        </td>
-      </>
-    )
-  }
-
-  function renderBoldTotalRow(label: string, lines: BalanceLine[], total: number) {
-    return (
-      <tr className="border-t border-border bg-secondary/15">
-        <td className="px-3 py-2 pl-8 text-sm font-bold">{label}</td>
-        {MONTH_KEYS.map((mk) => (
-          <td key={mk} className="px-2 py-2 text-right text-xs font-bold tabular-nums">
-            {money(sumByMonth(lines, mk))}
-          </td>
-        ))}
-        <td className="px-3 py-2 text-right text-sm font-bold tabular-nums">{money(total)}</td>
-      </tr>
-    )
-  }
-
   return (
-    <div className="table-scroll animate-fade-up overflow-hidden rounded-xl border border-border bg-card soft-shadow-lift">
-      <FinancialReportHeader
-        companyName={companyName}
-        reportTitle={t('reports.balanceSheet')}
-        asOfPeriod={asOfPeriod}
-      />
-      <table className="w-full min-w-[320px] text-left text-sm">
-        <thead className="border-b border-border bg-secondary/40 text-muted-foreground">
-          <tr>
-            <th className="px-3 py-2 font-medium">{t('reports.account')}</th>
-            {monthLabels.map((m) => (
-              <th key={m} className="px-2 py-2 text-right text-xs font-medium">
-                {m}
-              </th>
-            ))}
-            <th className="px-3 py-2 text-right font-medium">{t('reports.total')}</th>
-          </tr>
-        </thead>
-        <tbody>
-          {groups.map((group) => {
-            const hasSections = group.sections && group.sections.length > 0
-            return (
-              <Fragment key={group.title}>
-                <tr className="border-t-2 border-border bg-secondary/20">
-                  <td
-                    colSpan={14}
-                    className="px-3 py-2 font-display text-base font-semibold tracking-wide"
-                  >
-                    {group.title}
-                  </td>
-                </tr>
-                {hasSections ? (
-                  group.sections!.map((sec) => {
-                    const subName = String(sec.subcategory || t('reports.emptySection'))
-                    const lines = sec.lines || []
-                    const subTotal = Number(sec.total ?? 0)
-                    return (
-                      <Fragment key={`${group.title}-${subName}`}>
-                        <tr className="border-t border-border">
-                          <td colSpan={14} className="px-3 py-1.5 pl-6 font-semibold text-foreground">
-                            {subName}
-                          </td>
-                        </tr>
-                        {lines.map((row) => (
-                          <tr
-                            key={`${row.code}-${row.name}`}
-                            className="border-t border-border/60 hover:bg-[color-mix(in_srgb,var(--accent-cream)_8%,transparent)]"
-                          >
-                            <td className="px-3 py-1.5 pl-10">
-                              <span className="font-mono text-xs text-muted-foreground">
-                                {row.code ?? '—'}
-                              </span>{' '}
-                              {row.name ?? '—'}
-                            </td>
-                            {renderAmountCells(row)}
-                          </tr>
-                        ))}
-                        {renderBoldTotalRow(
-                          t('reports.totalForName').replace('{name}', subName),
-                          lines,
-                          subTotal,
-                        )}
-                      </Fragment>
-                    )
-                  })
-                ) : (
-                  group.fallbackLines.map((row) => (
-                    <tr
-                      key={`${row.code}-${row.name}`}
-                      className="border-t border-border hover:bg-[color-mix(in_srgb,var(--accent-cream)_8%,transparent)]"
-                    >
-                      <td className="px-3 py-1.5 pl-8">
-                        <span className="font-mono text-xs text-muted-foreground">
-                          {row.code ?? '—'}
-                        </span>{' '}
-                        {row.name ?? '—'}
-                      </td>
-                      {renderAmountCells(row)}
-                    </tr>
-                  ))
-                )}
-                {renderBoldTotalRow(
-                  t('reports.totalForName').replace('{name}', group.title),
-                  hasSections
-                    ? (group.sections ?? []).flatMap((s) => s.lines ?? [])
-                    : group.fallbackLines,
-                  group.fallbackTotal,
-                )}
-              </Fragment>
-            )
-          })}
-        </tbody>
-      </table>
-    </div>
+    <tr className="border-t border-border/60">
+      <td className={cn('px-4 py-1.5', indentClass, bold && 'font-bold')}>{label}</td>
+      <td
+        className={cn(
+          'px-4 py-1.5 text-right tabular-nums',
+          bold && 'font-bold',
+        )}
+      >
+        {money(amount)}
+      </td>
+    </tr>
   )
 }
 
@@ -401,32 +246,6 @@ function CashFlowStatement({
     investingLines.length > 0 || Math.abs(invSubtotal) > 0.0001
   const showFinancing =
     financingLines.length > 0 || Math.abs(finSubtotal) > 0.0001
-
-  function CfAmountRow({
-    label,
-    amount,
-    indentClass = 'pl-6',
-    bold = false,
-  }: {
-    label: string
-    amount: number
-    indentClass?: string
-    bold?: boolean
-  }) {
-    return (
-      <tr className="border-t border-border/60">
-        <td className={cn('px-4 py-1.5', indentClass, bold && 'font-bold')}>{label}</td>
-        <td
-          className={cn(
-            'px-4 py-1.5 text-right tabular-nums',
-            bold && 'font-bold',
-          )}
-        >
-          {money(amount)}
-        </td>
-      </tr>
-    )
-  }
 
   function CfDetailRows(lines: PnLLineItem[], indentClass = 'pl-10') {
     if (lines.length === 0) return null
@@ -545,24 +364,17 @@ function CashFlowStatement({
   )
 }
 
-const btnPrimary =
-  'cursor-pointer rounded-lg bg-primary px-4 py-2 text-sm font-semibold text-primary-foreground transition duration-200 hover:opacity-90 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50'
-const btnSecondary =
-  'cursor-pointer rounded-lg border border-border bg-card px-4 py-2 text-sm font-medium transition duration-200 hover:border-primary/50 hover:bg-secondary focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary disabled:cursor-not-allowed disabled:opacity-50'
-
 export default function Reports() {
   const { workspaceId = '' } = useParams()
   const { t, locale } = useLocale()
-  const monthLabels =
-    locale === 'en'
-      ? ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec']
-      : MONTH_LABELS
+  const monthLabels = shortMonthLabels(locale)
   const [periods, setPeriods] = useState<Period[]>([])
   const [bundle, setBundle] = useState<StatementsBundle | null>(null)
   const [availableYears, setAvailableYears] = useState<string[]>([])
   const [fiscalYear, setFiscalYear] = useState('')
   const [month, setMonth] = useState<string>('') // '' = Jan–Dec columns for that year
-  const reportLayout = 'monthly' as const
+  const [showMonths, setShowMonths] = useState(false) // QuickBooks template = single Total column
+  const [downloading, setDownloading] = useState<QbReportKey | 'package' | null>(null)
   const [loading, setLoading] = useState(true)
   const [loadingStmt, setLoadingStmt] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -582,7 +394,6 @@ export default function Reports() {
   const [drillTxs, setDrillTxs] = useState<Transaction[]>([])
   const [drillLoading, setDrillLoading] = useState(false)
   const [drillError, setDrillError] = useState<string | null>(null)
-  const [workspaceName, setWorkspaceName] = useState<string | null>(null)
 
   const loadMeta = useCallback(async () => {
     setLoading(true)
@@ -594,7 +405,6 @@ export default function Reports() {
         api.availableYears(workspaceId),
         api.getWorkspace(workspaceId).catch(() => null),
       ])
-      setWorkspaceName(workspace?.name ?? null)
       setPeriods(Array.isArray(periodsData) ? periodsData : [])
       setFiscalYears(Array.isArray(yearsData.years) ? yearsData.years : [])
       const ceiling =
@@ -713,17 +523,10 @@ export default function Reports() {
   }
 
   const displayPnl = bundle?.pnl || null
-  const revTotal = Number(displayPnl?.revenue ?? displayPnl?.totalRevenue ?? 0)
-  const expTotal = Number(displayPnl?.expenses ?? displayPnl?.totalExpenses ?? 0)
-  const cogsTotal = Number(displayPnl?.cogs ?? displayPnl?.totalCogs ?? 0)
-  const opexTotal = Number(
-    displayPnl?.operatingExpenses ??
-      pnlItems(displayPnl, 'expenseItems').reduce((s, r) => s + Number(r.amount ?? 0), 0),
-  )
-  const grossProfit = Number(
-    displayPnl?.grossProfit ?? revTotal - cogsTotal,
-  )
-  const net = Number(displayPnl?.net_income ?? displayPnl?.netIncome ?? revTotal - expTotal)
+  const revTotal = Number(displayPnl?.totalRevenue ?? 0)
+  const expTotal = Number(displayPnl?.totalExpenses ?? 0)
+  const net = Number(displayPnl?.netIncome ?? revTotal - expTotal)
+  const qb = bundle?.qb ?? null
 
   const cfMonthly = useMemo(() => {
     const rows = bundle?.cash_flow_monthly || []
@@ -736,13 +539,24 @@ export default function Reports() {
   }, [bundle])
 
   const periodLabel = month ? `${fiscalYear}-${month}` : fiscalYear
-  const companyDisplayName = workspaceName?.trim() || 'LedgerAI'
-  const balanceAsOfPeriod = formatBalanceAsOf(locale, fiscalYear, month)
-  const exportHref = api.exportStatementsUrl({
+  const reportParams = {
     workspace_id: workspaceId,
     fiscal_year: fiscalYear || undefined,
     month: month ? Number(month) : undefined,
-  })
+  }
+
+  async function download(kind: QbReportKey | 'package') {
+    setDownloading(kind)
+    setError(null)
+    try {
+      if (kind === 'package') await api.downloadStatementsPackage(reportParams)
+      else await api.downloadQbReport(kind, reportParams)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : t('common.error'))
+    } finally {
+      setDownloading(null)
+    }
+  }
 
   const drillDateFrom = useMemo(() => {
     if (!fiscalYear) return undefined
@@ -762,9 +576,9 @@ export default function Reports() {
   }, [fiscalYear, month])
 
   const openPnLDrill = useCallback(
-    async (row: PnLLineItem) => {
+    async (row: QbRow) => {
       if (!row.code || !workspaceId || !fiscalYear) return
-      setDrillAccount(row)
+      setDrillAccount({ code: row.code, name: row.label })
       setDrillLoading(true)
       setDrillError(null)
       setDrillTxs([])
@@ -855,12 +669,23 @@ export default function Reports() {
             >
               {loadingStmt ? t('common.loading') : t('reports.refresh')}
             </button>
-            <a
-              className={cn(btnSecondary, 'flex-1 text-center sm:flex-none')}
-              href={exportHref}
+            <button
+              type="button"
+              className={cn(btnSecondary, 'flex-1 sm:flex-none')}
+              onClick={() => void download('package')}
+              disabled={downloading !== null || !fiscalYear}
+              title={t('reports.packageHint')}
             >
-              {t('reports.exportExcel')}
-            </a>
+              {downloading === 'package' ? t('common.loading') : t('reports.downloadPackage')}
+            </button>
+            <button
+              type="button"
+              className={cn(btnSecondary, 'flex-1 sm:flex-none')}
+              onClick={() => setShowMonths((v) => !v)}
+              aria-pressed={showMonths}
+            >
+              {showMonths ? t('reports.columnsTotal') : t('reports.columnsMonthly')}
+            </button>
           </div>
         </div>
 
@@ -901,64 +726,38 @@ export default function Reports() {
           </div>
         )}
 
-        {/* ── P&L ─────────────────────────────────────────────────────────── */}
+        {/* ── QuickBooks reports (template layout) ───────────────────────── */}
         {displayPnl && (
-          <div className="mb-8 space-y-4">
-            <h3 className="font-display text-xl tracking-wide">{t('reports.pnl')}</h3>
-            <div className="grid gap-4 sm:grid-cols-3">
-              {[
-                { label: t('reports.revenue'), value: revTotal, tone: 'text-[var(--positive)]' },
-                { label: t('reports.expenses'), value: expTotal, tone: 'text-[var(--negative)]' },
-                { label: t('reports.net'), value: net, tone: 'text-primary' },
-              ].map((kpi) => (
-                <div
-                  key={kpi.label}
-                  className="animate-fade-up rounded-xl border border-border bg-background p-4 soft-shadow-lift"
-                >
-                  <p className="text-sm text-muted-foreground">{kpi.label}</p>
-                  <p className={cn('mt-1 text-2xl font-semibold tabular-nums', kpi.tone)}>
-                    {money(kpi.value)}
-                  </p>
-                </div>
-              ))}
-            </div>
+          <div className="mb-6 grid gap-4 sm:grid-cols-3">
+            {[
+              { label: t('reports.revenue'), value: revTotal, tone: 'text-[var(--positive)]' },
+              { label: t('reports.expenses'), value: expTotal, tone: 'text-[var(--negative)]' },
+              { label: t('reports.net'), value: net, tone: 'text-primary' },
+            ].map((kpi) => (
+              <div
+                key={kpi.label}
+                className="animate-fade-up rounded-xl border border-border bg-background p-4 soft-shadow-lift"
+              >
+                <p className="text-sm text-muted-foreground">{kpi.label}</p>
+                <p className={cn('mt-1 text-2xl font-semibold tabular-nums', kpi.tone)}>
+                  {money(kpi.value)}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
 
-            <MonthTable
-              title={t('reports.sectionRevenue')}
-              items={pnlItems(displayPnl, 'revenueItems')}
-              total={revTotal}
-              layout={reportLayout}
+        {qb && (
+          <div className="mb-8 space-y-6">
+            <QbReportCard
+              company={qb.company}
+              report={qb.profit_and_loss}
+              showMonths={showMonths}
               fiscalYear={fiscalYear}
-              onRowClick={(row) => void openPnLDrill(row)}
+              onAccountClick={(row) => void openPnLDrill(row)}
+              onDownload={() => void download('profit-and-loss')}
+              downloading={downloading === 'profit-and-loss'}
             />
-            <MonthTable
-              title={t('reports.sectionCogs')}
-              items={pnlItems(displayPnl, 'cogsItems')}
-              total={cogsTotal}
-              layout={reportLayout}
-              fiscalYear={fiscalYear}
-              onRowClick={(row) => void openPnLDrill(row)}
-            />
-            <div className="rounded-xl border border-border bg-secondary/20 px-4 py-3 text-right">
-              <span className="font-display text-lg font-semibold tracking-wide">
-                {t('reports.grossProfit')} {money(grossProfit)}
-              </span>
-            </div>
-            <MonthTable
-              title={t('reports.sectionOpex')}
-              items={pnlItems(displayPnl, 'expenseItems')}
-              total={opexTotal}
-              showUncategorizedHint
-              layout={reportLayout}
-              fiscalYear={fiscalYear}
-              onRowClick={(row) => void openPnLDrill(row)}
-            />
-
-            <div className="rounded-xl border border-border bg-secondary/20 px-4 py-3 text-right">
-              <span className="font-display text-lg font-semibold tracking-wide">
-                {t('reports.netIncomeLine')} {money(net)}
-              </span>
-            </div>
           </div>
         )}
 
@@ -1007,55 +806,18 @@ export default function Reports() {
           </div>
         )}
 
-        {/* ── Balance ─────────────────────────────────────────────────────── */}
-        {bundle?.balance_sheet && (
-          <div className="mb-8 space-y-4">
-            <div className="flex flex-wrap items-center gap-3 text-sm">
-              <span
-                className={
-                  bundle.balance_sheet.balanced
-                    ? 'rounded-md bg-success px-2 py-1 font-medium text-success-foreground'
-                    : 'rounded-md bg-warning px-2 py-1 font-medium text-warning-foreground'
-                }
-              >
-                {bundle.balance_sheet.balanced
-                  ? `✅ ${t('reports.balanceOk')}`
-                  : `Δ ${money(Number(bundle.balance_sheet.imbalance ?? 0))}`}
-              </span>
-              {bundle.balance_sheet.equation && (
-                <span className="text-muted-foreground">{bundle.balance_sheet.equation}</span>
-              )}
-            </div>
-            <div className="grid gap-4 lg:grid-cols-3">
-              {[
-                {
-                  label: t('reports.assets'),
-                  value: Number(bundle.balance_sheet.totalAssets ?? 0),
-                },
-                {
-                  label: t('reports.liabilities'),
-                  value: Number(bundle.balance_sheet.totalLiabilities ?? 0),
-                },
-                {
-                  label: t('reports.equity'),
-                  value: Number(bundle.balance_sheet.totalEquity ?? 0),
-                },
-              ].map((kpi) => (
-                <div
-                  key={kpi.label}
-                  className="rounded-xl border border-border bg-background p-4 soft-shadow-lift"
-                >
-                  <p className="text-sm text-muted-foreground">{kpi.label}</p>
-                  <p className="mt-1 text-xl font-semibold tabular-nums">{money(kpi.value)}</p>
-                </div>
-              ))}
-            </div>
-            <BalanceSheetMonthlyTable
-              companyName={companyDisplayName}
-              asOfPeriod={balanceAsOfPeriod}
+        {qb && (
+          <div className="mb-8">
+            <QbReportCard
+              company={qb.company}
+              report={qb.balance_sheet}
+              showMonths={showMonths}
               fiscalYear={fiscalYear}
-              balanceSheet={bundle.balance_sheet}
+              onAccountClick={(row) => void openPnLDrill(row)}
+              onDownload={() => void download('balance-sheet')}
+              downloading={downloading === 'balance-sheet'}
             />
+            <p className="mt-2 text-xs text-muted-foreground">{t('reports.balanceSheetHint')}</p>
           </div>
         )}
 

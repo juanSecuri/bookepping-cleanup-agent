@@ -170,7 +170,6 @@ async def test_emit_investing_bumps_non_cash_asset_and_sections(
 
     uc = EmitPeriodReportsUseCase(transaction_repo=repo)
     monkeypatch.setattr(uc, "_coa_accounts", lambda _tid: coa)
-    monkeypatch.setattr(uc, "_prior_retained_earnings", lambda *_a, **_k: Decimal("0"))
 
     bundle = await uc.execute(wid, fiscal_year="2025")
     assert float(bundle.pnl["grossProfit"]) == 150.0  # 200 revenue - 50 cogs

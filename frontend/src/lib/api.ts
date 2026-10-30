@@ -29,6 +29,39 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   return undefined as T
 }
 
+/** Fetch a file with auth headers and hand it to the browser as a download. */
+async function downloadFile(path: string): Promise<void> {
+  const res = await fetch(`${API_BASE}${path}`, { headers: authHeaders() })
+  if (!res.ok) {
+    const text = await res.text().catch(() => '')
+    throw new Error(text || `Download failed: ${res.status}`)
+  }
+  const disposition = res.headers.get('content-disposition') || ''
+  const match = /filename="?([^";]+)"?/i.exec(disposition)
+  const blob = await res.blob()
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = match?.[1] || 'report.xlsx'
+  document.body.appendChild(a)
+  a.click()
+  a.remove()
+  setTimeout(() => URL.revokeObjectURL(url), 1000)
+}
+
+export type ReportPeriodParams = {
+  workspace_id: string
+  fiscal_year?: string
+  month?: number
+}
+
+function reportQuery(params: ReportPeriodParams): URLSearchParams {
+  const q = new URLSearchParams({ workspace_id: params.workspace_id })
+  if (params.fiscal_year) q.set('fiscal_year', params.fiscal_year)
+  if (params.month != null) q.set('month', String(params.month))
+  return q
+}
+
 export type Workspace = {
   id: string
   name: string
@@ -226,7 +259,37 @@ export type BalanceSectionGroup = {
   total?: number
 }
 
+/** One printed line of a QuickBooks-layout report (same rows feed the Excel download). */
+export type QbRow = {
+  kind: 'header' | 'account' | 'total' | 'summary'
+  label: string
+  depth: number
+  amount: number | null
+  byMonth: Record<string, number> | null
+  code: string | null
+}
+
+export type QbReport = {
+  title: string
+  period: string
+  rows: QbRow[]
+  balanced?: boolean
+  imbalance?: number
+}
+
+export type QbReportKey = 'profit-and-loss' | 'balance-sheet'
+
+export type QbReports = {
+  company: string
+  basis: string
+  fiscal_year?: string | null
+  month?: number | null
+  profit_and_loss: QbReport
+  balance_sheet: QbReport
+}
+
 export type StatementsBundle = {
+  qb?: QbReports
   period_label?: string
   transaction_count?: number
   pending_count?: number
@@ -285,8 +348,6 @@ export type StatementsBundle = {
 
 export const api = {
   listWorkspaces: () => request<Workspace[]>('/api/workspaces'),
-  queueStatus: () => request<{ status: string; queue: Record<string, number> }>('/api/queue/status'),
-  health: () => request<{ status: string; queue?: Record<string, number> }>('/health'),
   createWorkspace: (body: { name: string; description?: string }) =>
     request<Workspace>('/api/workspaces', { method: 'POST', body: JSON.stringify(body) }),
   deleteWorkspace: (id: string) =>
@@ -328,8 +389,6 @@ export const api = {
     const qs = q.toString()
     return request<Document[]>(`/api/documents${qs ? `?${qs}` : ''}`)
   },
-  createDocument: (body: Record<string, unknown>) =>
-    request<Document>('/api/documents', { method: 'POST', body: JSON.stringify(body) }),
   uploadDocument: (form: FormData) =>
     request<Document>('/api/documents/upload', { method: 'POST', body: form }),
   documentFileUrl: (document_id: string, workspace_id: string) =>
@@ -489,22 +548,6 @@ export const api = {
       body: JSON.stringify({ workspace_id }),
     }),
 
-  pnlReport: (params: {
-    workspace_id: string
-    date_from?: string
-    date_to?: string
-    fiscal_year?: string
-    month?: number
-    period?: string
-  }) => {
-    const q = new URLSearchParams({ workspace_id: params.workspace_id })
-    if (params.date_from) q.set('date_from', params.date_from)
-    if (params.date_to) q.set('date_to', params.date_to)
-    if (params.fiscal_year) q.set('fiscal_year', params.fiscal_year)
-    if (params.month != null) q.set('month', String(params.month))
-    if (params.period) q.set('period', params.period)
-    return request<PnLReport>(`/api/reports/pnl?${q}`)
-  },
   availableYears: (workspace_id: string) =>
     request<{
       years: string[]
@@ -575,22 +618,12 @@ export const api = {
       { method: 'POST', body: JSON.stringify({ workspace_id }) },
     ),
 
-  exportStatementsUrl: (params: {
-    workspace_id: string
-    period?: string
-    date_from?: string
-    date_to?: string
-    fiscal_year?: string
-    month?: number
-  }) => {
-    const q = new URLSearchParams({ workspace_id: params.workspace_id })
-    if (params.period) q.set('period', params.period)
-    if (params.date_from) q.set('date_from', params.date_from)
-    if (params.date_to) q.set('date_to', params.date_to)
-    if (params.fiscal_year) q.set('fiscal_year', params.fiscal_year)
-    if (params.month != null) q.set('month', String(params.month))
-    return `${API_BASE}/api/reports/export.xlsx?${q}`
-  },
+  /** CPA package (P&L + Balance Sheet + Cash flow + Transacciones). */
+  downloadStatementsPackage: (params: ReportPeriodParams) =>
+    downloadFile(`/api/reports/export.xlsx?${reportQuery(params)}`),
+  /** One QuickBooks-layout report as the TPC template Excel. */
+  downloadQbReport: (report: QbReportKey, params: ReportPeriodParams) =>
+    downloadFile(`/api/reports/qb/${report}.xlsx?${reportQuery(params)}`),
 
   driveStatus: () => request<DriveStatus>('/api/drive/status'),
   driveLink: (body: { workspace_id: string; folder_id: string; folder_name?: string }) =>
